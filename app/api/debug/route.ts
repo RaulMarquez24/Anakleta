@@ -56,8 +56,8 @@ export async function GET() {
 
   const tag = "%232G9RJUYG9";
   const probes = {
+    cocproxy_clan: await probe(`https://cocproxy.royaleapi.dev/v1/clans/${tag}`),
     proxy_clan: await probe(`https://proxy.royaleapi.dev/v1/clans/${tag}`),
-    proxy_locations: await probe(`https://proxy.royaleapi.dev/v1/locations?limit=1`),
     direct_clan: await probe(`https://api.clashofclans.com/v1/clans/${tag}`),
   };
 
