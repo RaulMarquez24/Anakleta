@@ -32,7 +32,35 @@ export async function GET() {
   // Detecta espacios/saltos de línea invisibles pegados por error.
   const hasWhitespace = /\s/.test(token);
 
+  // Pruebas en vivo desde producción para aislar el fallo.
+  async function probe(url: string) {
+    try {
+      const r = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        cache: "no-store",
+      });
+      const text = await r.text();
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        parsed = text.slice(0, 200);
+      }
+      return { status: r.status, body: parsed };
+    } catch (e) {
+      return { error: String(e) };
+    }
+  }
+
+  const tag = "%232G9RJUYG9";
+  const probes = {
+    proxy_clan: await probe(`https://proxy.royaleapi.dev/v1/clans/${tag}`),
+    proxy_locations: await probe(`https://proxy.royaleapi.dev/v1/locations?limit=1`),
+    direct_clan: await probe(`https://api.clashofclans.com/v1/clans/${tag}`),
+  };
+
   return NextResponse.json({
+    probes,
     base_url: baseUrl,
     token_present: token.length > 0,
     token_len: tokenLen,
