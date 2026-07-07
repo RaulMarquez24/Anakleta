@@ -8,7 +8,10 @@ export async function GET() {
   const token = process.env.COC_API_TOKEN ?? "";
 
   let tokenCidrs: unknown = null;
-  let tokenLen = token.length;
+  let scopes: unknown = null;
+  let aud: unknown = null;
+  let iss: unknown = null;
+  const tokenLen = token.length;
   try {
     const payload = JSON.parse(
       Buffer.from(token.split(".")[1], "base64").toString(),
@@ -17,6 +20,9 @@ export async function GET() {
       (l: { type?: string }) => l?.type === "client",
     );
     tokenCidrs = clientLimit?.cidrs ?? null;
+    scopes = payload.scopes ?? null;
+    aud = payload.aud ?? null;
+    iss = payload.iss ?? null;
   } catch {
     tokenCidrs = "no se pudo decodificar el token";
   }
@@ -26,5 +32,8 @@ export async function GET() {
     token_present: token.length > 0,
     token_len: tokenLen,
     token_cidrs: tokenCidrs,
+    token_scopes: scopes,
+    token_aud: aud,
+    token_iss: iss,
   });
 }
