@@ -11,6 +11,7 @@ export async function GET() {
   let scopes: unknown = null;
   let aud: unknown = null;
   let iss: unknown = null;
+  let limits: unknown = null;
   const tokenLen = token.length;
   try {
     const payload = JSON.parse(
@@ -23,6 +24,7 @@ export async function GET() {
     scopes = payload.scopes ?? null;
     aud = payload.aud ?? null;
     iss = payload.iss ?? null;
+    limits = payload.limits ?? null;
   } catch {
     tokenCidrs = "no se pudo decodificar el token";
   }
@@ -71,5 +73,6 @@ export async function GET() {
     token_scopes: scopes,
     token_aud: aud,
     token_iss: iss,
+    token_limits: limits,
   });
 }
