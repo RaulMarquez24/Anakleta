@@ -1,0 +1,23 @@
+name: Snapshot del clan
+
+# Cron externo del proyecto: cada 6 horas hace POST a /api/snapshot en Vercel,
+# que captura el estado del clan y lo guarda en Supabase. Snapshots frecuentes
+# (cada 6-12 h) ayudan a distinguir el reset de temporada de la inactividad real.
+on:
+  schedule:
+    # A las 00:00, 06:00, 12:00 y 18:00 UTC. Cron de GitHub Actions va en UTC.
+    - cron: "0 */6 * * *"
+  # Permite lanzarlo a mano desde la pestaña Actions para probar.
+  workflow_dispatch:
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST /api/snapshot
+        run: |
+          curl --fail-with-body -sS -X POST \
+            "https://anakleta.vercel.app/api/snapshot" \
+            -H "Authorization: Bearer $CRON_SECRET"
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
