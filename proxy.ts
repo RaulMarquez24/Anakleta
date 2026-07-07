@@ -1,13 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-// Middleware de sesión + protección de rutas.
+// Proxy (antes "middleware", renombrado en Next 16): sesión + protección de rutas.
 // - Refresca el token de Supabase en cada request (patrón oficial @supabase/ssr).
 // - Si no hay usuario y la ruta no es pública, redirige a /login.
 // - Si hay usuario y va a /login, redirige al dashboard.
 // Las rutas /api quedan FUERA: /api/snapshot se protege con CRON_SECRET, no con
 // la sesión de usuario.
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
