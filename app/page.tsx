@@ -44,6 +44,12 @@ export default async function DashboardPage() {
           </div>
           <div className="flex items-center gap-3 text-sm">
             <a
+              href="/actividad"
+              className="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-300 transition hover:bg-slate-800"
+            >
+              Actividad
+            </a>
+            <a
               href="/war"
               className="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-300 transition hover:bg-slate-800"
             >
@@ -77,7 +83,14 @@ export default async function DashboardPage() {
               {data.members.map((m) => (
                 <tr key={m.tag} className="hover:bg-slate-900/50">
                   <td className="px-3 py-2 text-slate-500">{m.clanRank ?? "—"}</td>
-                  <td className="px-3 py-2 font-medium">{m.name}</td>
+                  <td className="px-3 py-2 font-medium">
+                    <a
+                      href={`/member/${encodeURIComponent(m.tag)}`}
+                      className="hover:text-emerald-400 hover:underline"
+                    >
+                      {m.name}
+                    </a>
+                  </td>
                   <td className="px-3 py-2 text-slate-400">
                     {m.role ? (ROLE_LABEL[m.role] ?? m.role) : "—"}
                   </td>
