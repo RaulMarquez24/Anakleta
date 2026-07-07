@@ -43,6 +43,12 @@ export default async function DashboardPage() {
             </p>
           </div>
           <div className="flex items-center gap-3 text-sm">
+            <a
+              href="/war"
+              className="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-300 transition hover:bg-slate-800"
+            >
+              Guerra
+            </a>
             <span className="text-slate-400">{user?.email}</span>
             <form action="/auth/signout" method="post">
               <button className="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-300 transition hover:bg-slate-800">
