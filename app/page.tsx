@@ -1,65 +1,127 @@
-import Image from "next/image";
+import { getMembersOverview } from "@/lib/dashboard";
+import { createAuthServerClient } from "@/lib/supabase/auth-server";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+const ROLE_LABEL: Record<string, string> = {
+  leader: "Líder",
+  coLeader: "Colíder",
+  admin: "Veterano",
+  member: "Miembro",
+};
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return "—";
+  return new Intl.DateTimeFormat("es-ES", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Europe/Madrid",
+  }).format(new Date(iso));
+}
+
+export default async function DashboardPage() {
+  const supabase = await createAuthServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const data = await getMembersOverview();
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main className="min-h-screen bg-slate-950 text-slate-100">
+      <div className="mx-auto max-w-6xl p-6">
+        <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">
+              {data.clanName ?? "Clan"}{" "}
+              {data.clanLevel != null && (
+                <span className="text-slate-500">· nivel {data.clanLevel}</span>
+              )}
+            </h1>
+            <p className="text-sm text-slate-400">
+              {data.members.length} miembros · última captura {fmtDate(data.latestCapture)}
+            </p>
+          </div>
+          <div className="flex items-center gap-3 text-sm">
+            <span className="text-slate-400">{user?.email}</span>
+            <form action="/auth/signout" method="post">
+              <button className="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-300 transition hover:bg-slate-800">
+                Salir
+              </button>
+            </form>
+          </div>
+        </header>
+
+        <div className="overflow-x-auto rounded-xl border border-slate-800">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-900 text-left text-slate-400">
+              <tr>
+                <th className="px-3 py-2 font-medium">#</th>
+                <th className="px-3 py-2 font-medium">Miembro</th>
+                <th className="px-3 py-2 font-medium">Rol</th>
+                <th className="px-3 py-2 text-center font-medium">TH</th>
+                <th className="px-3 py-2 text-right font-medium">Trofeos</th>
+                <th className="px-3 py-2 text-right font-medium">Donadas</th>
+                <th className="px-3 py-2 text-right font-medium">Recibidas</th>
+                <th className="px-3 py-2 text-right font-medium">Ratio</th>
+                <th className="px-3 py-2 text-center font-medium">Actividad</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {data.members.map((m) => (
+                <tr key={m.tag} className="hover:bg-slate-900/50">
+                  <td className="px-3 py-2 text-slate-500">{m.clanRank ?? "—"}</td>
+                  <td className="px-3 py-2 font-medium">{m.name}</td>
+                  <td className="px-3 py-2 text-slate-400">
+                    {m.role ? (ROLE_LABEL[m.role] ?? m.role) : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-center text-slate-300">{m.townHall ?? "—"}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{m.trophies ?? "—"}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {m.donations ?? "—"}
+                    {m.donationsDelta != null && m.donationsDelta > 0 && (
+                      <span className="ml-1 text-xs text-emerald-500">+{m.donationsDelta}</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums text-slate-400">
+                    {m.donationsReceived ?? "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {m.ratio == null ? (
+                      "—"
+                    ) : (
+                      <span className={m.ratio < 1 ? "text-amber-400" : "text-slate-200"}>
+                        {m.ratio.toFixed(2)}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    {m.hadChange == null ? (
+                      <span className="text-slate-600" title="Sin captura previa para comparar">
+                        —
+                      </span>
+                    ) : m.hadChange ? (
+                      <span className="text-emerald-500" title="Cambió donaciones o trofeos desde la captura anterior">
+                        ●
+                      </span>
+                    ) : (
+                      <span className="text-slate-500" title="Sin cambios desde la captura anterior">
+                        ○
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+
+        <p className="mt-3 text-xs text-slate-500">
+          Ratio &lt; 1 (en ámbar) = recibe más de lo que dona. La columna Actividad es
+          preliminar (compara con la captura anterior); se refinará en el Hito 7 teniendo
+          en cuenta el reseteo de temporada.
+        </p>
+      </div>
+    </main>
   );
 }
