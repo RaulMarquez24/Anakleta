@@ -27,10 +27,18 @@ export async function GET() {
     tokenCidrs = "no se pudo decodificar el token";
   }
 
+  const parts = token.split(".");
+  const segLens = parts.map((p) => p.length);
+  // Detecta espacios/saltos de línea invisibles pegados por error.
+  const hasWhitespace = /\s/.test(token);
+
   return NextResponse.json({
     base_url: baseUrl,
     token_present: token.length > 0,
     token_len: tokenLen,
+    token_parts: parts.length, // debe ser 3
+    token_seg_lens: segLens, // firma (último) debe ser 86
+    token_has_whitespace: hasWhitespace, // debe ser false
     token_cidrs: tokenCidrs,
     token_scopes: scopes,
     token_aud: aud,
