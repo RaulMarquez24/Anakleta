@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { CocApiError, getClan, getPlayer } from "@/lib/coc";
 import type { CocClan, CocPlayer } from "@/lib/coc-types";
 import { createServerClient } from "@/lib/supabase/server";
+import { captureWar, type WarCaptureResult } from "@/lib/war-capture";
 
 // POST /api/snapshot — captura el estado del clan y lo persiste en Supabase.
 // Protegido con CRON_SECRET: lo llama el cron externo con la cabecera
@@ -136,6 +137,15 @@ export async function POST(req: NextRequest) {
       .insert(snapshotRows);
     if (snapErr) throw snapErr;
 
+    // Grabación de la guerra actual (para el histórico de participación).
+    // Resiliente: si falla (p.ej. war log privado), no tumba la captura.
+    let war: WarCaptureResult;
+    try {
+      war = await captureWar(supabase, capturedAt);
+    } catch (e) {
+      war = { recorded: false, reason: `error: ${String(e)}` };
+    }
+
     return NextResponse.json({
       ok: true,
       captured_at: capturedAt,
@@ -143,6 +153,7 @@ export async function POST(req: NextRequest) {
       members_captured: clan.memberList.length,
       members_enriched: enrichedOk,
       members_deactivated: goneTags.length,
+      war,
     });
   } catch (err) {
     if (err instanceof CocApiError) {

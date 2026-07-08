@@ -84,76 +84,125 @@ export interface InactivityRow {
   tag: string;
   name: string;
   role: string | null;
-  lastChangeAt: string | null; // último cambio "real" observado
-  staleDays: number | null; // días sin cambios (null si no hay histórico)
+  lastActivityAt: string | null; // última señal de actividad detectada
+  staleDays: number | null; // días desde la última actividad (null si no hay histórico)
+  capped: boolean; // true si podría llevar más (lo topamos a la ventana de análisis)
+  warsPlayed: number; // guerras del último mes en las que atacó
+  warAttacks: number; // ataques totales en guerra el último mes
 }
 
 export interface ActivityReport {
-  windowDays: number;
+  lookbackDays: number; // ventana de análisis de actividad/guerra
+  thresholdDays: number; // umbral para marcar candidato a limpiar
+  warsInPeriod: number; // nº de guerras del clan en la ventana
   inactivity: InactivityRow[]; // ordenado por staleDays desc (más sospechoso primero)
   altas: { tag: string; name: string; firstSeenAt: string }[];
   bajas: { tag: string; name: string; lastSeenAt: string }[];
 }
 
-// Inactividad refinada: recorre los snapshots de cada miembro en la ventana y
-// busca el último cambio "real". Un cambio real = las donaciones SUBEN
-// (delta > 0) o los trofeos varían. Una BAJADA de donaciones se ignora: es el
-// reseteo de temporada, no inactividad. Cuanto más tiempo sin cambios, más
-// sospechoso.
-export async function getActivityReport(windowDays = 7): Promise<ActivityReport> {
+const LOOKBACK_DAYS = 30; // cuánto miramos atrás para actividad y guerra
+const THRESHOLD_DAYS = 7; // a partir de aquí, candidato a limpiar
+
+// Contadores que, si SUBEN entre dos capturas, prueban que la persona estuvo
+// online: donar, atacar en multi (copas/attackWins), estrellas de guerra, aporte
+// a la capital, XP, y pedir tropas. Solo miramos subidas: una bajada de
+// donaciones es el reseteo de temporada, no inactividad.
+const SIGNALS = [
+  "donations",
+  "donations_received",
+  "trophies",
+  "attack_wins",
+  "war_stars",
+  "capital_contributions",
+  "exp_level",
+] as const;
+
+type SignalRow = { capturedAt: string } & Record<(typeof SIGNALS)[number], number | null>;
+
+// Última actividad detectada (multi-señal) + participación en guerra del último mes.
+export async function getActivityReport(newMemberDays = 7): Promise<ActivityReport> {
   const supabase = createServerClient();
   const now = Date.now();
-  const since = new Date(now - windowDays * DAY_MS).toISOString();
+  const since = new Date(now - LOOKBACK_DAYS * DAY_MS).toISOString();
 
   const { data: members } = await supabase
     .from("members")
     .select("tag, name, role, is_active, first_seen_at, last_seen_at");
-
   const active = (members ?? []).filter((m) => m.is_active);
 
+  // Snapshots de la ventana con todas las señales.
   const { data: snaps } = await supabase
     .from("member_snapshots")
-    .select("member_tag, captured_at, donations, trophies")
+    .select(`member_tag, captured_at, ${SIGNALS.join(", ")}`)
     .gte("captured_at", since)
-    .order("captured_at", { ascending: true });
+    .order("captured_at", { ascending: true })
+    .limit(50000);
 
-  // Agrupa snapshots por miembro.
-  const byTag = new Map<
-    string,
-    { capturedAt: string; donations: number | null; trophies: number | null }[]
-  >();
-  for (const s of snaps ?? []) {
+  const byTag = new Map<string, SignalRow[]>();
+  for (const s of (snaps ?? []) as unknown as Record<string, unknown>[]) {
     const tag = s.member_tag as string;
     if (!byTag.has(tag)) byTag.set(tag, []);
-    byTag.get(tag)!.push({
-      capturedAt: s.captured_at as string,
-      donations: (s.donations as number | null) ?? null,
-      trophies: (s.trophies as number | null) ?? null,
-    });
+    const row = { capturedAt: s.captured_at as string } as SignalRow;
+    for (const k of SIGNALS) row[k] = (s[k] as number | null) ?? null;
+    byTag.get(tag)!.push(row);
+  }
+
+  // Participación en guerra del último mes.
+  const { data: warRows } = await supabase
+    .from("wars")
+    .select("id")
+    .gte("start_time", since);
+  const warIds = (warRows ?? []).map((w) => w.id as number);
+  const warsInPeriod = warIds.length;
+
+  const warsPlayedByTag = new Map<string, Set<number>>();
+  const warAttacksByTag = new Map<string, number>();
+  if (warIds.length > 0) {
+    const { data: atk } = await supabase
+      .from("war_attacks")
+      .select("war_id, attacker_tag")
+      .in("war_id", warIds)
+      .limit(50000);
+    for (const a of atk ?? []) {
+      const tag = a.attacker_tag as string;
+      if (!warsPlayedByTag.has(tag)) warsPlayedByTag.set(tag, new Set());
+      warsPlayedByTag.get(tag)!.add(a.war_id as number);
+      warAttacksByTag.set(tag, (warAttacksByTag.get(tag) ?? 0) + 1);
+    }
   }
 
   const inactivity: InactivityRow[] = active.map((m) => {
-    const rows = byTag.get(m.tag as string) ?? [];
-    let lastChangeAt: string | null = null;
+    const tag = m.tag as string;
+    const rows = byTag.get(tag) ?? [];
+    let lastActivityAt: string | null = null;
     for (let i = 1; i < rows.length; i++) {
       const prev = rows[i - 1];
       const cur = rows[i];
-      const donationsUp = (cur.donations ?? 0) > (prev.donations ?? 0);
-      const trophiesChanged = cur.trophies !== prev.trophies;
-      if (donationsUp || trophiesChanged) lastChangeAt = cur.capturedAt;
+      const moved = SIGNALS.some((k) => {
+        const a = prev[k];
+        const b = cur[k];
+        return a != null && b != null && b > a;
+      });
+      if (moved) lastActivityAt = cur.capturedAt;
     }
-    const staleDays =
-      lastChangeAt != null
-        ? (now - new Date(lastChangeAt).getTime()) / DAY_MS
-        : rows.length > 0
-          ? (now - new Date(rows[0].capturedAt).getTime()) / DAY_MS
-          : null;
+    let staleDays: number | null = null;
+    let capped = false;
+    if (lastActivityAt != null) {
+      staleDays = (now - new Date(lastActivityAt).getTime()) / DAY_MS;
+    } else if (rows.length > 0) {
+      // Sin actividad en toda la ventana: lleva al menos desde la 1ª captura vista.
+      staleDays = (now - new Date(rows[0].capturedAt).getTime()) / DAY_MS;
+      capped = true;
+    }
     return {
-      tag: m.tag as string,
+      tag,
       name: m.name as string,
       role: (m.role as string | null) ?? null,
-      lastChangeAt,
+      lastActivityAt,
       staleDays: staleDays != null ? Math.round(staleDays * 10) / 10 : null,
+      capped,
+      warsPlayed: warsPlayedByTag.get(tag)?.size ?? 0,
+      warAttacks: warAttacksByTag.get(tag) ?? 0,
     };
   });
 
@@ -164,13 +213,9 @@ export async function getActivityReport(windowDays = 7): Promise<ActivityReport>
       (m) =>
         m.is_active &&
         m.first_seen_at &&
-        new Date(m.first_seen_at as string).getTime() >= now - windowDays * DAY_MS,
+        new Date(m.first_seen_at as string).getTime() >= now - newMemberDays * DAY_MS,
     )
-    .map((m) => ({
-      tag: m.tag as string,
-      name: m.name as string,
-      firstSeenAt: m.first_seen_at as string,
-    }))
+    .map((m) => ({ tag: m.tag as string, name: m.name as string, firstSeenAt: m.first_seen_at as string }))
     .sort((a, b) => new Date(b.firstSeenAt).getTime() - new Date(a.firstSeenAt).getTime());
 
   const bajas = (members ?? [])
@@ -180,12 +225,15 @@ export async function getActivityReport(windowDays = 7): Promise<ActivityReport>
         m.last_seen_at &&
         new Date(m.last_seen_at as string).getTime() >= now - 30 * DAY_MS,
     )
-    .map((m) => ({
-      tag: m.tag as string,
-      name: m.name as string,
-      lastSeenAt: m.last_seen_at as string,
-    }))
+    .map((m) => ({ tag: m.tag as string, name: m.name as string, lastSeenAt: m.last_seen_at as string }))
     .sort((a, b) => new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime());
 
-  return { windowDays, inactivity, altas, bajas };
+  return {
+    lookbackDays: LOOKBACK_DAYS,
+    thresholdDays: THRESHOLD_DAYS,
+    warsInPeriod,
+    inactivity,
+    altas,
+    bajas,
+  };
 }
