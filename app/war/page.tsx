@@ -23,13 +23,11 @@ export default async function WarPage() {
   const showDetail = war.state !== "notInWar" && war.members.length > 0;
 
   return (
-    <AppShell email={user?.email}>
-      <Link href="/guerras" className="mb-3 inline-block text-sm font-bold text-sky hover:underline">
-        ← Guerras
-      </Link>
-
-      <div className="mb-4 flex items-baseline justify-between gap-2">
-        <h1 className="ribbon-title text-xl text-ink [text-shadow:none]">Guerra</h1>
+    <AppShell email={user?.email} title="Guerra">
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <Link href="/guerras" className="text-sm font-bold text-sky hover:underline">
+          ← Guerras
+        </Link>
         <div className="flex items-center gap-2">
           {war.isCwl && (
             <span className="rounded-full bg-gold/25 px-3 py-1 text-xs font-extrabold text-gold-deep">

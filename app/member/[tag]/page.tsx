@@ -58,34 +58,29 @@ export default async function MemberPage({
       .map((s) => ({ t: new Date(s.capturedAt).getTime(), v: s[key] as number }));
 
   return (
-    <AppShell email={user?.email}>
-      <Link
-        href="/"
-        className="mb-3 inline-block text-sm font-bold text-sky hover:underline"
-      >
-        ← Miembros
-      </Link>
-
-      <div className="mb-5">
-        <h1 className="ribbon-title text-2xl text-ink [text-shadow:none]">
-          {history.name}{" "}
+    <AppShell email={user?.email} title={history.name}>
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <Link href="/" className="text-sm font-bold text-sky hover:underline">
+          ← Miembros
+        </Link>
+        <div className="flex items-center gap-2">
           {isNew && (
-            <span className="align-middle rounded-full bg-grass/20 px-2 py-0.5 font-sans text-[10px] font-extrabold uppercase tracking-wide text-grass">
+            <span className="rounded-full bg-grass/20 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-grass">
               Nuevo
             </span>
           )}
           {!history.isActive && (
-            <span className="align-middle font-sans text-xs font-extrabold text-banner">
-              (fuera del clan)
+            <span className="rounded-full bg-banner/15 px-2 py-0.5 text-[10px] font-extrabold uppercase text-banner">
+              Fuera del clan
             </span>
           )}
-        </h1>
-        <p className="text-sm font-semibold text-ink-soft">
-          {history.role ? (ROLE_LABEL[history.role] ?? history.role) : "—"} · TH{" "}
-          {history.townHall ?? "—"}
-        </p>
-        <p className="mt-1 text-xs text-ink-soft">{history.snapshots.length} capturas registradas</p>
+        </div>
       </div>
+
+      <p className="mb-4 text-sm font-semibold text-ink-soft">
+        {history.role ? (ROLE_LABEL[history.role] ?? history.role) : "—"} · TH {history.townHall ?? "—"} ·{" "}
+        {history.snapshots.length} capturas
+      </p>
 
       {/* Estadísticas actuales */}
       <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-3">

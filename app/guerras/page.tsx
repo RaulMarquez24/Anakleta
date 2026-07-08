@@ -22,9 +22,7 @@ export default async function GuerrasPage() {
   const live = current && current.state !== "notInWar" && current.members.length > 0 ? current : null;
 
   return (
-    <AppShell email={user?.email}>
-      <h1 className="ribbon-title mb-3 text-xl text-ink [text-shadow:none]">Guerras</h1>
-
+    <AppShell email={user?.email} title="Guerras">
       {/* Acceso fijado a lo que esté en curso */}
       {live ? (
         <Link

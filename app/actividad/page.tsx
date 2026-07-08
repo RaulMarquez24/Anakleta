@@ -25,9 +25,8 @@ export default async function ActividadPage({
   const defaultSort = period === "semana" ? "inactivo" : "participacion";
 
   return (
-    <AppShell email={user?.email}>
-      <div className="mb-2 flex items-baseline justify-between gap-2">
-        <h1 className="ribbon-title text-xl text-ink [text-shadow:none]">Actividad</h1>
+    <AppShell email={user?.email} title="Actividad">
+      <div className="mb-3 flex justify-end">
         <Link
           href="/bajas"
           className="rounded-full border border-line px-3 py-1 text-xs font-bold text-ink-soft transition hover:bg-surface-2"
@@ -36,11 +35,6 @@ export default async function ActividadPage({
         </Link>
       </div>
 
-      <p className="mb-3 text-xs text-ink-soft">
-        Actividad de cada miembro {report.periodLabel}. Filtra por grupo y ordena por la métrica que
-        quieras.
-      </p>
-
       <ActivityList
         members={report.members}
         thresholdDays={report.thresholdDays}
@@ -48,12 +42,6 @@ export default async function ActividadPage({
         defaultSort={defaultSort}
         period={period}
       />
-
-      <p className="mt-3 text-xs text-ink-soft">
-        <strong>Semana</strong> (lunes-domingo) para el día a día y a quién echar; <strong>Mes</strong> y
-        <strong> Todo</strong> para ver participación acumulada y candidatos a subir. Los fallos de
-        guerra solo cuentan rondas ya terminadas; la ronda en curso no penaliza.
-      </p>
     </AppShell>
   );
 }

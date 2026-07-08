@@ -16,9 +16,11 @@ function timeLeft(iso: string | null): string {
 // navegación (arriba en escritorio, barra inferior en móvil) y el contenido.
 export async function AppShell({
   email,
+  title,
   children,
 }: {
   email?: string | null;
+  title: string;
   children: React.ReactNode;
 }) {
   const alert = await getWarAlert().catch(() => null);
@@ -36,10 +38,10 @@ export async function AppShell({
             className="h-11 w-11 flex-none rounded-xl shadow-[0_0_0_2px_rgba(255,255,255,.35)]"
           />
           <div className="min-w-0">
-            <p className="ribbon-title text-2xl leading-none">AÑAKLETA</p>
             <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#f6d9b0]">
-              Fuerza y Unión
+              Añakleta
             </p>
+            <p className="ribbon-title truncate text-2xl leading-none">{title}</p>
           </div>
 
           <div className="ml-auto flex items-center gap-3">

@@ -32,9 +32,8 @@ export default async function BajasPage() {
   const departures = await getDepartures();
 
   return (
-    <AppShell email={user?.email}>
-      <div className="mb-4 flex items-baseline justify-between gap-2">
-        <h1 className="ribbon-title text-xl text-ink [text-shadow:none]">Registro de bajas</h1>
+    <AppShell email={user?.email} title="Bajas">
+      <div className="mb-4 flex items-baseline justify-end gap-2">
         <Link href="/actividad" className="text-sm font-bold text-sky hover:underline">
           ← Actividad
         </Link>

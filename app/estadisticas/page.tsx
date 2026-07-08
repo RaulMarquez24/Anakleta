@@ -59,9 +59,7 @@ export default async function EstadisticasPage({
     .slice(0, 5);
 
   return (
-    <AppShell email={user?.email}>
-      <h1 className="ribbon-title mb-2 text-xl text-ink [text-shadow:none]">Estadísticas del clan</h1>
-
+    <AppShell email={user?.email} title="Estadísticas">
       {/* Periodo */}
       <div className="mb-4 flex gap-2">
         {PERIODS.map((p) => (
