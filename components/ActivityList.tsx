@@ -20,10 +20,11 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 type Filter = "todos" | "candidatos" | "destacados" | "nuevos";
-type Sort = "kick" | "inactivo" | "ratio" | "guerra" | "nombre";
+export type Sort = "kick" | "participacion" | "inactivo" | "ratio" | "guerra" | "nombre";
 
 const SORTS: { key: Sort; label: string }[] = [
   { key: "kick", label: "A revisar/echar" },
+  { key: "participacion", label: "Más participativos (subir)" },
   { key: "inactivo", label: "Más inactivos" },
   { key: "ratio", label: "Peor ratio donaciones" },
   { key: "guerra", label: "Más fallos en guerra" },
@@ -64,14 +65,16 @@ export function ActivityList({
   thresholdDays,
   warsInPeriod,
   liveWar,
+  defaultSort,
 }: {
   members: ActivityRow[];
   thresholdDays: number;
   warsInPeriod: number;
   liveWar: LiveWar | null;
+  defaultSort: Sort;
 }) {
   const [filter, setFilter] = useState<Filter>("todos");
-  const [sort, setSort] = useState<Sort>("kick");
+  const [sort, setSort] = useState<Sort>(defaultSort);
 
   const pendingSet = useMemo(
     () => new Set((liveWar?.pending ?? []).map((p) => p.tag)),
@@ -96,6 +99,8 @@ export function ActivityList({
     });
     arr = [...arr].sort((a, b) => {
       switch (sort) {
+        case "participacion":
+          return b.participationScore - a.participationScore;
         case "inactivo":
           return (b.staleDays ?? -1) - (a.staleDays ?? -1);
         case "ratio":

@@ -101,14 +101,17 @@ export interface ActivityRow {
   donations: number | null;
   donationsReceived: number | null;
   ratio: number | null;
-  warsPlayed: number; // rondas/guerras del último mes en las que estuvo alineado
-  warAttacks: number; // ataques usados en guerra el último mes
-  warMissed: number; // rondas TERMINADAS alineado sin atacar (último mes)
+  warsPlayed: number; // rondas/guerras del periodo en las que estuvo alineado
+  warAttacks: number; // ataques usados en guerra el periodo
+  warMissed: number; // rondas TERMINADAS alineado sin atacar (periodo)
   missedRounds: number[]; // qué rondas de CWL falló (terminadas)
-  warStars: number; // estrellas de guerra del último mes
+  warStars: number; // estrellas de guerra del periodo
   category: ActivityCategory;
-  kickScore: number; // mayor = más candidato a echar (orden por defecto)
+  kickScore: number; // mayor = más candidato a echar
+  participationScore: number; // mayor = más participativo (candidato a subir)
 }
+
+export type ActivityPeriod = "semana" | "mes" | "todo";
 
 // Etiqueta e icono de cada señal, para explicar "por qué está activo".
 const SIGNAL_META: Record<(typeof SIGNALS)[number], { icon: string; label: string }> = {
@@ -122,11 +125,30 @@ const SIGNAL_META: Record<(typeof SIGNALS)[number], { icon: string; label: strin
 };
 
 export interface ActivityReport {
-  lookbackDays: number; // ventana de análisis de actividad/guerra
-  thresholdDays: number; // umbral para marcar candidato a limpiar
-  warsInPeriod: number; // nº de guerras del clan en la ventana
+  period: ActivityPeriod;
+  periodLabel: string; // "esta semana", "este mes", "todo el histórico"
+  thresholdDays: number;
+  warsInPeriod: number; // nº de guerras del clan en el periodo
+  clanDonations: number; // donaciones totales del clan en el periodo
+  clanWarStars: number; // estrellas de guerra totales del clan en el periodo
   members: ActivityRow[]; // ordenado por kickScore desc (candidatos a echar primero)
 }
+
+// Inicio del periodo (en UTC; el desfase con Madrid es <2h, irrelevante para
+// contar actividad). Semana = lunes; Mes = día 1; Todo = desde siempre.
+function periodStartMs(period: ActivityPeriod): number {
+  const now = new Date();
+  if (period === "todo") return 0;
+  if (period === "mes") return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+  const dow = (now.getUTCDay() + 6) % 7; // 0 = lunes
+  return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - dow);
+}
+
+const PERIOD_LABEL: Record<ActivityPeriod, string> = {
+  semana: "esta semana (L-D)",
+  mes: "este mes",
+  todo: "todo el histórico",
+};
 
 export interface Departure {
   tag: string;
@@ -156,7 +178,6 @@ export async function getDepartures(): Promise<Departure[]> {
   }));
 }
 
-const LOOKBACK_DAYS = 30; // cuánto miramos atrás para actividad y guerra
 const THRESHOLD_DAYS = 7; // a partir de aquí, candidato a limpiar
 
 // Contadores que, si SUBEN entre dos capturas, prueban que la persona estuvo
@@ -176,10 +197,12 @@ const SIGNALS = [
 type SignalRow = { capturedAt: string } & Record<(typeof SIGNALS)[number], number | null>;
 
 // Última actividad detectada (multi-señal) + participación en guerra del último mes.
-export async function getActivityReport(): Promise<ActivityReport> {
+export async function getActivityReport(
+  period: ActivityPeriod = "semana",
+): Promise<ActivityReport> {
   const supabase = createServerClient();
   const now = Date.now();
-  const since = new Date(now - LOOKBACK_DAYS * DAY_MS).toISOString();
+  const since = new Date(periodStartMs(period)).toISOString();
 
   const { data: members } = await supabase
     .from("members")
@@ -264,8 +287,10 @@ export async function getActivityReport(): Promise<ActivityReport> {
     const role = (m.role as string | null) ?? null;
     const snapRows = byTag.get(tag) ?? [];
 
-    // Última vez que subió cada señal.
+    // Última señal de cada tipo + donaciones DEL PERIODO (suma de subidas).
     const lastBySignal: Partial<Record<(typeof SIGNALS)[number], string>> = {};
+    let donationsPeriod = 0;
+    let receivedPeriod = 0;
     for (let i = 1; i < snapRows.length; i++) {
       const prev = snapRows[i - 1];
       const cur = snapRows[i];
@@ -274,6 +299,10 @@ export async function getActivityReport(): Promise<ActivityReport> {
         const b = cur[k];
         if (a != null && b != null && b > a) lastBySignal[k] = cur.capturedAt;
       }
+      const dDon = (cur.donations ?? 0) - (prev.donations ?? 0);
+      if (dDon > 0) donationsPeriod += dDon;
+      const dRec = (cur.donations_received ?? 0) - (prev.donations_received ?? 0);
+      if (dRec > 0) receivedPeriod += dRec;
     }
     const recent: ActivitySignal[] = SIGNALS.filter((k) => lastBySignal[k])
       .map((k) => ({ key: k, icon: SIGNAL_META[k].icon, label: SIGNAL_META[k].label, at: lastBySignal[k]! }))
@@ -290,9 +319,8 @@ export async function getActivityReport(): Promise<ActivityReport> {
     }
     staleDays = staleDays != null ? Math.round(staleDays * 10) / 10 : null;
 
-    const last = snapRows[snapRows.length - 1];
-    const donations = last?.donations ?? null;
-    const received = last?.donations_received ?? null;
+    const donations = snapRows.length > 0 ? donationsPeriod : null;
+    const received = snapRows.length > 0 ? receivedPeriod : null;
     const ratio = received && received > 0 ? donations! / received : null;
 
     const w = warStat.get(tag) ?? { played: 0, attacks: 0, missed: 0, missedRounds: [], stars: 0 };
@@ -343,15 +371,23 @@ export async function getActivityReport(): Promise<ActivityReport> {
       warStars: w.stars,
       category,
       kickScore,
+      // Participación (para ascensos): donaciones + estrellas + ataques, penaliza fallos.
+      participationScore: (donations ?? 0) + w.stars * 100 + w.attacks * 50 - w.missed * 300,
     };
   });
 
   rowsOut.sort((a, b) => b.kickScore - a.kickScore || (b.staleDays ?? -1) - (a.staleDays ?? -1));
 
+  const clanDonations = rowsOut.reduce((n, r) => n + (r.donations ?? 0), 0);
+  const clanWarStars = rowsOut.reduce((n, r) => n + r.warStars, 0);
+
   return {
-    lookbackDays: LOOKBACK_DAYS,
+    period,
+    periodLabel: PERIOD_LABEL[period],
     thresholdDays: THRESHOLD_DAYS,
     warsInPeriod,
+    clanDonations,
+    clanWarStars,
     members: rowsOut,
   };
 }
