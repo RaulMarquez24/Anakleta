@@ -19,7 +19,7 @@ const ROLE_LABEL: Record<string, string> = {
   member: "Miembro",
 };
 
-type Filter = "todos" | "candidatos" | "destacados" | "nuevos";
+type Filter = "todos" | "expulsar" | "pendiente" | "destacables";
 export type Sort = "kick" | "participacion" | "inactivo" | "ratio" | "guerra" | "nombre";
 
 const SORTS: { key: Sort; label: string }[] = [
@@ -45,56 +45,34 @@ function agoShort(iso: string): string {
   return `${Math.round(h / 24)}d`;
 }
 
-interface LiveWar {
-  pending: { tag: string; name: string }[];
-  endsAt: string | null;
-  label: string;
-}
-
-function hoursLeft(iso: string | null): string {
-  if (!iso) return "";
-  const ms = new Date(iso).getTime() - Date.now();
-  if (ms <= 0) return "0h";
-  const h = Math.floor(ms / 3_600_000);
-  const m = Math.floor((ms % 3_600_000) / 60_000);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
-
 export function ActivityList({
   members,
   thresholdDays,
   warsInPeriod,
-  liveWar,
   defaultSort,
 }: {
   members: ActivityRow[];
   thresholdDays: number;
   warsInPeriod: number;
-  liveWar: LiveWar | null;
   defaultSort: Sort;
 }) {
   const [filter, setFilter] = useState<Filter>("todos");
   const [sort, setSort] = useState<Sort>(defaultSort);
 
-  const pendingSet = useMemo(
-    () => new Set((liveWar?.pending ?? []).map((p) => p.tag)),
-    [liveWar],
-  );
-
   const counts = useMemo(
     () => ({
-      candidatos: members.filter((m) => m.category === "expulsion" || m.category === "revisar").length,
-      destacados: members.filter((m) => m.category === "destacado").length,
-      nuevos: members.filter((m) => m.isNew).length,
+      expulsar: members.filter((m) => m.category === "expulsion").length,
+      pendiente: members.filter((m) => m.category === "revisar").length,
+      destacables: members.filter((m) => m.category === "destacado").length,
     }),
     [members],
   );
 
   const view = useMemo(() => {
     let arr = members.filter((m) => {
-      if (filter === "candidatos") return m.category === "expulsion" || m.category === "revisar";
-      if (filter === "destacados") return m.category === "destacado";
-      if (filter === "nuevos") return m.isNew;
+      if (filter === "expulsar") return m.category === "expulsion";
+      if (filter === "pendiente") return m.category === "revisar";
+      if (filter === "destacables") return m.category === "destacado";
       return true;
     });
     arr = [...arr].sort((a, b) => {
@@ -118,28 +96,13 @@ export function ActivityList({
 
   const FILTERS: { key: Filter; label: string }[] = [
     { key: "todos", label: `Todos (${members.length})` },
-    { key: "candidatos", label: `A revisar (${counts.candidatos})` },
-    { key: "destacados", label: `Destacados (${counts.destacados})` },
-    { key: "nuevos", label: `Nuevos (${counts.nuevos})` },
+    { key: "expulsar", label: `Expulsar (${counts.expulsar})` },
+    { key: "pendiente", label: `Pendiente (${counts.pendiente})` },
+    { key: "destacables", label: `Destacables (${counts.destacables})` },
   ];
 
   return (
     <>
-      {/* Aviso en vivo: guerra en curso con gente sin atacar */}
-      {liveWar && liveWar.pending.length > 0 && (
-        <Link
-          href="/war"
-          className="mb-4 block rounded-2xl border-2 border-banner/50 bg-banner/10 p-3.5 transition hover:bg-banner/15"
-        >
-          <p className="font-extrabold text-banner">
-            ⏰ Quedan {hoursLeft(liveWar.endsAt)} · {liveWar.pending.length} sin atacar
-          </p>
-          <p className="text-sm text-ink-soft">
-            {liveWar.label} — {liveWar.pending.map((p) => p.name).join(", ")}
-          </p>
-        </Link>
-      )}
-
       {/* Filtros */}
       <div className="mb-3 flex flex-wrap gap-2">
         {FILTERS.map((f) => (
@@ -220,11 +183,6 @@ export function ActivityList({
                     {m.missedRounds.length > 0
                       ? `: ${m.missedRounds.map((r) => `R${r}`).join(", ")}`
                       : ` (${m.warMissed})`}
-                  </span>
-                )}
-                {pendingSet.has(m.tag) && (
-                  <span className="rounded-lg bg-gold/20 px-2 py-1 text-gold-deep">
-                    ⏰ pendiente hoy
                   </span>
                 )}
               </div>

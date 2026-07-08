@@ -1,15 +1,28 @@
 import Image from "next/image";
+import Link from "next/link";
 import { AppNav } from "@/components/AppNav";
+import { getWarAlert } from "@/lib/war-history";
+
+function timeLeft(iso: string | null): string {
+  if (!iso) return "";
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return "0h";
+  const h = Math.floor(ms / 3_600_000);
+  const m = Math.floor((ms % 3_600_000) / 60_000);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
 
 // Marco común de las páginas autenticadas: cabecera con la cinta roja del logo,
 // navegación (arriba en escritorio, barra inferior en móvil) y el contenido.
-export function AppShell({
+export async function AppShell({
   email,
   children,
 }: {
   email?: string | null;
   children: React.ReactNode;
 }) {
+  const alert = await getWarAlert().catch(() => null);
+
   return (
     <div className="min-h-full pb-20 sm:pb-6">
       <header className="bg-banner">
@@ -49,6 +62,17 @@ export function AppShell({
           </div>
         </div>
       </header>
+
+      {/* Aviso global: aún hay gente sin atacar en la guerra en curso */}
+      {alert && (
+        <Link
+          href="/war"
+          className="block bg-banner-dark/90 px-4 py-2 text-center text-sm font-bold text-white transition hover:bg-banner-dark"
+        >
+          ⏰ Aún falta gente por atacar · {alert.pendingCount} sin atacar en {alert.label}
+          {alert.endsAt && <> · quedan {timeLeft(alert.endsAt)}</>}
+        </Link>
+      )}
 
       <main className="mx-auto max-w-5xl px-4 py-5">{children}</main>
 

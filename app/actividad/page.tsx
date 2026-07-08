@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { getActivityReport, type ActivityPeriod } from "@/lib/history";
-import { getCurrentWar } from "@/lib/war";
 import { createAuthServerClient } from "@/lib/supabase/auth-server";
 import { AppShell } from "@/components/AppShell";
 import { ActivityList } from "@/components/ActivityList";
@@ -26,19 +25,7 @@ export default async function ActividadPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const [report, war] = await Promise.all([
-    getActivityReport(period),
-    getCurrentWar().catch(() => null),
-  ]);
-
-  const liveWar =
-    war && war.state === "inWar"
-      ? {
-          pending: war.pending.map((m) => ({ tag: m.tag, name: m.name })),
-          endsAt: war.endTime,
-          label: war.isCwl ? `CWL${war.round ? ` · Ronda ${war.round}` : ""}` : "la guerra",
-        }
-      : null;
+  const report = await getActivityReport(period);
 
   // Semana → foco en echar; Mes/Todo → foco en participación (ascensos).
   const defaultSort = period === "semana" ? "kick" : "participacion";
@@ -81,7 +68,6 @@ export default async function ActividadPage({
         members={report.members}
         thresholdDays={report.thresholdDays}
         warsInPeriod={report.warsInPeriod}
-        liveWar={liveWar}
         defaultSort={defaultSort}
       />
 

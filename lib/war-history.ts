@@ -188,6 +188,41 @@ export async function getSeasonSummary(season: string): Promise<SeasonSummary> {
   };
 }
 
+export interface WarAlert {
+  pendingCount: number;
+  endsAt: string | null;
+  label: string; // "CWL · Ronda 6" o "la guerra"
+}
+
+// Aviso global de ataques pendientes: lee de BD la guerra en curso (state=inWar)
+// y cuántos alineados no han atacado. Barato (sin API); refleja la última captura.
+export async function getWarAlert(): Promise<WarAlert | null> {
+  const supabase = createServerClient();
+  const { data: war } = await supabase
+    .from("wars")
+    .select("id, is_cwl, round, end_time")
+    .eq("state", "inWar")
+    .order("start_time", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!war) return null;
+
+  const { count } = await supabase
+    .from("war_members")
+    .select("tag", { count: "exact", head: true })
+    .eq("war_id", war.id as number)
+    .eq("attacks_used", 0);
+
+  const pendingCount = count ?? 0;
+  if (pendingCount === 0) return null;
+
+  return {
+    pendingCount,
+    endsAt: (war.end_time as string | null) ?? null,
+    label: war.is_cwl ? `CWL · Ronda ${war.round ?? "?"}` : "la guerra",
+  };
+}
+
 // Detalle de una guerra: cabecera + alineación de nuestro clan.
 export async function getWarDetail(
   id: number,
