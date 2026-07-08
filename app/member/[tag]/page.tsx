@@ -45,6 +45,11 @@ export default async function MemberPage({
   const history = await getMemberHistory(decodeURIComponent(tag));
   if (!history) notFound();
 
+  const isNew =
+    history.isActive &&
+    history.firstSeenAt != null &&
+    Date.now() - new Date(history.firstSeenAt).getTime() < 7 * 86_400_000;
+
   const toPoint = (
     key: "donations" | "donationsReceived" | "trophies",
   ): ChartPoint[] =>
@@ -64,6 +69,11 @@ export default async function MemberPage({
       <div className="mb-5">
         <h1 className="ribbon-title text-2xl text-ink [text-shadow:none]">
           {history.name}{" "}
+          {isNew && (
+            <span className="align-middle rounded-full bg-grass/20 px-2 py-0.5 font-sans text-[10px] font-extrabold uppercase tracking-wide text-grass">
+              Nuevo
+            </span>
+          )}
           {!history.isActive && (
             <span className="align-middle font-sans text-xs font-extrabold text-banner">
               (fuera del clan)
@@ -74,9 +84,7 @@ export default async function MemberPage({
           {history.role ? (ROLE_LABEL[history.role] ?? history.role) : "—"} · TH{" "}
           {history.townHall ?? "—"}
         </p>
-        <p className="mt-1 text-xs text-ink-soft">
-          Primera vez visto {fmtDate(history.firstSeenAt)} · {history.snapshots.length} capturas
-        </p>
+        <p className="mt-1 text-xs text-ink-soft">{history.snapshots.length} capturas registradas</p>
       </div>
 
       {/* Estadísticas actuales */}
@@ -107,6 +115,7 @@ export default async function MemberPage({
             ? history.current.capitalContributions.toLocaleString("es-ES")
             : "—"}
         </Stat>
+        <Stat label="Alta (aprox.)">{fmtDate(history.firstSeenAt)}</Stat>
       </div>
 
       <section className="space-y-4">

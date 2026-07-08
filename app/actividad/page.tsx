@@ -61,47 +61,16 @@ export default async function ActividadPage() {
         </span>
       </div>
 
-      {/* Altas y bajas */}
-      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="rounded-2xl border border-line bg-surface p-4">
-          <h2 className="mb-2 flex items-center gap-2 font-extrabold text-grass">
-            <span aria-hidden>📥</span> Altas ({report.altas.length})
-          </h2>
-          {report.altas.length === 0 ? (
-            <p className="text-sm text-ink-soft">Ninguna reciente.</p>
-          ) : (
-            <ul className="space-y-1.5 text-sm">
-              {report.altas.map((a) => (
-                <li key={a.tag} className="flex justify-between gap-2">
-                  <Link href={href(a.tag)} className="font-bold text-ink hover:text-gold-deep hover:underline">{a.name}</Link>
-                  <span className="text-ink-soft">{fmtDate(a.firstSeenAt)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="rounded-2xl border border-line bg-surface p-4">
-          <h2 className="mb-2 flex items-center gap-2 font-extrabold text-banner">
-            <span aria-hidden>📤</span> Bajas ({report.bajas.length})
-          </h2>
-          {report.bajas.length === 0 ? (
-            <p className="text-sm text-ink-soft">Ninguna en los últimos 30 días.</p>
-          ) : (
-            <ul className="space-y-1.5 text-sm">
-              {report.bajas.map((b) => (
-                <li key={b.tag} className="flex justify-between gap-2">
-                  <Link href={href(b.tag)} className="font-bold text-ink hover:text-gold-deep hover:underline">{b.name}</Link>
-                  <span className="text-ink-soft">{fmtDate(b.lastSeenAt)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-
       {/* Actividad + participación en guerra */}
-      <h2 className="mb-2 font-extrabold text-ink">Última actividad y guerra</h2>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h2 className="font-extrabold text-ink">Última actividad y guerra</h2>
+        <Link
+          href="/bajas"
+          className="rounded-full border border-line px-3 py-1 text-xs font-bold text-ink-soft transition hover:bg-surface-2"
+        >
+          📤 Registro de bajas
+        </Link>
+      </div>
       <div className="overflow-hidden rounded-2xl border border-line bg-surface">
         <ul className="divide-y divide-line">
           {report.inactivity.map((r) => {

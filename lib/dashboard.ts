@@ -43,6 +43,8 @@ export interface MemberOverviewRow {
   attackWins: number | null;
   warPreference: string | null; // "in" | "out"
   capitalContributions: number | null;
+  firstSeenAt: string | null; // alta (primera vez que apareció el tag)
+  isNew: boolean; // entró de verdad hace poco (no en el arranque del tracking)
 }
 
 export interface DashboardData {
@@ -94,8 +96,19 @@ export async function getMembersOverview(): Promise<DashboardData> {
   // Miembros activos (siguen en el clan).
   const { data: members } = await supabase
     .from("members")
-    .select("tag, name, role, town_hall, is_active")
+    .select("tag, name, role, town_hall, is_active, first_seen_at")
     .eq("is_active", true);
+
+  // Línea base del tracking: el alta más antigua. Todo lo que entró en el
+  // arranque comparte esa fecha, así que solo es "nuevo" quien entró bastante
+  // después (>12h) y dentro de los últimos 7 días.
+  const now = Date.now();
+  const firstSeens = (members ?? [])
+    .map((m) => (m.first_seen_at ? new Date(m.first_seen_at as string).getTime() : null))
+    .filter((t): t is number => t != null);
+  const baseline = firstSeens.length ? Math.min(...firstSeens) : now;
+  const NEW_MS = 7 * 86_400_000;
+  const MARGIN_MS = 12 * 3_600_000;
 
   const rows: MemberOverviewRow[] = (members ?? []).map((m) => {
     const cur = latestByTag.get(m.tag as string);
@@ -132,6 +145,11 @@ export async function getMembersOverview(): Promise<DashboardData> {
       attackWins: cur?.attack_wins ?? null,
       warPreference: cur?.war_preference ?? null,
       capitalContributions: cur?.capital_contributions ?? null,
+      firstSeenAt: (m.first_seen_at as string | null) ?? null,
+      isNew: (() => {
+        const fs = m.first_seen_at ? new Date(m.first_seen_at as string).getTime() : null;
+        return fs != null && now - fs < NEW_MS && fs - baseline > MARGIN_MS;
+      })(),
     };
   });
 

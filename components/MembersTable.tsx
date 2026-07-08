@@ -40,6 +40,14 @@ function shortTier(name: string | null): string {
   return name.replace(" League", "");
 }
 
+function NewBadge() {
+  return (
+    <span className="rounded-full bg-grass/20 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-grass">
+      Nuevo
+    </span>
+  );
+}
+
 function valueOf(m: MemberOverviewRow, key: SortKey): number | string {
   switch (key) {
     case "rank": return m.leagueTierId ?? -1;
@@ -163,6 +171,7 @@ export function MembersTable({ members }: { members: MemberOverviewRow[] }) {
               <div className="mb-2 flex items-center gap-2">
                 <span className="text-base font-extrabold text-ink">{m.name}</span>
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide ${rb.cls}`}>{rb.label}</span>
+                {m.isNew && <NewBadge />}
                 <span className="ml-auto rounded-full bg-sky px-2.5 py-0.5 text-[11px] font-extrabold text-white">TH{m.townHall ?? "—"}</span>
               </div>
               <div className="mb-2 flex items-center gap-2 text-sm">
@@ -209,6 +218,7 @@ export function MembersTable({ members }: { members: MemberOverviewRow[] }) {
                   <td className="px-3 py-2">
                     <Link href={href(m.tag)} className="font-bold text-ink hover:text-gold-deep hover:underline">{m.name}</Link>
                     <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${rb.cls}`}>{rb.label}</span>
+                    {m.isNew && <span className="ml-1"><NewBadge /></span>}
                   </td>
                   <td className="px-3 py-2 text-center text-ink-soft">{m.townHall ?? "—"}</td>
                   <td className="px-3 py-2 text-center text-ink-soft tabular-nums">{m.expLevel ?? "—"}</td>

@@ -115,8 +115,34 @@ export interface ActivityReport {
   thresholdDays: number; // umbral para marcar candidato a limpiar
   warsInPeriod: number; // nº de guerras del clan en la ventana
   inactivity: InactivityRow[]; // ordenado por staleDays desc (más sospechoso primero)
-  altas: { tag: string; name: string; firstSeenAt: string }[];
-  bajas: { tag: string; name: string; lastSeenAt: string }[];
+}
+
+export interface Departure {
+  tag: string;
+  name: string;
+  role: string | null;
+  townHall: number | null;
+  firstSeenAt: string | null; // cuándo entró (aprox.)
+  lastSeenAt: string | null; // última vez visto antes de irse
+}
+
+// Registro de abandonos: todos los que ya no están en el clan (is_active=false),
+// del más reciente al más antiguo.
+export async function getDepartures(): Promise<Departure[]> {
+  const supabase = createServerClient();
+  const { data } = await supabase
+    .from("members")
+    .select("tag, name, role, town_hall, first_seen_at, last_seen_at")
+    .eq("is_active", false)
+    .order("last_seen_at", { ascending: false });
+  return (data ?? []).map((m) => ({
+    tag: m.tag as string,
+    name: m.name as string,
+    role: (m.role as string | null) ?? null,
+    townHall: (m.town_hall as number | null) ?? null,
+    firstSeenAt: (m.first_seen_at as string | null) ?? null,
+    lastSeenAt: (m.last_seen_at as string | null) ?? null,
+  }));
 }
 
 const LOOKBACK_DAYS = 30; // cuánto miramos atrás para actividad y guerra
@@ -139,15 +165,16 @@ const SIGNALS = [
 type SignalRow = { capturedAt: string } & Record<(typeof SIGNALS)[number], number | null>;
 
 // Última actividad detectada (multi-señal) + participación en guerra del último mes.
-export async function getActivityReport(newMemberDays = 7): Promise<ActivityReport> {
+export async function getActivityReport(): Promise<ActivityReport> {
   const supabase = createServerClient();
   const now = Date.now();
   const since = new Date(now - LOOKBACK_DAYS * DAY_MS).toISOString();
 
   const { data: members } = await supabase
     .from("members")
-    .select("tag, name, role, is_active, first_seen_at, last_seen_at");
-  const active = (members ?? []).filter((m) => m.is_active);
+    .select("tag, name, role, is_active")
+    .eq("is_active", true);
+  const active = members ?? [];
 
   // Snapshots de la ventana con todas las señales.
   const { data: snaps } = await supabase
@@ -233,32 +260,10 @@ export async function getActivityReport(newMemberDays = 7): Promise<ActivityRepo
 
   inactivity.sort((a, b) => (b.staleDays ?? -1) - (a.staleDays ?? -1));
 
-  const altas = (members ?? [])
-    .filter(
-      (m) =>
-        m.is_active &&
-        m.first_seen_at &&
-        new Date(m.first_seen_at as string).getTime() >= now - newMemberDays * DAY_MS,
-    )
-    .map((m) => ({ tag: m.tag as string, name: m.name as string, firstSeenAt: m.first_seen_at as string }))
-    .sort((a, b) => new Date(b.firstSeenAt).getTime() - new Date(a.firstSeenAt).getTime());
-
-  const bajas = (members ?? [])
-    .filter(
-      (m) =>
-        !m.is_active &&
-        m.last_seen_at &&
-        new Date(m.last_seen_at as string).getTime() >= now - 30 * DAY_MS,
-    )
-    .map((m) => ({ tag: m.tag as string, name: m.name as string, lastSeenAt: m.last_seen_at as string }))
-    .sort((a, b) => new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime());
-
   return {
     lookbackDays: LOOKBACK_DAYS,
     thresholdDays: THRESHOLD_DAYS,
     warsInPeriod,
     inactivity,
-    altas,
-    bajas,
   };
 }
