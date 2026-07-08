@@ -107,6 +107,87 @@ export async function getSeasonWars(season: string): Promise<WarSummary[]> {
   return (data ?? []).map((w) => toSummary(w as Record<string, unknown>));
 }
 
+export interface SeasonMemberStat {
+  tag: string;
+  name: string;
+  roundsPlayed: number; // rondas en las que estuvo alineado
+  attacksUsed: number;
+  missed: number; // rondas alineado sin atacar
+  stars: number;
+}
+export interface SeasonSummary {
+  totalRounds: number; // rondas con datos
+  expectedRounds: number; // 7 en CWL estándar
+  wins: number;
+  losses: number;
+  ties: number;
+  clanStars: number;
+  members: SeasonMemberStat[]; // ordenado por estrellas desc
+}
+
+const CWL_ROUNDS = 7;
+
+// Resumen agregado de una temporada de CWL: récord + rendimiento por miembro.
+export async function getSeasonSummary(season: string): Promise<SeasonSummary> {
+  const supabase = createServerClient();
+  const { data: wars } = await supabase
+    .from("wars")
+    .select("id, round, result, clan_stars")
+    .eq("is_cwl", true)
+    .eq("season", season);
+
+  const rows = wars ?? [];
+  const ids = rows.map((w) => w.id as number);
+  let wins = 0,
+    losses = 0,
+    ties = 0,
+    clanStars = 0;
+  let maxRound = 0;
+  for (const w of rows) {
+    if (w.result === "win") wins++;
+    else if (w.result === "lose") losses++;
+    else if (w.result === "tie") ties++;
+    clanStars += (w.clan_stars as number | null) ?? 0;
+    maxRound = Math.max(maxRound, (w.round as number | null) ?? 0);
+  }
+
+  const agg = new Map<string, SeasonMemberStat>();
+  if (ids.length > 0) {
+    const { data: wm } = await supabase
+      .from("war_members")
+      .select("tag, name, attacks_used, stars")
+      .in("war_id", ids)
+      .limit(50000);
+    for (const m of wm ?? []) {
+      const tag = m.tag as string;
+      if (!agg.has(tag)) {
+        agg.set(tag, { tag, name: m.name as string, roundsPlayed: 0, attacksUsed: 0, missed: 0, stars: 0 });
+      }
+      const s = agg.get(tag)!;
+      s.name = (m.name as string) ?? s.name;
+      s.roundsPlayed++;
+      const used = (m.attacks_used as number | null) ?? 0;
+      s.attacksUsed += used;
+      if (used === 0) s.missed++;
+      s.stars += (m.stars as number | null) ?? 0;
+    }
+  }
+
+  const members = [...agg.values()].sort(
+    (a, b) => b.stars - a.stars || b.attacksUsed - a.attacksUsed || a.missed - b.missed,
+  );
+
+  return {
+    totalRounds: rows.length,
+    expectedRounds: Math.max(CWL_ROUNDS, maxRound),
+    wins,
+    losses,
+    ties,
+    clanStars,
+    members,
+  };
+}
+
 // Detalle de una guerra: cabecera + alineación de nuestro clan.
 export async function getWarDetail(
   id: number,
