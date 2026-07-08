@@ -63,10 +63,10 @@ export function LineChart({
             x2={width - pad.r}
             y1={sy(v)}
             y2={sy(v)}
-            stroke="#1e293b"
+            stroke="var(--line)"
             strokeWidth={1}
           />
-          <text x={pad.l - 8} y={sy(v) + 4} textAnchor="end" fontSize={11} fill="#64748b">
+          <text x={pad.l - 8} y={sy(v) + 4} textAnchor="end" fontSize={11} fill="var(--ink-soft)">
             {Math.round(v)}
           </text>
         </g>

@@ -22,56 +22,73 @@ export default function LoginPage() {
       setError("Email o contraseña incorrectos.");
       return;
     }
-    // Refresca para que el middleware/servidor vea la sesión recién creada.
     router.replace("/");
     router.refresh();
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 p-4">
-      <form
-        onSubmit={onSubmit}
-        className="w-full max-w-sm space-y-4 rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-xl"
-      >
-        <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-bold text-white">Anakleta</h1>
-          <p className="text-sm text-slate-400">Panel de gestión del clan</p>
+    <main className="flex min-h-screen items-center justify-center bg-bg p-4">
+      <div className="w-full max-w-sm">
+        {/* Escudo del clan */}
+        <div className="mb-6 text-center">
+          <div className="mx-auto mb-3 flex h-20 w-20 items-center justify-center rounded-2xl bg-banner text-4xl shadow-lg shadow-banner/30">
+            🛡️
+          </div>
+          <h1 className="ribbon-title text-4xl text-gold">AÑAKLETA</h1>
+          <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-banner">
+            Fuerza y Unión
+          </p>
         </div>
 
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-slate-300">Email</label>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-white outline-none focus:border-emerald-500"
-            autoComplete="email"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-slate-300">Contraseña</label>
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-white outline-none focus:border-emerald-500"
-            autoComplete="current-password"
-          />
-        </div>
-
-        {error && <p className="text-sm text-red-400">{error}</p>}
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50"
+        <form
+          onSubmit={onSubmit}
+          className="space-y-4 rounded-2xl border border-line bg-surface p-6 shadow-xl"
         >
-          {loading ? "Entrando…" : "Entrar"}
-        </button>
-      </form>
+          <div className="space-y-1.5">
+            <label htmlFor="email" className="block text-sm font-bold text-ink">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-ink outline-none focus:border-sky"
+              autoComplete="email"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="password" className="block text-sm font-bold text-ink">
+              Contraseña
+            </label>
+            <input
+              id="password"
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-ink outline-none focus:border-sky"
+              autoComplete="current-password"
+            />
+          </div>
+
+          {error && (
+            <p role="alert" className="rounded-lg bg-banner/12 px-3 py-2 text-sm font-semibold text-banner">
+              {error}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-xl bg-grass px-4 py-3 text-base font-extrabold text-white shadow-sm transition hover:brightness-110 disabled:opacity-50"
+          >
+            {loading ? "Entrando…" : "Entrar"}
+          </button>
+        </form>
+      </div>
     </main>
   );
 }

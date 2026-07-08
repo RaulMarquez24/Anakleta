@@ -1,26 +1,95 @@
 @import "tailwindcss";
 
+/* ---- Identidad "Campo soleado" de Añakleta ----
+   Paleta derivada del logo: oro, madera, hierba, estandarte rojo, cielo.
+   Las variables semánticas cambian solas en claro/oscuro (prefers-color-scheme). */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  --bg: #fbf5e9; /* pergamino, luz de día */
+  --surface: #ffffff;
+  --surface-2: #f3e9d2;
+  --ink: #3a2414; /* madera: texto principal */
+  --ink-soft: #6e5330;
+  --line: #e3d6b8;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --gold: #f4b740;
+  --gold-deep: #b9770f; /* oro legible sobre fondo claro */
+  --grass: #4c8228; /* positivo, dona, activo */
+  --grass-bright: #6bb13a;
+  --banner: #b32c22; /* guerra, alertas, bajas */
+  --banner-dark: #8a1f17;
+  --sky: #2e7fb0; /* info, enlaces, TH */
+  --magenta: #c43b78; /* acento especial, con tino */
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg: #1e1710; /* madera casi negra */
+    --surface: #2a2016;
+    --surface-2: #241a10;
+    --ink: #f6eedc;
+    --ink-soft: #c7b79a;
+    --line: #3e3020;
+
+    --gold: #f4b740;
+    --gold-deep: #edb84a;
+    --grass: #7cc247;
+    --grass-bright: #8fd257;
+    --banner: #e0544a;
+    --banner-dark: #b32c22;
+    --sky: #5ba9d6;
+    --magenta: #e066a0;
   }
 }
 
+/* Mapea los tokens a utilidades Tailwind (bg-bg, text-ink, border-line, ...).
+   Con @theme inline, las utilidades apuntan a las variables, así que respetan
+   el cambio claro/oscuro automáticamente. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-line: var(--line);
+  --color-gold: var(--gold);
+  --color-gold-deep: var(--gold-deep);
+  --color-grass: var(--grass);
+  --color-grass-bright: var(--grass-bright);
+  --color-banner: var(--banner);
+  --color-banner-dark: var(--banner-dark);
+  --color-sky: var(--sky);
+  --color-magenta: var(--magenta);
+
+  --font-display: var(--font-lilita), Impact, sans-serif;
+  --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+/* Cinta roja del estandarte del logo: firma de las cabeceras de sección. */
+.ribbon-title {
+  font-family: var(--font-display);
+  color: var(--gold);
+  letter-spacing: 0.01em;
+  text-shadow: 1px 1px 0 var(--banner-dark);
+}
+
+/* Foco visible y accesible en todos los interactivos. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid var(--sky);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

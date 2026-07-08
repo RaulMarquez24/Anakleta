@@ -17,17 +17,17 @@ export function WarNotice({ text }: { text: string }) {
   }
 
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-      <div className="mb-2 flex items-center justify-between">
-        <h2 className="font-semibold text-slate-200">Aviso para el chat</h2>
+    <div className="rounded-2xl border border-line bg-surface p-4">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <h2 className="text-base font-extrabold text-ink">Aviso para el chat</h2>
         <button
           onClick={copy}
-          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
+          className="rounded-xl bg-grass px-4 py-2 text-sm font-extrabold text-white transition hover:brightness-110"
         >
-          {copied ? "¡Copiado!" : "Copiar"}
+          {copied ? "¡Copiado! ✓" : "Copiar"}
         </button>
       </div>
-      <pre className="whitespace-pre-wrap break-words rounded-lg bg-slate-950 p-3 text-sm text-slate-300">
+      <pre className="whitespace-pre-wrap break-words rounded-xl bg-bg p-3 font-sans text-sm text-ink">
         {text}
       </pre>
     </div>

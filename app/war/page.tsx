@@ -1,5 +1,6 @@
-import Link from "next/link";
 import { buildWarNotice, getCurrentWar, type WarView } from "@/lib/war";
+import { createAuthServerClient } from "@/lib/supabase/auth-server";
+import { AppShell } from "@/components/AppShell";
 import { WarNotice } from "./WarNotice";
 
 export const dynamic = "force-dynamic";
@@ -20,8 +21,6 @@ function fmtDate(iso: string | null): string {
   }).format(new Date(iso));
 }
 
-// Tiempo restante hasta `iso`, en formato "Xh Ym". El cálculo del "ahora" se hace
-// en el render del servidor; es informativo (no cuenta atrás en vivo).
 function timeLeft(iso: string | null): string | null {
   if (!iso) return null;
   const ms = new Date(iso).getTime() - Date.now();
@@ -31,120 +30,117 @@ function timeLeft(iso: string | null): string | null {
   return `${h}h ${m}m`;
 }
 
+function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="rounded-2xl border border-line bg-surface p-4">
+      <p className="text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">{label}</p>
+      <p className="mt-1 text-lg font-extrabold text-ink">{value}</p>
+      {sub && <p className="text-sm text-ink-soft">{sub}</p>}
+    </div>
+  );
+}
+
 export default async function WarPage() {
+  const supabase = await createAuthServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   const war = await getCurrentWar();
   const notice = buildWarNotice(war);
   const inWar = war.state === "inWar";
+  const showBoard = war.state === "preparation" || inWar || war.state === "warEnded";
   const countdownTarget = war.state === "preparation" ? war.startTime : war.endTime;
   const countdownLabel = war.state === "preparation" ? "Empieza en" : "Termina en";
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto max-w-5xl p-6">
-        <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold">Guerra</h1>
-            <p className="text-sm text-slate-400">{STATE_LABEL[war.state]}</p>
-          </div>
-          <Link
-            href="/"
-            className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 transition hover:bg-slate-800"
-          >
-            ← Miembros
-          </Link>
-        </header>
-
-        {war.isPrivate && (
-          <div className="rounded-xl border border-amber-700/50 bg-amber-950/30 p-4 text-amber-200">
-            El registro de guerra del clan está en <strong>privado</strong>. Ponlo en público
-            en los ajustes del clan (dentro del juego) para ver aquí la guerra actual.
-          </div>
-        )}
-
-        {war.state === "notInWar" && !war.isPrivate && (
-          <div className="rounded-xl border border-slate-800 bg-slate-900 p-8 text-center text-slate-400">
-            Ahora mismo el clan no está en guerra.
-          </div>
-        )}
-
-        {(war.state === "preparation" || inWar || war.state === "warEnded") && (
-          <div className="space-y-6">
-            {/* Marcador */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Rival</p>
-                <p className="mt-1 text-lg font-semibold">{war.opponentName ?? "—"}</p>
-                {war.teamSize && (
-                  <p className="text-sm text-slate-400">{war.teamSize} vs {war.teamSize}</p>
-                )}
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Marcador</p>
-                <p className="mt-1 text-lg font-semibold">
-                  ⭐ {war.clanStars ?? "—"} — {war.opponentStars ?? "—"}
-                </p>
-                <p className="text-sm text-slate-400">
-                  {war.clanDestruction?.toFixed(1) ?? "—"}% vs{" "}
-                  {war.opponentDestruction?.toFixed(1) ?? "—"}%
-                </p>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-500">{countdownLabel}</p>
-                <p className="mt-1 text-lg font-semibold">{timeLeft(countdownTarget) ?? "—"}</p>
-                <p className="text-sm text-slate-400">{fmtDate(countdownTarget)}</p>
-              </div>
-            </div>
-
-            {/* Aviso copiable (solo si hay pendientes en guerra) */}
-            {notice && <WarNotice text={notice} />}
-
-            {inWar && war.pending.length === 0 && (
-              <div className="rounded-xl border border-emerald-800/50 bg-emerald-950/20 p-4 text-emerald-300">
-                ✅ Todos los ataques usados. ¡Nada pendiente!
-              </div>
-            )}
-
-            {/* Tabla de miembros de la guerra */}
-            {war.members.length > 0 && (
-              <div className="overflow-x-auto rounded-xl border border-slate-800">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-900 text-left text-slate-400">
-                    <tr>
-                      <th className="px-3 py-2 font-medium">Pos</th>
-                      <th className="px-3 py-2 font-medium">Miembro</th>
-                      <th className="px-3 py-2 text-center font-medium">TH</th>
-                      <th className="px-3 py-2 text-center font-medium">Ataques</th>
-                      <th className="px-3 py-2 text-center font-medium">Pendientes</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800">
-                    {war.members.map((m) => (
-                      <tr
-                        key={m.tag}
-                        className={m.attacksPending > 0 ? "bg-amber-950/20" : ""}
-                      >
-                        <td className="px-3 py-2 text-slate-500">{m.mapPosition}</td>
-                        <td className="px-3 py-2 font-medium">{m.name}</td>
-                        <td className="px-3 py-2 text-center text-slate-300">{m.townHall}</td>
-                        <td className="px-3 py-2 text-center tabular-nums">
-                          {m.attacksUsed}/{war.attacksPerMember}
-                        </td>
-                        <td className="px-3 py-2 text-center tabular-nums">
-                          {m.attacksPending > 0 ? (
-                            <span className="text-amber-400">{m.attacksPending}</span>
-                          ) : (
-                            <span className="text-slate-600">0</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
+    <AppShell email={user?.email}>
+      <div className="mb-4 flex items-baseline justify-between gap-2">
+        <h1 className="ribbon-title text-xl text-ink [text-shadow:none]">Guerra</h1>
+        <span className="rounded-full bg-surface-2 px-3 py-1 text-xs font-extrabold text-ink-soft">
+          {STATE_LABEL[war.state]}
+        </span>
       </div>
-    </main>
+
+      {war.isPrivate && (
+        <div className="rounded-2xl border border-banner/40 bg-banner/10 p-4 text-banner">
+          El registro de guerra del clan está en <strong>privado</strong>. Ponlo en público en los
+          ajustes del clan (dentro del juego) para ver aquí la guerra actual.
+        </div>
+      )}
+
+      {war.state === "notInWar" && !war.isPrivate && (
+        <div className="rounded-2xl border border-line bg-surface p-10 text-center">
+          <p className="text-4xl">🕊️</p>
+          <p className="mt-2 font-bold text-ink-soft">Ahora mismo el clan no está en guerra.</p>
+        </div>
+      )}
+
+      {showBoard && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Stat
+              label="Rival"
+              value={war.opponentName ?? "—"}
+              sub={war.teamSize ? `${war.teamSize} vs ${war.teamSize}` : undefined}
+            />
+            <Stat
+              label="Marcador"
+              value={`⭐ ${war.clanStars ?? "—"} — ${war.opponentStars ?? "—"}`}
+              sub={`${war.clanDestruction?.toFixed(1) ?? "—"}% vs ${war.opponentDestruction?.toFixed(1) ?? "—"}%`}
+            />
+            <Stat
+              label={countdownLabel}
+              value={timeLeft(countdownTarget) ?? "—"}
+              sub={fmtDate(countdownTarget)}
+            />
+          </div>
+
+          {notice && <WarNotice text={notice} />}
+
+          {inWar && war.pending.length === 0 && (
+            <div className="rounded-2xl border border-grass/40 bg-grass/10 p-4 font-bold text-grass">
+              ✅ Todos los ataques usados. ¡Nada pendiente!
+            </div>
+          )}
+
+          {war.members.length > 0 && (
+            <div className="overflow-hidden rounded-2xl border border-line bg-surface">
+              <ul className="divide-y divide-line">
+                {war.members.map((m) => {
+                  const pend = m.attacksPending > 0;
+                  return (
+                    <li
+                      key={m.tag}
+                      className={`flex items-center gap-3 px-3.5 py-2.5 ${pend ? "bg-banner/8" : ""}`}
+                    >
+                      <span className="w-6 flex-none text-sm font-bold text-ink-soft">
+                        {m.mapPosition}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-bold text-ink">{m.name}</p>
+                        <p className="text-xs text-ink-soft">TH{m.townHall}</p>
+                      </div>
+                      <span className="text-sm font-bold tabular-nums text-ink">
+                        {m.attacksUsed}/{war.attacksPerMember}
+                      </span>
+                      {pend ? (
+                        <span className="rounded-full bg-banner/15 px-2.5 py-1 text-xs font-extrabold text-banner">
+                          faltan {m.attacksPending}
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-grass/15 px-2.5 py-1 text-xs font-extrabold text-grass">
+                          hecho
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </AppShell>
   );
 }
