@@ -22,6 +22,15 @@ function fmtDate(iso: string | null): string {
   }).format(new Date(iso));
 }
 
+function Stat({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-line bg-surface p-3">
+      <p className="text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">{label}</p>
+      <p className="mt-1 font-bold text-ink">{children}</p>
+    </div>
+  );
+}
+
 export default async function MemberPage({
   params,
 }: {
@@ -68,6 +77,36 @@ export default async function MemberPage({
         <p className="mt-1 text-xs text-ink-soft">
           Primera vez visto {fmtDate(history.firstSeenAt)} · {history.snapshots.length} capturas
         </p>
+      </div>
+
+      {/* Estadísticas actuales */}
+      <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <Stat label="Rango">
+          <span className="inline-flex items-center gap-1.5">
+            {history.current.leagueTierIcon && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={history.current.leagueTierIcon} alt="" width={22} height={22} className="h-[22px] w-[22px]" />
+            )}
+            {history.current.leagueTierName?.replace(" League", "") ?? "Sin rango"}
+          </span>
+        </Stat>
+        <Stat label="Copas (ranked)">{history.current.trophies ?? "—"}</Stat>
+        <Stat label="Estrellas de guerra">⭐ {history.current.warStars ?? "—"}</Stat>
+        <Stat label="Ataques / Defensas ganados">
+          {history.current.attackWins ?? "—"} / {history.current.defenseWins ?? "—"}
+        </Stat>
+        <Stat label="Preferencia de guerra">
+          {history.current.warPreference === "in"
+            ? "⚔️ Entra"
+            : history.current.warPreference === "out"
+              ? "💤 No entra"
+              : "—"}
+        </Stat>
+        <Stat label="Aporte a la capital">
+          {history.current.capitalContributions != null
+            ? history.current.capitalContributions.toLocaleString("es-ES")
+            : "—"}
+        </Stat>
       </div>
 
       <section className="space-y-4">

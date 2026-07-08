@@ -10,6 +10,18 @@ export interface MemberHistory {
   isActive: boolean;
   firstSeenAt: string | null;
   lastSeenAt: string | null;
+  // Valores más recientes (última captura):
+  current: {
+    leagueTierName: string | null;
+    leagueTierIcon: string | null;
+    expLevel: number | null;
+    trophies: number | null;
+    warStars: number | null;
+    attackWins: number | null;
+    defenseWins: number | null;
+    warPreference: string | null;
+    capitalContributions: number | null;
+  };
   snapshots: {
     capturedAt: string;
     donations: number | null;
@@ -31,9 +43,14 @@ export async function getMemberHistory(tag: string): Promise<MemberHistory | nul
 
   const { data: snaps } = await supabase
     .from("member_snapshots")
-    .select("captured_at, donations, donations_received, trophies")
+    .select(
+      "captured_at, donations, donations_received, trophies, league_tier_name, league_tier_icon, exp_level, war_stars, attack_wins, defense_wins, war_preference, capital_contributions",
+    )
     .eq("member_tag", tag)
     .order("captured_at", { ascending: true });
+
+  const rows = snaps ?? [];
+  const last = rows[rows.length - 1];
 
   return {
     tag: member.tag as string,
@@ -43,7 +60,18 @@ export async function getMemberHistory(tag: string): Promise<MemberHistory | nul
     isActive: Boolean(member.is_active),
     firstSeenAt: (member.first_seen_at as string | null) ?? null,
     lastSeenAt: (member.last_seen_at as string | null) ?? null,
-    snapshots: (snaps ?? []).map((s) => ({
+    current: {
+      leagueTierName: (last?.league_tier_name as string | null) ?? null,
+      leagueTierIcon: (last?.league_tier_icon as string | null) ?? null,
+      expLevel: (last?.exp_level as number | null) ?? null,
+      trophies: (last?.trophies as number | null) ?? null,
+      warStars: (last?.war_stars as number | null) ?? null,
+      attackWins: (last?.attack_wins as number | null) ?? null,
+      defenseWins: (last?.defense_wins as number | null) ?? null,
+      warPreference: (last?.war_preference as string | null) ?? null,
+      capitalContributions: (last?.capital_contributions as number | null) ?? null,
+    },
+    snapshots: rows.map((s) => ({
       capturedAt: s.captured_at as string,
       donations: (s.donations as number | null) ?? null,
       donationsReceived: (s.donations_received as number | null) ?? null,

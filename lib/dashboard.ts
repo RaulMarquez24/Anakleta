@@ -9,7 +9,18 @@ interface SnapRow {
   clan_rank: number | null;
   town_hall: number | null;
   role: string | null;
+  league_tier_id: number | null;
+  league_tier_name: string | null;
+  league_tier_icon: string | null;
+  exp_level: number | null;
+  war_stars: number | null;
+  attack_wins: number | null;
+  war_preference: string | null;
+  capital_contributions: number | null;
 }
+
+const SNAP_COLS =
+  "member_tag, captured_at, donations, donations_received, trophies, clan_rank, town_hall, role, league_tier_id, league_tier_name, league_tier_icon, exp_level, war_stars, attack_wins, war_preference, capital_contributions";
 
 export interface MemberOverviewRow {
   tag: string;
@@ -23,6 +34,15 @@ export interface MemberOverviewRow {
   ratio: number | null; // donations / donations_received
   donationsDelta: number | null; // vs. captura anterior (null si no hay previa)
   hadChange: boolean | null; // ¿cambió donaciones o trofeos desde la captura previa?
+  // Sistema de ligas nuevo + XP + enriquecimiento:
+  leagueTierId: number | null; // rango real (creciente); clave de orden
+  leagueTierName: string | null;
+  leagueTierIcon: string | null;
+  expLevel: number | null;
+  warStars: number | null;
+  attackWins: number | null;
+  warPreference: string | null; // "in" | "out"
+  capitalContributions: number | null;
 }
 
 export interface DashboardData {
@@ -59,9 +79,7 @@ export async function getMembersOverview(): Promise<DashboardData> {
     ? (
         await supabase
           .from("member_snapshots")
-          .select(
-            "member_tag, captured_at, donations, donations_received, trophies, clan_rank, town_hall, role",
-          )
+          .select(SNAP_COLS)
           .in("captured_at", [latest, previous].filter(Boolean) as string[])
       ).data ?? []
     : [];
@@ -106,10 +124,23 @@ export async function getMembersOverview(): Promise<DashboardData> {
       ratio: received && received > 0 ? donations! / received : null,
       donationsDelta,
       hadChange,
+      leagueTierId: cur?.league_tier_id ?? null,
+      leagueTierName: cur?.league_tier_name ?? null,
+      leagueTierIcon: cur?.league_tier_icon ?? null,
+      expLevel: cur?.exp_level ?? null,
+      warStars: cur?.war_stars ?? null,
+      attackWins: cur?.attack_wins ?? null,
+      warPreference: cur?.war_preference ?? null,
+      capitalContributions: cur?.capital_contributions ?? null,
     };
   });
 
-  rows.sort((a, b) => (a.clanRank ?? 999) - (b.clanRank ?? 999));
+  // Orden por defecto: rango real (leagueTier) desc, desempate por copas.
+  rows.sort(
+    (a, b) =>
+      (b.leagueTierId ?? -1) - (a.leagueTierId ?? -1) ||
+      (b.trophies ?? -1) - (a.trophies ?? -1),
+  );
 
   const { data: clan } = await supabase
     .from("clans")

@@ -1,15 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
-import { CocApiError, getClan } from "@/lib/coc";
-import type { CocClan } from "@/lib/coc-types";
+import { CocApiError, getClan, getPlayer } from "@/lib/coc";
+import type { CocClan, CocPlayer } from "@/lib/coc-types";
 import { createServerClient } from "@/lib/supabase/server";
 
 // POST /api/snapshot — captura el estado del clan y lo persiste en Supabase.
-// Protegido con CRON_SECRET: lo llama el cron externo (Hito 4) con la cabecera
+// Protegido con CRON_SECRET: lo llama el cron externo con la cabecera
 //   Authorization: Bearer <CRON_SECRET>
 // El dashboard NUNCA llama a este endpoint; solo lee de Supabase.
 
+// El enriquecimiento hace ~1 llamada por miembro a /players; damos margen.
+export const maxDuration = 60;
+
+// Ejecuta `worker` sobre `items` con como mucho `limit` en paralelo.
+async function mapPool<T, R>(
+  items: T[],
+  limit: number,
+  worker: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let i = 0;
+  async function run() {
+    while (i < items.length) {
+      const idx = i++;
+      results[idx] = await worker(items[idx]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
+  return results;
+}
+
 export async function POST(req: NextRequest) {
-  // 1. Autorización por secreto compartido.
   const secret = process.env.CRON_SECRET;
   if (!secret) {
     return NextResponse.json(
@@ -23,26 +43,35 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // 2. Captura del clan desde la API de CoC.
     const clan = await getClan<CocClan>();
     const supabase = createServerClient();
     const capturedAt = new Date().toISOString();
 
-    // 3. Metadata del clan (una sola fila, upsert por tag).
+    // Enriquecimiento: datos por jugador (/players). Resiliente: si uno falla,
+    // sus campos quedan a null y NO se cae la captura entera.
+    let enrichedOk = 0;
+    const players = await mapPool(clan.memberList, 6, async (m) => {
+      try {
+        const p = await getPlayer<CocPlayer>(m.tag);
+        enrichedOk++;
+        return p;
+      } catch {
+        return null;
+      }
+    });
+    const playerByTag = new Map<string, CocPlayer>();
+    players.forEach((p, i) => {
+      if (p) playerByTag.set(clan.memberList[i].tag, p);
+    });
+
+    // Metadata del clan.
     const { error: clanErr } = await supabase.from("clans").upsert(
-      {
-        tag: clan.tag,
-        name: clan.name,
-        level: clan.clanLevel,
-        updated_at: capturedAt,
-      },
+      { tag: clan.tag, name: clan.name, level: clan.clanLevel, updated_at: capturedAt },
       { onConflict: "tag" },
     );
     if (clanErr) throw clanErr;
 
-    // 4. Upsert de miembros. Ojo: NO incluimos first_seen_at para no pisarlo en
-    //    los que ya existen; en un alta nueva toma el default now(). Sí
-    //    refrescamos last_seen_at e is_active=true en cada captura.
+    // Upsert de miembros (preserva first_seen_at; refresca last_seen_at/is_active).
     const memberRows = clan.memberList.map((m) => ({
       tag: m.tag,
       name: m.name,
@@ -56,18 +85,16 @@ export async function POST(req: NextRequest) {
       .upsert(memberRows, { onConflict: "tag" });
     if (membersErr) throw membersErr;
 
-    // 5. Bajas: miembros que estaban activos y ya no aparecen en la lista.
+    // Bajas: activos que ya no aparecen.
     const currentTags = new Set(clan.memberList.map((m) => m.tag));
     const { data: activeMembers, error: activeErr } = await supabase
       .from("members")
       .select("tag")
       .eq("is_active", true);
     if (activeErr) throw activeErr;
-
     const goneTags = (activeMembers ?? [])
       .map((r) => r.tag as string)
       .filter((tag) => !currentTags.has(tag));
-
     if (goneTags.length > 0) {
       const { error: goneErr } = await supabase
         .from("members")
@@ -76,18 +103,34 @@ export async function POST(req: NextRequest) {
       if (goneErr) throw goneErr;
     }
 
-    // 6. Serie temporal: una fila por miembro, con el mismo captured_at.
-    const snapshotRows = clan.memberList.map((m) => ({
-      member_tag: m.tag,
-      captured_at: capturedAt,
-      donations: m.donations,
-      donations_received: m.donationsReceived,
-      trophies: m.trophies,
-      builder_trophies: m.builderBaseTrophies ?? null,
-      clan_rank: m.clanRank,
-      town_hall: m.townHallLevel,
-      role: m.role,
-    }));
+    // Serie temporal: una fila por miembro, mismo captured_at.
+    const snapshotRows = clan.memberList.map((m) => {
+      const p = playerByTag.get(m.tag);
+      return {
+        member_tag: m.tag,
+        captured_at: capturedAt,
+        donations: m.donations,
+        donations_received: m.donationsReceived,
+        trophies: m.trophies,
+        builder_trophies: m.builderBaseTrophies ?? null,
+        clan_rank: m.clanRank,
+        town_hall: m.townHallLevel,
+        role: m.role,
+        // Sistema de ligas nuevo + XP:
+        league_id: m.league?.id ?? null,
+        league_name: m.league?.name ?? null,
+        league_tier_id: m.leagueTier?.id ?? null,
+        league_tier_name: m.leagueTier?.name ?? null,
+        league_tier_icon: m.leagueTier?.iconUrls?.small ?? null,
+        exp_level: m.expLevel ?? null,
+        // Enriquecimiento por jugador:
+        war_stars: p?.warStars ?? null,
+        attack_wins: p?.attackWins ?? null,
+        defense_wins: p?.defenseWins ?? null,
+        war_preference: p?.warPreference ?? null,
+        capital_contributions: p?.clanCapitalContributions ?? null,
+      };
+    });
     const { error: snapErr } = await supabase
       .from("member_snapshots")
       .insert(snapshotRows);
@@ -98,6 +141,7 @@ export async function POST(req: NextRequest) {
       captured_at: capturedAt,
       clan: clan.name,
       members_captured: clan.memberList.length,
+      members_enriched: enrichedOk,
       members_deactivated: goneTags.length,
     });
   } catch (err) {
@@ -107,7 +151,6 @@ export async function POST(req: NextRequest) {
         { status: err.status },
       );
     }
-    // Errores de Supabase u otros.
     return NextResponse.json(
       { error: "Fallo al capturar snapshot", details: String(err) },
       { status: 500 },

@@ -64,6 +64,21 @@ create table if not exists war_attacks (
   attack_order   int
 );
 
+-- Sistema de ligas nuevo (Ranked) + XP + datos por jugador (enriquecimiento).
+-- El leagueTier es el "rango real": su id es creciente y sirve para ordenar.
+alter table member_snapshots add column if not exists league_id            int;
+alter table member_snapshots add column if not exists league_name          text;
+alter table member_snapshots add column if not exists league_tier_id       int;
+alter table member_snapshots add column if not exists league_tier_name     text;
+alter table member_snapshots add column if not exists league_tier_icon     text;
+alter table member_snapshots add column if not exists exp_level            int;
+-- Enriquecimiento desde /players/{tag}:
+alter table member_snapshots add column if not exists war_stars            int;
+alter table member_snapshots add column if not exists attack_wins          int;
+alter table member_snapshots add column if not exists defense_wins         int;
+alter table member_snapshots add column if not exists war_preference       text;
+alter table member_snapshots add column if not exists capital_contributions bigint;
+
 -- Privilegios: con "expose new tables" desactivado, las tablas nuevas no reciben
 -- GRANTs automáticos. Concedemos acceso SOLO a service_role (el rol del servidor,
 -- usado por la SECRET KEY). NO se concede a anon/authenticated: los datos quedan

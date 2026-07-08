@@ -1,6 +1,17 @@
 // Subconjunto de los campos de la API de CoC que usamos. No es exhaustivo:
 // solo lo que consume el snapshot y el dashboard.
 
+interface CocLeagueRef {
+  id: number;
+  name: string;
+  iconUrls?: {
+    small?: string;
+    tiny?: string;
+    medium?: string;
+    large?: string;
+  };
+}
+
 export interface CocClanMember {
   tag: string;
   name: string;
@@ -13,7 +24,8 @@ export interface CocClanMember {
   previousClanRank: number;
   donations: number;
   donationsReceived: number;
-  league?: { id: number; name: string };
+  league?: CocLeagueRef; // liga "clásica" (mayormente Unranked ahora)
+  leagueTier?: CocLeagueRef; // rango del sistema nuevo (Ranked): id creciente
 }
 
 export interface CocClan {
@@ -22,4 +34,14 @@ export interface CocClan {
   clanLevel: number;
   members: number;
   memberList: CocClanMember[];
+}
+
+// Datos extra del endpoint /players/{tag} (enriquecimiento).
+export interface CocPlayer {
+  tag: string;
+  warStars?: number;
+  attackWins?: number;
+  defenseWins?: number;
+  warPreference?: "in" | "out";
+  clanCapitalContributions?: number;
 }

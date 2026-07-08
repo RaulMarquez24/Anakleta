@@ -64,3 +64,8 @@ export function getClan<T = unknown>(clanTag = process.env.COC_CLAN_TAG ?? ""): 
   if (!clanTag) throw new CocApiError("Falta COC_CLAN_TAG", 500);
   return cocFetch<T>(`/clans/${encodeTag(clanTag)}`);
 }
+
+/** Perfil de un jugador individual. */
+export function getPlayer<T = unknown>(playerTag: string): Promise<T> {
+  return cocFetch<T>(`/players/${encodeTag(playerTag)}`);
+}
