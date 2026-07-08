@@ -111,6 +111,7 @@ export interface ActivityRow {
   category: ActivityCategory;
   kickScore: number; // mayor = más candidato a echar
   participationScore: number; // mayor = más participativo (candidato a subir)
+  flags: string[]; // "faltillas" detectadas (no dona, no guerra, no sube liga, guerra off)
 }
 
 export type ActivityPeriod = "semana" | "mes" | "todo";
@@ -221,18 +222,20 @@ export async function getActivityReport(
   // Snapshots de la ventana con todas las señales.
   const { data: snaps } = await supabase
     .from("member_snapshots")
-    .select(`member_tag, captured_at, ${SIGNALS.join(", ")}`)
+    .select(`member_tag, captured_at, war_preference, ${SIGNALS.join(", ")}`)
     .gte("captured_at", since)
     .order("captured_at", { ascending: true })
     .limit(50000);
 
   const byTag = new Map<string, SignalRow[]>();
+  const lastWarPref = new Map<string, string | null>(); // preferencia de guerra más reciente
   for (const s of (snaps ?? []) as unknown as Record<string, unknown>[]) {
     const tag = s.member_tag as string;
     if (!byTag.has(tag)) byTag.set(tag, []);
     const row = { capturedAt: s.captured_at as string } as SignalRow;
     for (const k of SIGNALS) row[k] = (s[k] as number | null) ?? null;
     byTag.get(tag)!.push(row);
+    lastWarPref.set(tag, (s.war_preference as string | null) ?? null);
   }
 
   // Participación en guerra del último mes (desde la alineación war_members).
@@ -331,18 +334,32 @@ export async function getActivityReport(
     const fs = m.first_seen_at ? new Date(m.first_seen_at as string).getTime() : null;
     const isNew = fs != null && now - fs < 7 * DAY_MS && fs - baseline > 12 * 3_600_000;
 
+    // Faltillas: señales concretas de poca implicación (solo si hay datos suficientes).
+    const enoughData = snapRows.length >= 2;
+    const flags: string[] = [];
+    if (enoughData && donationsPeriod === 0 && receivedPeriod === 0) flags.push("🚫 No dona ni pide");
+    if (warsInPeriod > 0 && w.played === 0) flags.push("🚫 No juega guerras");
+    if (enoughData && !lastBySignal.trophies) flags.push("📉 No sube liga");
+    if (lastWarPref.get(tag) === "out") flags.push("💤 Guerra desactivada");
+
     const isStaff = role === "leader" || role === "coLeader";
     let category: ActivityCategory;
     if (isStaff) category = "mando";
-    else if ((staleDays != null && staleDays >= 14) || w.missed >= 3) category = "expulsion";
-    else if ((staleDays != null && staleDays >= THRESHOLD_DAYS) || w.missed >= 1 || donNeg)
+    else if ((staleDays != null && staleDays >= 14) || w.missed >= 3 || flags.length >= 3)
+      category = "expulsion";
+    else if (
+      (staleDays != null && staleDays >= THRESHOLD_DAYS) ||
+      w.missed >= 1 ||
+      donNeg ||
+      flags.length >= 2
+    )
       category = "revisar";
     else if (
       staleDays != null &&
       staleDays < 2 &&
       w.missed === 0 &&
-      // Destacar EXIGE aporte real de donaciones (> 1000) además de estar activo
-      // y sin fallos de guerra. No basta con jugar bien la guerra.
+      flags.length === 0 &&
+      // Destacar EXIGE aporte real de donaciones (> 1000) además de activo y sin fallos.
       donations != null &&
       donations > 1000
     )
@@ -355,7 +372,8 @@ export async function getActivityReport(
         Math.min(staleDays ?? 0, 30) +
         w.missed * 8 +
         (donNeg ? 8 : 0) +
-        (staleDays != null && staleDays >= THRESHOLD_DAYS ? 10 : 0);
+        (staleDays != null && staleDays >= THRESHOLD_DAYS ? 10 : 0) +
+        flags.length * 4;
     }
 
     return {
@@ -380,6 +398,7 @@ export async function getActivityReport(
       kickScore,
       // Participación (para ascensos): donaciones + estrellas + ataques, penaliza fallos.
       participationScore: (donations ?? 0) + w.stars * 100 + w.attacks * 50 - w.missed * 300,
+      flags,
     };
   });
 
