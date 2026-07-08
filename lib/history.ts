@@ -328,6 +328,8 @@ export async function getActivityReport(
     const received = snapRows.length > 0 ? receivedPeriod : null;
     const ratio = received && received > 0 ? donations! / received : null;
     const donNeg = donationsNegative(donations, received);
+    // Copas actuales (ranked). Se resetea cada lunes: 0 = sin competitivo esta semana.
+    const lastTrophies = snapRows.length > 0 ? snapRows[snapRows.length - 1].trophies : null;
 
     const w = warStat.get(tag) ?? { played: 0, attacks: 0, missed: 0, missedRounds: [], stars: 0 };
 
@@ -339,7 +341,7 @@ export async function getActivityReport(
     const flags: string[] = [];
     if (enoughData && donationsPeriod === 0 && receivedPeriod === 0) flags.push("🚫 No dona ni pide");
     if (warsInPeriod > 0 && w.played === 0) flags.push("🚫 No juega guerras");
-    if (enoughData && !lastBySignal.trophies) flags.push("📉 No sube liga");
+    if (lastTrophies != null && lastTrophies === 0) flags.push("🎯 Sin competitivo esta semana");
     if (lastWarPref.get(tag) === "out") flags.push("💤 Guerra desactivada");
 
     const isStaff = role === "leader" || role === "coLeader";
