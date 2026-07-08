@@ -5,13 +5,14 @@ import { usePathname } from "next/navigation";
 
 const ITEMS = [
   { href: "/", label: "Miembros", icon: "👥", match: (p: string) => p === "/" || p.startsWith("/member") },
-  { href: "/actividad", label: "Actividad", icon: "📊", match: (p: string) => p.startsWith("/actividad") },
+  { href: "/actividad", label: "Actividad", icon: "🔥", match: (p: string) => p.startsWith("/actividad") },
   {
     href: "/guerras",
     label: "Guerras",
     icon: "⚔️",
     match: (p: string) => p.startsWith("/guerra") || p.startsWith("/liga") || p.startsWith("/war"),
   },
+  { href: "/estadisticas", label: "Stats", icon: "📊", match: (p: string) => p.startsWith("/estadisticas") },
 ];
 
 export function AppNav({ variant }: { variant: "top" | "bottom" }) {
@@ -21,7 +22,7 @@ export function AppNav({ variant }: { variant: "top" | "bottom" }) {
     return (
       <nav
         aria-label="Secciones"
-        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-3 border-t border-line bg-surface sm:hidden"
+        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-line bg-surface sm:hidden"
       >
         {ITEMS.map((it) => {
           const active = it.match(pathname);

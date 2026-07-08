@@ -57,14 +57,8 @@ export default async function ActividadPage({
         ))}
       </div>
 
-      <p className="mb-1 text-xs text-ink-soft">
-        Total del clan ({report.periodLabel}):{" "}
-        <strong className="text-ink">{report.clanDonations.toLocaleString("es-ES")}</strong> donaciones ·{" "}
-        <strong className="text-ink">{report.warsInPeriod}</strong> guerras · ⭐{" "}
-        <strong className="text-ink">{report.clanWarStars}</strong>
-      </p>
-      <p className="mb-4 text-xs font-semibold text-ink-soft">
-        Orden:{" "}
+      <p className="mb-4 text-xs text-ink-soft">
+        Actividad de cada miembro {report.periodLabel} · Orden:{" "}
         {period === "semana"
           ? "candidatos a echar primero"
           : "más participativos primero (para ascensos)"}
