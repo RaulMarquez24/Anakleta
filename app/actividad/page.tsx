@@ -6,12 +6,6 @@ import { ActivityList } from "@/components/ActivityList";
 
 export const dynamic = "force-dynamic";
 
-const PERIODS: { key: ActivityPeriod; label: string }[] = [
-  { key: "semana", label: "Semana" },
-  { key: "mes", label: "Mes" },
-  { key: "todo", label: "Todo" },
-];
-
 export default async function ActividadPage({
   searchParams,
 }: {
@@ -42,24 +36,9 @@ export default async function ActividadPage({
         </Link>
       </div>
 
-      {/* Selector de periodo */}
-      <div className="mb-2 flex gap-2">
-        {PERIODS.map((p) => (
-          <Link
-            key={p.key}
-            href={`/actividad?p=${p.key}`}
-            className={`rounded-full px-4 py-1.5 text-sm font-extrabold transition ${
-              period === p.key ? "bg-gold text-banner-dark" : "bg-surface-2 text-ink-soft hover:bg-line"
-            }`}
-          >
-            {p.label}
-          </Link>
-        ))}
-      </div>
-
-      <p className="mb-4 text-xs text-ink-soft">
-        Actividad de cada miembro {report.periodLabel}. Filtra por grupo arriba y ordena por la
-        métrica que quieras.
+      <p className="mb-3 text-xs text-ink-soft">
+        Actividad de cada miembro {report.periodLabel}. Filtra por grupo y ordena por la métrica que
+        quieras.
       </p>
 
       <ActivityList
@@ -67,6 +46,7 @@ export default async function ActividadPage({
         thresholdDays={report.thresholdDays}
         warsInPeriod={report.warsInPeriod}
         defaultSort={defaultSort}
+        period={period}
       />
 
       <p className="mt-3 text-xs text-ink-soft">

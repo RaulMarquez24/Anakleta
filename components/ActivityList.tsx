@@ -2,7 +2,8 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import type { ActivityRow, ActivityCategory } from "@/lib/history";
+import { useRouter } from "next/navigation";
+import type { ActivityRow, ActivityCategory, ActivityPeriod } from "@/lib/history";
 
 const CAT: Record<ActivityCategory, { label: string; cls: string }> = {
   expulsion: { label: "🔴 Expulsión", cls: "bg-banner/15 text-banner" },
@@ -46,17 +47,26 @@ function agoShort(iso: string): string {
   return `${Math.round(h / 24)}d`;
 }
 
+const PERIODS: { key: ActivityPeriod; label: string }[] = [
+  { key: "semana", label: "Semana" },
+  { key: "mes", label: "Mes" },
+  { key: "todo", label: "Todo" },
+];
+
 export function ActivityList({
   members,
   thresholdDays,
   warsInPeriod,
   defaultSort,
+  period,
 }: {
   members: ActivityRow[];
   thresholdDays: number;
   warsInPeriod: number;
   defaultSort: Sort;
+  period: ActivityPeriod;
 }) {
+  const router = useRouter();
   const [filter, setFilter] = useState<Filter>("todos");
   const [sort, setSort] = useState<Sort>(defaultSort);
 
@@ -102,6 +112,34 @@ export function ActivityList({
 
   return (
     <>
+      {/* Periodo + Orden (desplegables) */}
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        <label className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2 py-1.5">
+          <span className="text-[11px] font-bold text-ink-soft">Periodo</span>
+          <select
+            value={period}
+            onChange={(e) => router.push(`/actividad?p=${e.target.value}`)}
+            className="min-w-0 flex-1 bg-transparent text-sm font-bold text-ink outline-none"
+          >
+            {PERIODS.map((p) => (
+              <option key={p.key} value={p.key}>{p.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2 py-1.5">
+          <span className="text-[11px] font-bold text-ink-soft">Orden</span>
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as Sort)}
+            className="min-w-0 flex-1 bg-transparent text-sm font-bold text-ink outline-none"
+          >
+            {SORTS.map((s) => (
+              <option key={s.key} value={s.key}>{s.label}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
       {/* Filtros: control segmentado de 4 columnas */}
       <div className="mb-3 grid grid-cols-4 gap-1.5">
         {FILTERS.map((f) => (
@@ -116,21 +154,6 @@ export function ActivityList({
             <span className="block text-base font-extrabold leading-tight">{f.count}</span>
           </button>
         ))}
-      </div>
-
-      {/* Orden */}
-      <div className="mb-3 flex items-center gap-2">
-        <label htmlFor="sort" className="text-xs font-bold text-ink-soft">Ordenar por</label>
-        <select
-          id="sort"
-          value={sort}
-          onChange={(e) => setSort(e.target.value as Sort)}
-          className="flex-1 rounded-lg border border-line bg-surface px-2 py-1.5 text-sm font-bold text-ink"
-        >
-          {SORTS.map((s) => (
-            <option key={s.key} value={s.key}>{s.label}</option>
-          ))}
-        </select>
       </div>
 
       <div className="space-y-3">
