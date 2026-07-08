@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getNormalWars, getCwlSeasons } from "@/lib/war-history";
+import { getCurrentWar } from "@/lib/war";
 import { createAuthServerClient } from "@/lib/supabase/auth-server";
 import { AppShell } from "@/components/AppShell";
 import { ResultBadge, scoreText, seasonLabel, fmtDate } from "@/components/WarBits";
@@ -12,16 +13,49 @@ export default async function GuerrasPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [wars, seasons] = await Promise.all([getNormalWars(), getCwlSeasons()]);
+  const [current, wars, seasons] = await Promise.all([
+    getCurrentWar().catch(() => null),
+    getNormalWars(),
+    getCwlSeasons(),
+  ]);
+
+  const live = current && current.state !== "notInWar" && current.members.length > 0 ? current : null;
 
   return (
     <AppShell email={user?.email}>
-      <div className="mb-4 flex items-baseline justify-between gap-2">
-        <h1 className="ribbon-title text-xl text-ink [text-shadow:none]">Historial</h1>
-        <Link href="/war" className="text-sm font-bold text-sky hover:underline">
-          Guerra actual →
+      <h1 className="ribbon-title mb-3 text-xl text-ink [text-shadow:none]">Guerras</h1>
+
+      {/* Acceso fijado a lo que esté en curso */}
+      {live ? (
+        <Link
+          href="/war"
+          className="mb-6 block rounded-2xl border-2 border-banner/50 bg-banner/10 p-4 transition hover:bg-banner/15"
+        >
+          <div className="mb-1 flex items-center gap-2">
+            <span className="flex h-2.5 w-2.5 flex-none rounded-full bg-banner" aria-hidden />
+            <span className="text-xs font-extrabold uppercase tracking-wide text-banner">
+              En curso
+            </span>
+            {live.isCwl && (
+              <span className="rounded-full bg-gold/25 px-2 py-0.5 text-[10px] font-extrabold text-gold-deep">
+                CWL{live.round ? ` · Ronda ${live.round}` : ""}
+              </span>
+            )}
+          </div>
+          <p className="text-lg font-extrabold text-ink">vs {live.opponentName ?? "—"}</p>
+          <p className="text-sm text-ink-soft">
+            ⭐ {live.clanStars ?? "—"} — {live.opponentStars ?? "—"}
+            {live.state === "inWar" && live.pending.length > 0 && (
+              <span className="font-bold text-banner"> · {live.pending.length} sin atacar</span>
+            )}
+            {live.state === "preparation" && <span> · en preparación</span>}
+          </p>
         </Link>
-      </div>
+      ) : (
+        <div className="mb-6 rounded-2xl border border-line bg-surface p-4 text-sm text-ink-soft">
+          🕊️ No hay ninguna guerra en curso ahora mismo.
+        </div>
+      )}
 
       {/* Ligas (CWL) */}
       <h2 className="mb-2 flex items-center gap-2 font-extrabold text-gold-deep">

@@ -24,6 +24,10 @@ export default async function WarPage() {
 
   return (
     <AppShell email={user?.email}>
+      <Link href="/guerras" className="mb-3 inline-block text-sm font-bold text-sky hover:underline">
+        ← Guerras
+      </Link>
+
       <div className="mb-4 flex items-baseline justify-between gap-2">
         <h1 className="ribbon-title text-xl text-ink [text-shadow:none]">Guerra</h1>
         <div className="flex items-center gap-2">
@@ -37,10 +41,6 @@ export default async function WarPage() {
           </span>
         </div>
       </div>
-
-      <Link href="/guerras" className="mb-4 inline-block text-sm font-bold text-sky hover:underline">
-        📜 Ver historial de guerras y ligas →
-      </Link>
 
       {war.isPrivate && (
         <div className="rounded-2xl border border-banner/40 bg-banner/10 p-4 text-banner">

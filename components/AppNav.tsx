@@ -6,7 +6,12 @@ import { usePathname } from "next/navigation";
 const ITEMS = [
   { href: "/", label: "Miembros", icon: "👥", match: (p: string) => p === "/" || p.startsWith("/member") },
   { href: "/actividad", label: "Actividad", icon: "📊", match: (p: string) => p.startsWith("/actividad") },
-  { href: "/war", label: "Guerra", icon: "⚔️", match: (p: string) => p.startsWith("/war") },
+  {
+    href: "/guerras",
+    label: "Guerras",
+    icon: "⚔️",
+    match: (p: string) => p.startsWith("/guerra") || p.startsWith("/liga") || p.startsWith("/war"),
+  },
 ];
 
 export function AppNav({ variant }: { variant: "top" | "bottom" }) {
