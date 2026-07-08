@@ -181,7 +181,7 @@ export function MembersTable({ members }: { members: MemberOverviewRow[] }) {
               </div>
               <div className="mb-2 flex flex-wrap gap-1.5">
                 <span className="rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink">🏆 {m.trophies ?? "—"}</span>
-                <span className="rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink">🎁 {m.donations ?? "—"}{m.donationsDelta != null && m.donationsDelta > 0 && <span className="ml-1 text-grass">+{m.donationsDelta}</span>}</span>
+                <span className="rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink">🎁 {m.donations ?? "—"}{m.donationsDelta != null && m.donationsDelta > 0 && <span className="ml-1 text-grass">+{m.donationsDelta}</span>} · 📥 {m.donationsReceived ?? "—"}</span>
                 <span className={`rounded-lg px-2 py-1 text-xs font-bold ${m.donationsNegative ? "bg-banner/12 text-banner" : "bg-grass/15 text-grass"}`}>Ratio {m.ratio == null ? "—" : m.ratio.toFixed(1)}</span>
                 {m.warStars != null && <span className="rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink">⭐ {m.warStars}</span>}
               </div>
