@@ -15,8 +15,25 @@ const nunito = Nunito({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://anakleta.vercel.app"),
   title: "Añakleta · Fuerza y Unión",
   description: "Panel de gestión del clan Añakleta",
+  // Imagen de previsualización al compartir el enlace (WhatsApp, Discord, etc.).
+  openGraph: {
+    title: "Añakleta · Fuerza y Unión",
+    description: "Panel de gestión del clan Añakleta",
+    url: "https://anakleta.vercel.app",
+    siteName: "Añakleta",
+    locale: "es_ES",
+    type: "website",
+    images: [{ url: "/logo.jpg", width: 1024, height: 1024, alt: "Escudo del clan Añakleta" }],
+  },
+  twitter: {
+    card: "summary",
+    title: "Añakleta · Fuerza y Unión",
+    description: "Panel de gestión del clan Añakleta",
+    images: ["/logo.jpg"],
+  },
 };
 
 export const viewport: Viewport = {
