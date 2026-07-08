@@ -80,6 +80,13 @@ export async function getMemberHistory(tag: string): Promise<MemberHistory | nul
   };
 }
 
+export interface ActivitySignal {
+  key: string;
+  icon: string;
+  label: string;
+  at: string; // última vez que subió esta señal
+}
+
 export interface InactivityRow {
   tag: string;
   name: string;
@@ -89,7 +96,19 @@ export interface InactivityRow {
   capped: boolean; // true si podría llevar más (lo topamos a la ventana de análisis)
   warsPlayed: number; // guerras del último mes en las que atacó
   warAttacks: number; // ataques totales en guerra el último mes
+  recent: ActivitySignal[]; // qué señales se movieron, más recientes primero
 }
+
+// Etiqueta e icono de cada señal, para explicar "por qué está activo".
+const SIGNAL_META: Record<(typeof SIGNALS)[number], { icon: string; label: string }> = {
+  donations: { icon: "🎁", label: "Donó" },
+  donations_received: { icon: "📥", label: "Pidió tropas" },
+  trophies: { icon: "🏆", label: "Copas" },
+  attack_wins: { icon: "⚔️", label: "Atacó" },
+  war_stars: { icon: "⭐", label: "Guerra" },
+  capital_contributions: { icon: "🏛️", label: "Capital" },
+  exp_level: { icon: "⬆️", label: "Subió nivel" },
+};
 
 export interface ActivityReport {
   lookbackDays: number; // ventana de análisis de actividad/guerra
@@ -174,17 +193,22 @@ export async function getActivityReport(newMemberDays = 7): Promise<ActivityRepo
   const inactivity: InactivityRow[] = active.map((m) => {
     const tag = m.tag as string;
     const rows = byTag.get(tag) ?? [];
-    let lastActivityAt: string | null = null;
+    // Última vez que subió CADA señal (para explicar por qué está activo).
+    const lastBySignal: Partial<Record<(typeof SIGNALS)[number], string>> = {};
     for (let i = 1; i < rows.length; i++) {
       const prev = rows[i - 1];
       const cur = rows[i];
-      const moved = SIGNALS.some((k) => {
+      for (const k of SIGNALS) {
         const a = prev[k];
         const b = cur[k];
-        return a != null && b != null && b > a;
-      });
-      if (moved) lastActivityAt = cur.capturedAt;
+        if (a != null && b != null && b > a) lastBySignal[k] = cur.capturedAt;
+      }
     }
+    const recent: ActivitySignal[] = SIGNALS.filter((k) => lastBySignal[k])
+      .map((k) => ({ key: k, icon: SIGNAL_META[k].icon, label: SIGNAL_META[k].label, at: lastBySignal[k]! }))
+      .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+
+    const lastActivityAt = recent[0]?.at ?? null;
     let staleDays: number | null = null;
     let capped = false;
     if (lastActivityAt != null) {
@@ -203,6 +227,7 @@ export async function getActivityReport(newMemberDays = 7): Promise<ActivityRepo
       capped,
       warsPlayed: warsPlayedByTag.get(tag)?.size ?? 0,
       warAttacks: warAttacksByTag.get(tag) ?? 0,
+      recent,
     };
   });
 

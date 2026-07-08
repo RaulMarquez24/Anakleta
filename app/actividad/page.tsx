@@ -36,6 +36,15 @@ function ago(days: number | null, capped: boolean): string {
   return `hace ${d} día${d === 1 ? "" : "s"}${capped ? "+" : ""}`;
 }
 
+// Tiempo corto para los chips de señal ("3h", "2d").
+function agoShort(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const h = ms / 3_600_000;
+  if (h < 1) return "ahora";
+  if (h < 24) return `${Math.round(h)}h`;
+  return `${Math.round(h / 24)}d`;
+}
+
 export default async function ActividadPage() {
   const supabase = await createAuthServerClient();
   const {
@@ -98,30 +107,53 @@ export default async function ActividadPage() {
           {report.inactivity.map((r) => {
             const susp = r.staleDays != null && r.staleDays >= report.thresholdDays;
             return (
-              <li key={r.tag} className={`flex items-center gap-3 px-3.5 py-2.5 ${susp ? "bg-banner/8" : ""}`}>
-                <div className="min-w-0 flex-1">
-                  <Link href={href(r.tag)} className="font-bold text-ink hover:text-gold-deep hover:underline">
-                    {r.name}
-                  </Link>
-                  <p className="text-xs text-ink-soft">
-                    {r.role ? (ROLE_LABEL[r.role] ?? r.role) : "—"}
-                    {report.warsInPeriod > 0 && (
-                      <> · ⚔️ {r.warsPlayed}/{report.warsInPeriod} guerras · {r.warAttacks} ataques</>
-                    )}
-                  </p>
+              <li key={r.tag} className={`px-3.5 py-2.5 ${susp ? "bg-banner/8" : ""}`}>
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <Link href={href(r.tag)} className="font-bold text-ink hover:text-gold-deep hover:underline">
+                      {r.name}
+                    </Link>
+                    <p className="text-xs text-ink-soft">
+                      {r.role ? (ROLE_LABEL[r.role] ?? r.role) : "—"}
+                      {report.warsInPeriod > 0 && (
+                        <> · ⚔️ {r.warsPlayed}/{report.warsInPeriod} guerras · {r.warAttacks} ataques</>
+                      )}
+                    </p>
+                  </div>
+                  <span
+                    className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-extrabold ${
+                      r.staleDays == null
+                        ? "bg-surface-2 text-ink-soft"
+                        : susp
+                          ? "bg-banner/15 text-banner"
+                          : "bg-grass/15 text-grass"
+                    }`}
+                    title={r.lastActivityAt ? `Última señal: ${fmtDate(r.lastActivityAt)}` : "Sin histórico todavía"}
+                  >
+                    {r.staleDays != null && r.staleDays < 1 ? "activo" : ago(r.staleDays, r.capped)}
+                  </span>
                 </div>
-                <span
-                  className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-extrabold ${
-                    r.staleDays == null
-                      ? "bg-surface-2 text-ink-soft"
-                      : susp
-                        ? "bg-banner/15 text-banner"
-                        : "bg-grass/15 text-grass"
-                  }`}
-                  title={r.lastActivityAt ? `Última señal: ${fmtDate(r.lastActivityAt)}` : "Sin histórico todavía"}
-                >
-                  {r.staleDays != null && r.staleDays < 1 ? "activo" : ago(r.staleDays, r.capped)}
-                </span>
+
+                {/* Detalle: qué señales se movieron y cuándo */}
+                {r.recent.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {r.recent.map((s) => (
+                      <span
+                        key={s.key}
+                        className="inline-flex items-center gap-1 rounded-lg bg-surface-2 px-2 py-0.5 text-[11px] font-bold text-ink-soft"
+                        title={fmtDate(s.at)}
+                      >
+                        <span aria-hidden>{s.icon}</span>
+                        {s.label}
+                        <span className="text-ink-soft/70">· {agoShort(s.at)}</span>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-1.5 text-[11px] text-ink-soft/70">
+                    Sin señales de actividad en la ventana.
+                  </p>
+                )}
               </li>
             );
           })}
