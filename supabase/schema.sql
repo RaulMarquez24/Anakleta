@@ -79,6 +79,27 @@ alter table member_snapshots add column if not exists defense_wins         int;
 alter table member_snapshots add column if not exists war_preference       text;
 alter table member_snapshots add column if not exists capital_contributions bigint;
 
+-- Histórico de guerras: marca CWL, temporada, ronda, marcador y alineación.
+alter table wars add column if not exists is_cwl               boolean default false;
+alter table wars add column if not exists season               text;
+alter table wars add column if not exists round                int;
+alter table wars add column if not exists clan_stars           int;
+alter table wars add column if not exists opponent_stars       int;
+alter table wars add column if not exists clan_destruction     numeric;
+alter table wars add column if not exists opponent_destruction numeric;
+
+create table if not exists war_members (
+  war_id        bigint references wars(id),
+  tag           text,
+  name          text,
+  map_position  int,
+  town_hall     int,
+  attacks_used  int,
+  stars         int,
+  destruction   numeric
+);
+create index if not exists war_members_war_idx on war_members (war_id);
+
 -- Privilegios: con "expose new tables" desactivado, las tablas nuevas no reciben
 -- GRANTs automáticos. Concedemos acceso SOLO a service_role (el rol del servidor,
 -- usado por la SECRET KEY). NO se concede a anon/authenticated: los datos quedan

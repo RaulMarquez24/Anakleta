@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { buildWarNotice, getCurrentWar, type WarView } from "@/lib/war";
 import { createAuthServerClient } from "@/lib/supabase/auth-server";
 import { AppShell } from "@/components/AppShell";
@@ -68,6 +69,13 @@ export default async function WarPage() {
           </span>
         </div>
       </div>
+
+      <Link
+        href="/guerras"
+        className="mb-4 inline-block text-sm font-bold text-sky hover:underline"
+      >
+        📜 Ver historial de guerras y ligas →
+      </Link>
 
       {war.isPrivate && (
         <div className="rounded-2xl border border-banner/40 bg-banner/10 p-4 text-banner">

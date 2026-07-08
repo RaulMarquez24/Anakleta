@@ -26,9 +26,16 @@ export async function captureWar(
       .upsert(
         {
           war_tag: rec.warTag,
+          is_cwl: rec.isCwl,
+          season: rec.season,
+          round: rec.round,
           state: rec.state,
           team_size: rec.teamSize,
           opponent_name: rec.opponentName,
+          clan_stars: rec.clanStars,
+          opponent_stars: rec.opponentStars,
+          clan_destruction: rec.clanDestruction,
+          opponent_destruction: rec.opponentDestruction,
           start_time: rec.startTime,
           end_time: rec.endTime,
           result: rec.result,
@@ -41,6 +48,7 @@ export async function captureWar(
     if (warErr) throw warErr;
     const warId = warRow.id as number;
 
+    // Reescribe ataques y alineación de esta guerra.
     await supabase.from("war_attacks").delete().eq("war_id", warId);
     if (rec.attacks.length > 0) {
       const { error: aErr } = await supabase.from("war_attacks").insert(
@@ -55,6 +63,24 @@ export async function captureWar(
       );
       if (aErr) throw aErr;
     }
+
+    await supabase.from("war_members").delete().eq("war_id", warId);
+    if (rec.members.length > 0) {
+      const { error: mErr } = await supabase.from("war_members").insert(
+        rec.members.map((m) => ({
+          war_id: warId,
+          tag: m.tag,
+          name: m.name,
+          map_position: m.mapPosition,
+          town_hall: m.townHall,
+          attacks_used: m.attacksUsed,
+          stars: m.stars,
+          destruction: m.destruction,
+        })),
+      );
+      if (mErr) throw mErr;
+    }
+
     recorded++;
     attacks += rec.attacks.length;
   }
