@@ -33,6 +33,10 @@ const SORTS: { key: Sort; label: string }[] = [
   { key: "nombre", label: "Nombre" },
 ];
 
+function shortTier(name: string | null): string {
+  return name ? name.replace(" League", "") : "Sin rango";
+}
+
 function ago(days: number | null, capped: boolean): string {
   if (days == null) return "sin datos";
   if (days < 1) return "activo hoy";
@@ -160,6 +164,9 @@ export function ActivityList({
         {view.map((m) => {
           const cat = CAT[m.category];
           const susp = m.category === "expulsion" || m.category === "revisar";
+          const stale = susp && m.staleDays != null && m.staleDays >= thresholdDays;
+          const roundsAttacked = Math.min(m.warAttacks, m.warsPlayed);
+          const warPct = m.warsPlayed > 0 ? roundsAttacked / m.warsPlayed : 0;
           return (
             <Link
               key={m.tag}
@@ -172,73 +179,73 @@ export function ActivityList({
                     : ""
               }`}
             >
-              <div className="mb-2 flex items-center gap-2">
-                <span className="font-extrabold text-ink">{m.name}</span>
+              {/* Nombre + estado */}
+              <div className="mb-1.5 flex items-center gap-2">
+                <span className="truncate font-extrabold text-ink">{m.name}</span>
                 {m.isNew && (
-                  <span className="rounded-full bg-grass/20 px-2 py-0.5 text-[10px] font-extrabold uppercase text-grass">
+                  <span className="flex-none rounded-full bg-grass/20 px-2 py-0.5 text-[10px] font-extrabold uppercase text-grass">
                     Nuevo
                   </span>
                 )}
-                <span className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-extrabold ${cat.cls}`}>
+                <span className={`ml-auto flex-none rounded-full px-2 py-0.5 text-[11px] font-extrabold ${cat.cls}`}>
                   {cat.label}
                 </span>
               </div>
 
-              <p className={`mb-2 text-sm font-bold ${susp && m.staleDays != null && m.staleDays >= thresholdDays ? "text-banner" : "text-ink-soft"}`}>
-                {ago(m.staleDays, m.capped)}
-                <span className="font-normal"> · {m.role ? (ROLE_LABEL[m.role] ?? m.role) : "—"}</span>
-              </p>
+              {/* Nivel: rango + TH + rol + actividad */}
+              <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                <span className="inline-flex items-center gap-1 font-bold text-ink">
+                  {m.leagueTierIcon && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={m.leagueTierIcon} alt="" width={18} height={18} className="h-[18px] w-[18px]" loading="lazy" />
+                  )}
+                  {shortTier(m.leagueTierName)}
+                </span>
+                <span className="rounded bg-sky/15 px-1.5 py-0.5 font-bold text-sky">TH{m.townHall ?? "—"}</span>
+                <span className="text-ink-soft">{m.role ? (ROLE_LABEL[m.role] ?? m.role) : "—"}</span>
+                <span className={`ml-auto font-bold ${stale ? "text-banner" : "text-ink-soft"}`}>
+                  {ago(m.staleDays, m.capped)}
+                </span>
+              </div>
 
               {/* Métricas */}
               <div className="mb-2 flex flex-wrap gap-1.5 text-xs font-bold">
                 <span className={`rounded-lg px-2 py-1 ${m.donationNegative ? "bg-banner/12 text-banner" : "bg-surface-2 text-ink"}`}>
-                  🎁 {m.donations ?? "—"} dadas · 📥 {m.donationsReceived ?? "—"} recib. · ratio{" "}
-                  {m.ratio == null ? "—" : m.ratio.toFixed(2)}
+                  🎁 {m.donations ?? "—"}
+                  {m.donationsTrend === "up" && <span className="text-grass"> ↑</span>}
+                  {m.donationsTrend === "down" && <span className="text-banner"> ↓</span>}
+                  {" · "}📥 {m.donationsReceived ?? "—"} · ratio {m.ratio == null ? "—" : m.ratio.toFixed(2)}
                 </span>
                 {warsInPeriod > 0 && (
-                  <span className="rounded-lg bg-surface-2 px-2 py-1 text-ink">
-                    ⚔️ {m.warsPlayed} guerras · ⭐ {m.warStars}
-                  </span>
-                )}
-                {m.warMissed > 0 && (
-                  <span className="rounded-lg bg-banner/12 px-2 py-1 text-banner">
-                    sin atacar
-                    {m.missedRounds.length > 0
-                      ? `: ${m.missedRounds.map((r) => `R${r}`).join(", ")}`
-                      : ` (${m.warMissed})`}
+                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-surface-2 px-2 py-1 text-ink">
+                    ⚔️ atacó {roundsAttacked}/{m.warsPlayed}
+                    <span aria-hidden className="inline-block h-1.5 w-10 overflow-hidden rounded-full bg-line">
+                      <span
+                        className={`block h-full rounded-full ${warPct >= 1 ? "bg-grass" : warPct > 0 ? "bg-gold" : "bg-banner"}`}
+                        style={{ width: `${Math.round(warPct * 100)}%` }}
+                      />
+                    </span>
+                    · ⭐ {m.warStars}
                   </span>
                 )}
               </div>
 
-              {/* Faltillas detectadas */}
+              {/* Faltillas */}
               {m.flags.length > 0 && (
                 <div className="mb-2 flex flex-wrap gap-1.5">
                   {m.flags.map((f) => (
-                    <span
-                      key={f}
-                      className="rounded-lg bg-banner/12 px-2 py-1 text-[11px] font-bold text-banner"
-                    >
+                    <span key={f} className="rounded-lg bg-banner/12 px-2 py-1 text-[11px] font-bold text-banner">
                       {f}
                     </span>
                   ))}
                 </div>
               )}
 
-              {/* Señales recientes */}
+              {/* Señales recientes (discreto) */}
               {m.recent.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {m.recent.map((s) => (
-                    <span
-                      key={s.key}
-                      title={new Date(s.at).toLocaleString("es-ES")}
-                      className="inline-flex items-center gap-1 rounded-lg bg-surface-2 px-2 py-0.5 text-[11px] font-bold text-ink-soft"
-                    >
-                      <span aria-hidden>{s.icon}</span>
-                      {s.label}
-                      <span className="text-ink-soft/70">· {agoShort(s.at)}</span>
-                    </span>
-                  ))}
-                </div>
+                <p className="text-[11px] text-ink-soft/80">
+                  {m.recent.slice(0, 5).map((s) => `${s.icon} ${agoShort(s.at)}`).join("   ")}
+                </p>
               )}
             </Link>
           );

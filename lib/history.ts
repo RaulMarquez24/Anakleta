@@ -95,6 +95,10 @@ export interface ActivityRow {
   name: string;
   role: string | null;
   isNew: boolean;
+  townHall: number | null;
+  leagueTierName: string | null;
+  leagueTierIcon: string | null;
+  donationsTrend: "up" | "down" | "flat" | null; // vs periodo anterior
   lastActivityAt: string | null; // última señal de actividad detectada
   staleDays: number | null; // días desde la última actividad (null si no hay histórico)
   capped: boolean; // true si podría llevar más (lo topamos a la ventana de análisis)
@@ -222,13 +226,17 @@ export async function getActivityReport(
   // Snapshots de la ventana con todas las señales.
   const { data: snaps } = await supabase
     .from("member_snapshots")
-    .select(`member_tag, captured_at, war_preference, ${SIGNALS.join(", ")}`)
+    .select(
+      `member_tag, captured_at, war_preference, town_hall, league_tier_name, league_tier_icon, ${SIGNALS.join(", ")}`,
+    )
     .gte("captured_at", since)
     .order("captured_at", { ascending: true })
     .limit(50000);
 
   const byTag = new Map<string, SignalRow[]>();
-  const lastWarPref = new Map<string, string | null>(); // preferencia de guerra más reciente
+  const lastWarPref = new Map<string, string | null>();
+  const lastTH = new Map<string, number | null>();
+  const lastTier = new Map<string, { name: string | null; icon: string | null }>();
   for (const s of (snaps ?? []) as unknown as Record<string, unknown>[]) {
     const tag = s.member_tag as string;
     if (!byTag.has(tag)) byTag.set(tag, []);
@@ -236,6 +244,43 @@ export async function getActivityReport(
     for (const k of SIGNALS) row[k] = (s[k] as number | null) ?? null;
     byTag.get(tag)!.push(row);
     lastWarPref.set(tag, (s.war_preference as string | null) ?? null);
+    lastTH.set(tag, (s.town_hall as number | null) ?? null);
+    lastTier.set(tag, {
+      name: (s.league_tier_name as string | null) ?? null,
+      icon: (s.league_tier_icon as string | null) ?? null,
+    });
+  }
+
+  // Donaciones del periodo ANTERIOR (para la tendencia). Semana→semana previa,
+  // Mes→mes previo, Todo→sin comparación.
+  const prevDon = new Map<string, number>();
+  let prevHasData = false;
+  if (period !== "todo") {
+    const curStart = periodStartMs(period);
+    const d = new Date(curStart);
+    const prevStart =
+      period === "mes"
+        ? Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)
+        : curStart - 7 * DAY_MS;
+    const { data: prevSnaps } = await supabase
+      .from("member_snapshots")
+      .select("member_tag, captured_at, donations")
+      .gte("captured_at", new Date(prevStart).toISOString())
+      .lt("captured_at", new Date(curStart).toISOString())
+      .order("captured_at", { ascending: true })
+      .limit(50000);
+    prevHasData = (prevSnaps?.length ?? 0) > 0;
+    const prevByTag = new Map<string, number[]>();
+    for (const s of prevSnaps ?? []) {
+      const tag = s.member_tag as string;
+      if (!prevByTag.has(tag)) prevByTag.set(tag, []);
+      prevByTag.get(tag)!.push((s.donations as number | null) ?? 0);
+    }
+    for (const [tag, vals] of prevByTag) {
+      let sum = 0;
+      for (let i = 1; i < vals.length; i++) if (vals[i] > vals[i - 1]) sum += vals[i] - vals[i - 1];
+      prevDon.set(tag, sum);
+    }
   }
 
   // Participación en guerra del último mes (desde la alineación war_members).
@@ -331,6 +376,13 @@ export async function getActivityReport(
     // Copas actuales (ranked). Se resetea cada lunes: 0 = sin competitivo esta semana.
     const lastTrophies = snapRows.length > 0 ? snapRows[snapRows.length - 1].trophies : null;
 
+    // Tendencia de donaciones vs periodo anterior.
+    let donationsTrend: "up" | "down" | "flat" | null = null;
+    if (prevHasData && donations != null) {
+      const diff = donations - (prevDon.get(tag) ?? 0);
+      donationsTrend = Math.abs(diff) < 50 ? "flat" : diff > 0 ? "up" : "down";
+    }
+
     const w = warStat.get(tag) ?? { played: 0, attacks: 0, missed: 0, missedRounds: [], stars: 0 };
 
     const fs = m.first_seen_at ? new Date(m.first_seen_at as string).getTime() : null;
@@ -383,6 +435,10 @@ export async function getActivityReport(
       name: m.name as string,
       role,
       isNew,
+      townHall: lastTH.get(tag) ?? null,
+      leagueTierName: lastTier.get(tag)?.name ?? null,
+      leagueTierIcon: lastTier.get(tag)?.icon ?? null,
+      donationsTrend,
       lastActivityAt,
       staleDays,
       capped,
