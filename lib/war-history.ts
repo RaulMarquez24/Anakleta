@@ -6,6 +6,7 @@ export interface WarSummary {
   season: string | null;
   round: number | null;
   state: string | null;
+  teamSize: number | null;
   opponentName: string | null;
   clanStars: number | null;
   opponentStars: number | null;
@@ -36,7 +37,7 @@ export interface WarMemberDetail {
 }
 
 const WAR_COLS =
-  "id, is_cwl, season, round, state, opponent_name, clan_stars, opponent_stars, clan_destruction, opponent_destruction, result, start_time, end_time";
+  "id, is_cwl, season, round, state, team_size, opponent_name, clan_stars, opponent_stars, clan_destruction, opponent_destruction, result, start_time, end_time";
 
 function toSummary(w: Record<string, unknown>): WarSummary {
   return {
@@ -45,6 +46,7 @@ function toSummary(w: Record<string, unknown>): WarSummary {
     season: (w.season as string | null) ?? null,
     round: (w.round as number | null) ?? null,
     state: (w.state as string | null) ?? null,
+    teamSize: (w.team_size as number | null) ?? null,
     opponentName: (w.opponent_name as string | null) ?? null,
     clanStars: (w.clan_stars as number | null) ?? null,
     opponentStars: (w.opponent_stars as number | null) ?? null,

@@ -46,6 +46,8 @@ export interface WarMemberRow {
   mapPosition: number;
   attacksUsed: number;
   attacksPending: number;
+  stars: number; // estrellas conseguidas (suma de sus ataques)
+  destruction: number; // % sumado de sus ataques
 }
 export interface WarView {
   state: CocCurrentWar["state"];
@@ -104,14 +106,16 @@ function buildView(
 
   const members: WarMemberRow[] = (us?.members ?? [])
     .map((m) => {
-      const used = m.attacks?.length ?? 0;
+      const atks = m.attacks ?? [];
       return {
         tag: m.tag,
         name: m.name,
         townHall: m.townhallLevel,
         mapPosition: m.mapPosition,
-        attacksUsed: used,
-        attacksPending: Math.max(0, attacksPerMember - used),
+        attacksUsed: atks.length,
+        attacksPending: Math.max(0, attacksPerMember - atks.length),
+        stars: atks.reduce((n, a) => n + (a.stars ?? 0), 0),
+        destruction: atks.reduce((n, a) => n + (a.destructionPercentage ?? 0), 0),
       };
     })
     .sort((a, b) => a.mapPosition - b.mapPosition);
@@ -364,14 +368,19 @@ function emptyWar(state: CocCurrentWar["state"], isPrivate: boolean): WarView {
 }
 
 /** Texto listo para copiar/pegar al chat del clan con los ataques pendientes. */
-export function buildWarNotice(war: WarView): string {
-  if (war.state !== "inWar" || war.pending.length === 0) return "";
-  const lines = war.pending.map(
+export function buildNoticeText(opts: {
+  opponentName: string | null;
+  isCwl: boolean;
+  round: number | null;
+  pending: { name: string; attacksPending: number }[];
+}): string {
+  if (opts.pending.length === 0) return "";
+  const lines = opts.pending.map(
     (m) => `• ${m.name} — ${m.attacksPending} ataque${m.attacksPending > 1 ? "s" : ""}`,
   );
-  const total = war.pending.reduce((n, m) => n + m.attacksPending, 0);
-  const titulo = war.isCwl
-    ? `⚔️ AVISO CWL${war.round ? ` (Ronda ${war.round})` : ""} vs ${war.opponentName ?? "rival"}`
-    : `⚔️ AVISO DE GUERRA vs ${war.opponentName ?? "rival"}`;
+  const total = opts.pending.reduce((n, m) => n + m.attacksPending, 0);
+  const titulo = opts.isCwl
+    ? `⚔️ AVISO CWL${opts.round ? ` (Ronda ${opts.round})` : ""} vs ${opts.opponentName ?? "rival"}`
+    : `⚔️ AVISO DE GUERRA vs ${opts.opponentName ?? "rival"}`;
   return [titulo, `Quedan ${total} ataques pendientes:`, ...lines, ``, `¡A por ellos! 💪`].join("\n");
 }
