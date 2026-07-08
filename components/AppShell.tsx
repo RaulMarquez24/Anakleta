@@ -63,11 +63,11 @@ export async function AppShell({
         </div>
       </header>
 
-      {/* Aviso global: aún hay gente sin atacar en la guerra en curso */}
+      {/* Aviso global flotante: se queda fijo arriba al hacer scroll */}
       {alert && (
         <Link
           href="/war"
-          className="block bg-banner-dark/90 px-4 py-2 text-center text-sm font-bold text-white transition hover:bg-banner-dark"
+          className="sticky top-0 z-40 block bg-banner-dark px-4 py-2 text-center text-sm font-bold text-white shadow-md transition hover:brightness-110"
         >
           ⏰ Aún falta gente por atacar · {alert.pendingCount} sin atacar en {alert.label}
           {alert.endsAt && <> · quedan {timeLeft(alert.endsAt)}</>}

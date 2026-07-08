@@ -94,26 +94,27 @@ export function ActivityList({
     return arr;
   }, [members, filter, sort]);
 
-  const FILTERS: { key: Filter; label: string }[] = [
-    { key: "todos", label: `Todos (${members.length})` },
-    { key: "expulsar", label: `Expulsar (${counts.expulsar})` },
-    { key: "pendiente", label: `Pendiente (${counts.pendiente})` },
-    { key: "destacables", label: `Destacables (${counts.destacables})` },
+  const FILTERS: { key: Filter; label: string; count: number }[] = [
+    { key: "todos", label: "Todos", count: members.length },
+    { key: "expulsar", label: "Expulsar", count: counts.expulsar },
+    { key: "pendiente", label: "Pendiente", count: counts.pendiente },
+    { key: "destacables", label: "Destac.", count: counts.destacables },
   ];
 
   return (
     <>
-      {/* Filtros */}
-      <div className="mb-3 flex flex-wrap gap-2">
+      {/* Filtros: control segmentado de 4 columnas */}
+      <div className="mb-3 grid grid-cols-4 gap-1.5">
         {FILTERS.map((f) => (
           <button
             key={f.key}
             onClick={() => setFilter(f.key)}
-            className={`rounded-full px-3 py-1.5 text-xs font-extrabold transition ${
+            className={`rounded-xl px-1 py-1.5 text-center transition ${
               filter === f.key ? "bg-banner text-white" : "bg-surface-2 text-ink-soft hover:bg-line"
             }`}
           >
-            {f.label}
+            <span className="block text-[10px] font-bold leading-tight">{f.label}</span>
+            <span className="block text-base font-extrabold leading-tight">{f.count}</span>
           </button>
         ))}
       </div>
