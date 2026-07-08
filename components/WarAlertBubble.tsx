@@ -41,7 +41,9 @@ export function WarAlertBubble({
     >
       <span aria-hidden className="text-base leading-none">⏰</span>
       {compact ? (
-        <span className="text-sm tabular-nums">{pendingCount}</span>
+        <span className="text-sm tabular-nums">
+          {pendingCount} · {timeLeft(endsAt)}
+        </span>
       ) : (
         <span className="text-sm">
           {pendingCount} sin atacar · {timeLeft(endsAt)}
