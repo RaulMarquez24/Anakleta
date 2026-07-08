@@ -87,16 +87,26 @@ export interface ActivitySignal {
   at: string; // última vez que subió esta señal
 }
 
-export interface InactivityRow {
+export type ActivityCategory = "expulsion" | "revisar" | "destacado" | "ok" | "mando";
+
+export interface ActivityRow {
   tag: string;
   name: string;
   role: string | null;
+  isNew: boolean;
   lastActivityAt: string | null; // última señal de actividad detectada
   staleDays: number | null; // días desde la última actividad (null si no hay histórico)
   capped: boolean; // true si podría llevar más (lo topamos a la ventana de análisis)
-  warsPlayed: number; // guerras del último mes en las que atacó
-  warAttacks: number; // ataques totales en guerra el último mes
   recent: ActivitySignal[]; // qué señales se movieron, más recientes primero
+  donations: number | null;
+  donationsReceived: number | null;
+  ratio: number | null;
+  warsPlayed: number; // rondas/guerras del último mes en las que estuvo alineado
+  warAttacks: number; // ataques usados en guerra el último mes
+  warMissed: number; // rondas alineado sin atacar (último mes)
+  warStars: number; // estrellas de guerra del último mes
+  category: ActivityCategory;
+  kickScore: number; // mayor = más candidato a echar (orden por defecto)
 }
 
 // Etiqueta e icono de cada señal, para explicar "por qué está activo".
@@ -114,7 +124,7 @@ export interface ActivityReport {
   lookbackDays: number; // ventana de análisis de actividad/guerra
   thresholdDays: number; // umbral para marcar candidato a limpiar
   warsInPeriod: number; // nº de guerras del clan en la ventana
-  inactivity: InactivityRow[]; // ordenado por staleDays desc (más sospechoso primero)
+  members: ActivityRow[]; // ordenado por kickScore desc (candidatos a echar primero)
 }
 
 export interface Departure {
@@ -172,9 +182,15 @@ export async function getActivityReport(): Promise<ActivityReport> {
 
   const { data: members } = await supabase
     .from("members")
-    .select("tag, name, role, is_active")
+    .select("tag, name, role, is_active, first_seen_at")
     .eq("is_active", true);
   const active = members ?? [];
+
+  // Línea base del tracking para detectar "nuevos" reales (ver dashboard).
+  const firstSeens = active
+    .map((m) => (m.first_seen_at ? new Date(m.first_seen_at as string).getTime() : null))
+    .filter((t): t is number => t != null);
+  const baseline = firstSeens.length ? Math.min(...firstSeens) : now;
 
   // Snapshots de la ventana con todas las señales.
   const { data: snaps } = await supabase
@@ -193,38 +209,40 @@ export async function getActivityReport(): Promise<ActivityReport> {
     byTag.get(tag)!.push(row);
   }
 
-  // Participación en guerra del último mes.
-  const { data: warRows } = await supabase
-    .from("wars")
-    .select("id")
-    .gte("start_time", since);
+  // Participación en guerra del último mes (desde la alineación war_members).
+  const { data: warRows } = await supabase.from("wars").select("id").gte("start_time", since);
   const warIds = (warRows ?? []).map((w) => w.id as number);
   const warsInPeriod = warIds.length;
 
-  const warsPlayedByTag = new Map<string, Set<number>>();
-  const warAttacksByTag = new Map<string, number>();
+  const warStat = new Map<string, { played: number; attacks: number; missed: number; stars: number }>();
   if (warIds.length > 0) {
-    const { data: atk } = await supabase
-      .from("war_attacks")
-      .select("war_id, attacker_tag")
+    const { data: wm } = await supabase
+      .from("war_members")
+      .select("tag, attacks_used, stars")
       .in("war_id", warIds)
       .limit(50000);
-    for (const a of atk ?? []) {
-      const tag = a.attacker_tag as string;
-      if (!warsPlayedByTag.has(tag)) warsPlayedByTag.set(tag, new Set());
-      warsPlayedByTag.get(tag)!.add(a.war_id as number);
-      warAttacksByTag.set(tag, (warAttacksByTag.get(tag) ?? 0) + 1);
+    for (const m of wm ?? []) {
+      const tag = m.tag as string;
+      if (!warStat.has(tag)) warStat.set(tag, { played: 0, attacks: 0, missed: 0, stars: 0 });
+      const s = warStat.get(tag)!;
+      const used = (m.attacks_used as number | null) ?? 0;
+      s.played++;
+      s.attacks += used;
+      if (used === 0) s.missed++;
+      s.stars += (m.stars as number | null) ?? 0;
     }
   }
 
-  const inactivity: InactivityRow[] = active.map((m) => {
+  const rowsOut: ActivityRow[] = active.map((m) => {
     const tag = m.tag as string;
-    const rows = byTag.get(tag) ?? [];
-    // Última vez que subió CADA señal (para explicar por qué está activo).
+    const role = (m.role as string | null) ?? null;
+    const snapRows = byTag.get(tag) ?? [];
+
+    // Última vez que subió cada señal.
     const lastBySignal: Partial<Record<(typeof SIGNALS)[number], string>> = {};
-    for (let i = 1; i < rows.length; i++) {
-      const prev = rows[i - 1];
-      const cur = rows[i];
+    for (let i = 1; i < snapRows.length; i++) {
+      const prev = snapRows[i - 1];
+      const cur = snapRows[i];
       for (const k of SIGNALS) {
         const a = prev[k];
         const b = cur[k];
@@ -240,30 +258,73 @@ export async function getActivityReport(): Promise<ActivityReport> {
     let capped = false;
     if (lastActivityAt != null) {
       staleDays = (now - new Date(lastActivityAt).getTime()) / DAY_MS;
-    } else if (rows.length > 0) {
-      // Sin actividad en toda la ventana: lleva al menos desde la 1ª captura vista.
-      staleDays = (now - new Date(rows[0].capturedAt).getTime()) / DAY_MS;
+    } else if (snapRows.length > 0) {
+      staleDays = (now - new Date(snapRows[0].capturedAt).getTime()) / DAY_MS;
       capped = true;
     }
+    staleDays = staleDays != null ? Math.round(staleDays * 10) / 10 : null;
+
+    const last = snapRows[snapRows.length - 1];
+    const donations = last?.donations ?? null;
+    const received = last?.donations_received ?? null;
+    const ratio = received && received > 0 ? donations! / received : null;
+
+    const w = warStat.get(tag) ?? { played: 0, attacks: 0, missed: 0, stars: 0 };
+
+    const fs = m.first_seen_at ? new Date(m.first_seen_at as string).getTime() : null;
+    const isNew = fs != null && now - fs < 7 * DAY_MS && fs - baseline > 12 * 3_600_000;
+
+    const isStaff = role === "leader" || role === "coLeader";
+    let category: ActivityCategory;
+    if (isStaff) category = "mando";
+    else if ((staleDays != null && staleDays >= 14) || w.missed >= 3) category = "expulsion";
+    else if ((staleDays != null && staleDays >= THRESHOLD_DAYS) || w.missed >= 1 || (ratio != null && ratio < 1))
+      category = "revisar";
+    else if (
+      staleDays != null &&
+      staleDays < 2 &&
+      w.missed === 0 &&
+      ((ratio != null && ratio >= 2) || w.attacks >= 2 || w.stars >= 6)
+    )
+      category = "destacado";
+    else category = "ok";
+
+    let kickScore = -1;
+    if (!isStaff) {
+      kickScore =
+        Math.min(staleDays ?? 0, 30) +
+        w.missed * 8 +
+        (ratio != null && ratio < 1 ? 8 : 0) +
+        (staleDays != null && staleDays >= THRESHOLD_DAYS ? 10 : 0);
+    }
+
     return {
       tag,
       name: m.name as string,
-      role: (m.role as string | null) ?? null,
+      role,
+      isNew,
       lastActivityAt,
-      staleDays: staleDays != null ? Math.round(staleDays * 10) / 10 : null,
+      staleDays,
       capped,
-      warsPlayed: warsPlayedByTag.get(tag)?.size ?? 0,
-      warAttacks: warAttacksByTag.get(tag) ?? 0,
       recent,
+      donations,
+      donationsReceived: received,
+      ratio,
+      warsPlayed: w.played,
+      warAttacks: w.attacks,
+      warMissed: w.missed,
+      warStars: w.stars,
+      category,
+      kickScore,
     };
   });
 
-  inactivity.sort((a, b) => (b.staleDays ?? -1) - (a.staleDays ?? -1));
+  rowsOut.sort((a, b) => b.kickScore - a.kickScore || (b.staleDays ?? -1) - (a.staleDays ?? -1));
 
   return {
     lookbackDays: LOOKBACK_DAYS,
     thresholdDays: THRESHOLD_DAYS,
     warsInPeriod,
-    inactivity,
+    members: rowsOut,
   };
 }

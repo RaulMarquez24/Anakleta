@@ -2,48 +2,9 @@ import Link from "next/link";
 import { getActivityReport } from "@/lib/history";
 import { createAuthServerClient } from "@/lib/supabase/auth-server";
 import { AppShell } from "@/components/AppShell";
+import { ActivityList } from "@/components/ActivityList";
 
 export const dynamic = "force-dynamic";
-
-const ROLE_LABEL: Record<string, string> = {
-  leader: "Líder",
-  coLeader: "Colíder",
-  admin: "Veterano",
-  member: "Miembro",
-};
-
-function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  return new Intl.DateTimeFormat("es-ES", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Europe/Madrid",
-  }).format(new Date(iso));
-}
-
-function href(tag: string) {
-  return `/member/${encodeURIComponent(tag)}`;
-}
-
-// "hace X" legible a partir de días (con decimal para <1 día → horas).
-function ago(days: number | null, capped: boolean): string {
-  if (days == null) return "sin datos";
-  if (days < 1) {
-    const h = Math.max(1, Math.round(days * 24));
-    return `hace ${h} h`;
-  }
-  const d = Math.round(days);
-  return `hace ${d} día${d === 1 ? "" : "s"}${capped ? "+" : ""}`;
-}
-
-// Tiempo corto para los chips de señal ("3h", "2d").
-function agoShort(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  const h = ms / 3_600_000;
-  if (h < 1) return "ahora";
-  if (h < 24) return `${Math.round(h)}h`;
-  return `${Math.round(h / 24)}d`;
-}
 
 export default async function ActividadPage() {
   const supabase = await createAuthServerClient();
@@ -54,86 +15,31 @@ export default async function ActividadPage() {
 
   return (
     <AppShell email={user?.email}>
-      <div className="mb-4 flex items-baseline justify-between gap-2">
+      <div className="mb-1 flex items-baseline justify-between gap-2">
         <h1 className="ribbon-title text-xl text-ink [text-shadow:none]">Actividad</h1>
-        <span className="text-xs font-semibold text-ink-soft">
-          Últimos {report.lookbackDays} días · {report.warsInPeriod} guerras
-        </span>
-      </div>
-
-      {/* Actividad + participación en guerra */}
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <h2 className="font-extrabold text-ink">Última actividad y guerra</h2>
         <Link
           href="/bajas"
           className="rounded-full border border-line px-3 py-1 text-xs font-bold text-ink-soft transition hover:bg-surface-2"
         >
-          📤 Registro de bajas
+          📤 Bajas
         </Link>
       </div>
-      <div className="overflow-hidden rounded-2xl border border-line bg-surface">
-        <ul className="divide-y divide-line">
-          {report.inactivity.map((r) => {
-            const susp = r.staleDays != null && r.staleDays >= report.thresholdDays;
-            return (
-              <li key={r.tag} className={`px-3.5 py-2.5 ${susp ? "bg-banner/8" : ""}`}>
-                <div className="flex items-center gap-3">
-                  <div className="min-w-0 flex-1">
-                    <Link href={href(r.tag)} className="font-bold text-ink hover:text-gold-deep hover:underline">
-                      {r.name}
-                    </Link>
-                    <p className="text-xs text-ink-soft">
-                      {r.role ? (ROLE_LABEL[r.role] ?? r.role) : "—"}
-                      {report.warsInPeriod > 0 && (
-                        <> · ⚔️ {r.warsPlayed}/{report.warsInPeriod} guerras · {r.warAttacks} ataques</>
-                      )}
-                    </p>
-                  </div>
-                  <span
-                    className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-extrabold ${
-                      r.staleDays == null
-                        ? "bg-surface-2 text-ink-soft"
-                        : susp
-                          ? "bg-banner/15 text-banner"
-                          : "bg-grass/15 text-grass"
-                    }`}
-                    title={r.lastActivityAt ? `Última señal: ${fmtDate(r.lastActivityAt)}` : "Sin histórico todavía"}
-                  >
-                    {r.staleDays != null && r.staleDays < 1 ? "activo" : ago(r.staleDays, r.capped)}
-                  </span>
-                </div>
+      <p className="mb-4 text-xs text-ink-soft">
+        Últimos {report.lookbackDays} días · {report.warsInPeriod} guerras · ordenado por defecto:
+        candidatos a echar primero.
+      </p>
 
-                {/* Detalle: qué señales se movieron y cuándo */}
-                {r.recent.length > 0 ? (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {r.recent.map((s) => (
-                      <span
-                        key={s.key}
-                        className="inline-flex items-center gap-1 rounded-lg bg-surface-2 px-2 py-0.5 text-[11px] font-bold text-ink-soft"
-                        title={fmtDate(s.at)}
-                      >
-                        <span aria-hidden>{s.icon}</span>
-                        {s.label}
-                        <span className="text-ink-soft/70">· {agoShort(s.at)}</span>
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-1.5 text-[11px] text-ink-soft/70">
-                    Sin señales de actividad en la ventana.
-                  </p>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      </div>
+      <ActivityList
+        members={report.members}
+        thresholdDays={report.thresholdDays}
+        warsInPeriod={report.warsInPeriod}
+      />
 
       <p className="mt-3 text-xs text-ink-soft">
-        &ldquo;Última actividad&rdquo; = última vez que subió alguna señal (donaciones, copas,
-        ataques, estrellas de guerra, aporte a capital o XP) entre capturas. La API de Clash no da
-        la última conexión real; esto es lo más fiable posible. En ámbar, ≥ {report.thresholdDays}{" "}
-        días sin actividad. La participación en guerra se acumula desde ahora.
+        <strong>Categorías:</strong> 🔴 Expulsión (inactivo ≥ 14 días o ≥ 3 fallos de guerra) · 🟡
+        Revisar (≥ {report.thresholdDays} días, algún fallo o ratio &lt; 1) · 🟢 Destacado (activo,
+        sin fallos y buen aporte) · Mando (líderes/colíderes, no se juzgan). &ldquo;Última
+        actividad&rdquo; se infiere de las señales entre capturas; la API no da la conexión real.
       </p>
     </AppShell>
   );
