@@ -27,8 +27,8 @@ export default async function ActividadPage({
   } = await supabase.auth.getUser();
   const report = await getActivityReport(period);
 
-  // Semana → foco en echar; Mes/Todo → foco en participación (ascensos).
-  const defaultSort = period === "semana" ? "kick" : "participacion";
+  // Semana → foco en inactividad (día a día); Mes/Todo → participación (ascensos).
+  const defaultSort = period === "semana" ? "inactivo" : "participacion";
 
   return (
     <AppShell email={user?.email}>
@@ -58,10 +58,8 @@ export default async function ActividadPage({
       </div>
 
       <p className="mb-4 text-xs text-ink-soft">
-        Actividad de cada miembro {report.periodLabel} · Orden:{" "}
-        {period === "semana"
-          ? "candidatos a echar primero"
-          : "más participativos primero (para ascensos)"}
+        Actividad de cada miembro {report.periodLabel}. Filtra por grupo arriba y ordena por la
+        métrica que quieras.
       </p>
 
       <ActivityList

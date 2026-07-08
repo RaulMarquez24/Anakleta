@@ -20,13 +20,14 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 type Filter = "todos" | "expulsar" | "pendiente" | "destacables";
-export type Sort = "kick" | "participacion" | "inactivo" | "ratio" | "guerra" | "nombre";
+export type Sort = "participacion" | "donaciones" | "inactivo" | "guerra" | "nombre";
 
+// El orden es solo por métricas; el agrupado (expulsar/revisar/destacables) lo
+// hacen los tabs de arriba.
 const SORTS: { key: Sort; label: string }[] = [
-  { key: "kick", label: "A revisar/echar" },
-  { key: "participacion", label: "Más participativos (subir)" },
+  { key: "participacion", label: "Más participativos" },
+  { key: "donaciones", label: "Más donan" },
   { key: "inactivo", label: "Más inactivos" },
-  { key: "ratio", label: "Peor ratio donaciones" },
   { key: "guerra", label: "Más fallos en guerra" },
   { key: "nombre", label: "Nombre" },
 ];
@@ -77,18 +78,16 @@ export function ActivityList({
     });
     arr = [...arr].sort((a, b) => {
       switch (sort) {
-        case "participacion":
-          return b.participationScore - a.participationScore;
+        case "donaciones":
+          return (b.donations ?? -1) - (a.donations ?? -1);
         case "inactivo":
           return (b.staleDays ?? -1) - (a.staleDays ?? -1);
-        case "ratio":
-          return (a.ratio ?? Infinity) - (b.ratio ?? Infinity);
         case "guerra":
           return b.warMissed - a.warMissed || (b.staleDays ?? -1) - (a.staleDays ?? -1);
         case "nombre":
           return a.name.localeCompare(b.name, "es");
         default:
-          return b.kickScore - a.kickScore || (b.staleDays ?? -1) - (a.staleDays ?? -1);
+          return b.participationScore - a.participationScore;
       }
     });
     return arr;
