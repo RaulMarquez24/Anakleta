@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getMembersOverview } from "@/lib/dashboard";
 import { createAuthServerClient } from "@/lib/supabase/auth-server";
 import { AppShell } from "@/components/AppShell";
@@ -23,10 +24,18 @@ export default async function DashboardPage() {
 
   return (
     <AppShell email={user?.email} title="Miembros">
-      <p className="mb-3 text-xs font-semibold text-ink-soft">
-        {data.members.length} miembros
-        {data.clanLevel != null && <> · nivel {data.clanLevel}</>} · captura {fmtDate(data.latestCapture)}
-      </p>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold text-ink-soft">
+          {data.members.length} miembros
+          {data.clanLevel != null && <> · nivel {data.clanLevel}</>} · captura {fmtDate(data.latestCapture)}
+        </p>
+        <Link
+          href="/bajas"
+          className="flex-none rounded-full border border-line px-3 py-1 text-xs font-bold text-ink-soft transition hover:bg-surface-2"
+        >
+          📤 Bajas
+        </Link>
+      </div>
 
       <MembersTable members={data.members} />
     </AppShell>

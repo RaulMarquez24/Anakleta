@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { getActivityReport, type ActivityPeriod } from "@/lib/history";
 import { createAuthServerClient } from "@/lib/supabase/auth-server";
 import { AppShell } from "@/components/AppShell";
@@ -26,15 +25,6 @@ export default async function ActividadPage({
 
   return (
     <AppShell email={user?.email} title="Actividad">
-      <div className="mb-3 flex justify-end">
-        <Link
-          href="/bajas"
-          className="rounded-full border border-line px-3 py-1 text-xs font-bold text-ink-soft transition hover:bg-surface-2"
-        >
-          📤 Bajas
-        </Link>
-      </div>
-
       <ActivityList
         members={report.members}
         thresholdDays={report.thresholdDays}

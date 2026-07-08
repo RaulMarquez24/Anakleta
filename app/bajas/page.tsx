@@ -34,8 +34,8 @@ export default async function BajasPage() {
   return (
     <AppShell email={user?.email} title="Bajas">
       <div className="mb-4 flex items-baseline justify-end gap-2">
-        <Link href="/actividad" className="text-sm font-bold text-sky hover:underline">
-          ← Actividad
+        <Link href="/" className="text-sm font-bold text-sky hover:underline">
+          ← Miembros
         </Link>
       </div>
 
