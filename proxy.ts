@@ -54,5 +54,9 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // Ejecuta en todo salvo estáticos y /api (el cron llega a /api/snapshot sin sesión).
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    // Todo salvo /api (protegido por CRON_SECRET), estáticos de Next, y archivos
+    // de imagen del /public (logo, iconos): esos no deben redirigir a /login.
+    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico)$).*)",
+  ],
 };

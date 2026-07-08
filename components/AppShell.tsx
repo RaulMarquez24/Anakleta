@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { AppNav } from "@/components/AppNav";
 
 // Marco común de las páginas autenticadas: cabecera con la cinta roja del logo,
@@ -13,12 +14,14 @@ export function AppShell({
     <div className="min-h-full pb-20 sm:pb-6">
       <header className="bg-banner">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
-          <span
+          <Image
+            src="/logo.jpg"
+            alt=""
             aria-hidden
-            className="flex h-11 w-11 flex-none items-center justify-center rounded-xl bg-gold text-2xl shadow-[inset_0_0_0_2px_rgba(255,255,255,.35)]"
-          >
-            🛡️
-          </span>
+            width={44}
+            height={44}
+            className="h-11 w-11 flex-none rounded-xl shadow-[0_0_0_2px_rgba(255,255,255,.35)]"
+          />
           <div className="min-w-0">
             <p className="ribbon-title text-2xl leading-none">AÑAKLETA</p>
             <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#f6d9b0]">

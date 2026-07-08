@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase/client";
 
@@ -29,15 +30,17 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-bg p-4">
       <div className="w-full max-w-sm">
-        {/* Escudo del clan */}
+        {/* Logo del clan (ya incluye nombre y lema) */}
         <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 flex h-20 w-20 items-center justify-center rounded-2xl bg-banner text-4xl shadow-lg shadow-banner/30">
-            🛡️
-          </div>
-          <h1 className="ribbon-title text-4xl text-gold">AÑAKLETA</h1>
-          <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-banner">
-            Fuerza y Unión
-          </p>
+          <h1 className="sr-only">Añakleta · Fuerza y Unión</h1>
+          <Image
+            src="/logo.jpg"
+            alt="Escudo del clan Añakleta"
+            width={200}
+            height={200}
+            priority
+            className="mx-auto h-auto w-44 rounded-3xl shadow-xl sm:w-48"
+          />
         </div>
 
         <form
