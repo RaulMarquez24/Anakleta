@@ -341,8 +341,10 @@ export async function getActivityReport(
       staleDays != null &&
       staleDays < 2 &&
       w.missed === 0 &&
-      // Destacar requiere aporte real: donar > 1000, o buen registro de guerra.
-      ((donations != null && donations > 1000) || w.stars >= 6)
+      // Destacar EXIGE aporte real de donaciones (> 1000) además de estar activo
+      // y sin fallos de guerra. No basta con jugar bien la guerra.
+      donations != null &&
+      donations > 1000
     )
       category = "destacado";
     else category = "ok";
