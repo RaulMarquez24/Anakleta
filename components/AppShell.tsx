@@ -1,16 +1,7 @@
 import Image from "next/image";
-import Link from "next/link";
 import { AppNav } from "@/components/AppNav";
+import { WarAlertBubble } from "@/components/WarAlertBubble";
 import { getWarAlert } from "@/lib/war-history";
-
-function timeLeft(iso: string | null): string {
-  if (!iso) return "";
-  const ms = new Date(iso).getTime() - Date.now();
-  if (ms <= 0) return "0h";
-  const h = Math.floor(ms / 3_600_000);
-  const m = Math.floor((ms % 3_600_000) / 60_000);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
 
 // Marco común de las páginas autenticadas: cabecera con la cinta roja del logo,
 // navegación (arriba en escritorio, barra inferior en móvil) y el contenido.
@@ -65,18 +56,11 @@ export async function AppShell({
         </div>
       </header>
 
-      {/* Aviso global flotante: se queda fijo arriba al hacer scroll */}
-      {alert && (
-        <Link
-          href="/war"
-          className="sticky top-0 z-40 block bg-banner-dark px-4 py-2 text-center text-sm font-bold text-white shadow-md transition hover:brightness-110"
-        >
-          ⏰ Aún falta gente por atacar · {alert.pendingCount} sin atacar en {alert.label}
-          {alert.endsAt && <> · quedan {timeLeft(alert.endsAt)}</>}
-        </Link>
-      )}
-
       <main className="mx-auto max-w-5xl px-4 py-5">{children}</main>
+
+      {alert && (
+        <WarAlertBubble pendingCount={alert.pendingCount} endsAt={alert.endsAt} label={alert.label} />
+      )}
 
       <AppNav variant="bottom" />
     </div>

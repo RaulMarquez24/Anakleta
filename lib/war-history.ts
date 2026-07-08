@@ -216,9 +216,15 @@ export async function getWarAlert(): Promise<WarAlert | null> {
   const pendingCount = count ?? 0;
   if (pendingCount === 0) return null;
 
+  // Solo avisar si quedan menos de 12h (y la guerra no ha terminado aún).
+  const endsAt = (war.end_time as string | null) ?? null;
+  if (!endsAt) return null;
+  const msLeft = new Date(endsAt).getTime() - Date.now();
+  if (msLeft <= 0 || msLeft > 12 * 3_600_000) return null;
+
   return {
     pendingCount,
-    endsAt: (war.end_time as string | null) ?? null,
+    endsAt,
     label: war.is_cwl ? `CWL · Ronda ${war.round ?? "?"}` : "la guerra",
   };
 }
