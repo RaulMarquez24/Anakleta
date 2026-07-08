@@ -205,7 +205,7 @@ export function ActivityList({
 
               {/* Métricas */}
               <div className="mb-2 flex flex-wrap gap-1.5 text-xs font-bold">
-                <span className={`rounded-lg px-2 py-1 ${m.ratio != null && m.ratio < 1 ? "bg-banner/12 text-banner" : "bg-surface-2 text-ink"}`}>
+                <span className={`rounded-lg px-2 py-1 ${m.donationNegative ? "bg-banner/12 text-banner" : "bg-surface-2 text-ink"}`}>
                   🎁 {m.donations ?? "—"} · ratio {m.ratio == null ? "—" : m.ratio.toFixed(1)}
                 </span>
                 {warsInPeriod > 0 && (

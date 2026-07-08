@@ -1,5 +1,16 @@
 import { createServerClient } from "@/lib/supabase/server";
 
+// Las donaciones "cuentan negativo" (leeching) solo si donó poco (< 1000) Y le
+// han dado bastante más de lo que aportó (recibidas − donadas ≥ 1000). Así no
+// penaliza a quien recibió poco, ni a quien dona mucho aunque reciba más.
+export function donationsNegative(
+  donations: number | null,
+  received: number | null,
+): boolean {
+  if (donations == null || received == null) return false;
+  return donations < 1000 && received - donations >= 1000;
+}
+
 interface SnapRow {
   member_tag: string;
   captured_at: string;
@@ -32,6 +43,7 @@ export interface MemberOverviewRow {
   donationsReceived: number | null;
   trophies: number | null;
   ratio: number | null; // donations / donations_received
+  donationsNegative: boolean; // cuenta negativo (leeching) según la regla
   donationsDelta: number | null; // vs. captura anterior (null si no hay previa)
   hadChange: boolean | null; // ¿cambió donaciones o trofeos desde la captura previa?
   // Sistema de ligas nuevo + XP + enriquecimiento:
@@ -135,6 +147,7 @@ export async function getMembersOverview(): Promise<DashboardData> {
       donationsReceived: received,
       trophies,
       ratio: received && received > 0 ? donations! / received : null,
+      donationsNegative: donationsNegative(donations, received),
       donationsDelta,
       hadChange,
       leagueTierId: cur?.league_tier_id ?? null,

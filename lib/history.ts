@@ -1,4 +1,5 @@
 import { createServerClient } from "@/lib/supabase/server";
+import { donationsNegative } from "@/lib/dashboard";
 
 const DAY_MS = 86_400_000;
 
@@ -101,6 +102,7 @@ export interface ActivityRow {
   donations: number | null;
   donationsReceived: number | null;
   ratio: number | null;
+  donationNegative: boolean; // cuenta negativo (leeching) según la regla
   warsPlayed: number; // rondas/guerras del periodo en las que estuvo alineado
   warAttacks: number; // ataques usados en guerra el periodo
   warMissed: number; // rondas TERMINADAS alineado sin atacar (periodo)
@@ -322,6 +324,7 @@ export async function getActivityReport(
     const donations = snapRows.length > 0 ? donationsPeriod : null;
     const received = snapRows.length > 0 ? receivedPeriod : null;
     const ratio = received && received > 0 ? donations! / received : null;
+    const donNeg = donationsNegative(donations, received);
 
     const w = warStat.get(tag) ?? { played: 0, attacks: 0, missed: 0, missedRounds: [], stars: 0 };
 
@@ -332,7 +335,7 @@ export async function getActivityReport(
     let category: ActivityCategory;
     if (isStaff) category = "mando";
     else if ((staleDays != null && staleDays >= 14) || w.missed >= 3) category = "expulsion";
-    else if ((staleDays != null && staleDays >= THRESHOLD_DAYS) || w.missed >= 1 || (ratio != null && ratio < 1))
+    else if ((staleDays != null && staleDays >= THRESHOLD_DAYS) || w.missed >= 1 || donNeg)
       category = "revisar";
     else if (
       staleDays != null &&
@@ -348,7 +351,7 @@ export async function getActivityReport(
       kickScore =
         Math.min(staleDays ?? 0, 30) +
         w.missed * 8 +
-        (ratio != null && ratio < 1 ? 8 : 0) +
+        (donNeg ? 8 : 0) +
         (staleDays != null && staleDays >= THRESHOLD_DAYS ? 10 : 0);
     }
 
@@ -364,6 +367,7 @@ export async function getActivityReport(
       donations,
       donationsReceived: received,
       ratio,
+      donationNegative: donNeg,
       warsPlayed: w.played,
       warAttacks: w.attacks,
       warMissed: w.missed,

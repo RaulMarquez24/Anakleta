@@ -161,7 +161,7 @@ export function MembersTable({ members }: { members: MemberOverviewRow[] }) {
       <div className="space-y-3 sm:hidden">
         {sorted.map((m) => {
           const rb = roleBadge(m.role);
-          const attention = m.ratio != null && m.ratio < 1;
+          const attention = m.donationsNegative;
           return (
             <Link
               key={m.tag}
@@ -182,7 +182,7 @@ export function MembersTable({ members }: { members: MemberOverviewRow[] }) {
               <div className="mb-2 flex flex-wrap gap-1.5">
                 <span className="rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink">🏆 {m.trophies ?? "—"}</span>
                 <span className="rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink">🎁 {m.donations ?? "—"}{m.donationsDelta != null && m.donationsDelta > 0 && <span className="ml-1 text-grass">+{m.donationsDelta}</span>}</span>
-                <span className={`rounded-lg px-2 py-1 text-xs font-bold ${m.ratio != null && m.ratio < 1 ? "bg-banner/12 text-banner" : "bg-grass/15 text-grass"}`}>Ratio {m.ratio == null ? "—" : m.ratio.toFixed(1)}</span>
+                <span className={`rounded-lg px-2 py-1 text-xs font-bold ${m.donationsNegative ? "bg-banner/12 text-banner" : "bg-grass/15 text-grass"}`}>Ratio {m.ratio == null ? "—" : m.ratio.toFixed(1)}</span>
                 {m.warStars != null && <span className="rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink">⭐ {m.warStars}</span>}
               </div>
               <Activity m={m} />
@@ -227,7 +227,7 @@ export function MembersTable({ members }: { members: MemberOverviewRow[] }) {
                   <td className="px-3 py-2 text-right tabular-nums">{m.warStars ?? "—"}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{m.donations ?? "—"}{m.donationsDelta != null && m.donationsDelta > 0 && <span className="ml-1 text-xs text-grass">+{m.donationsDelta}</span>}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-ink-soft">{m.donationsReceived ?? "—"}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{m.ratio == null ? "—" : <span className={m.ratio < 1 ? "font-bold text-banner" : "text-ink"}>{m.ratio.toFixed(2)}</span>}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{m.ratio == null ? "—" : <span className={m.donationsNegative ? "font-bold text-banner" : "text-ink"}>{m.ratio.toFixed(2)}</span>}</td>
                   <td className="px-3 py-2"><div className="flex justify-center"><Activity m={m} /></div></td>
                 </tr>
               );
