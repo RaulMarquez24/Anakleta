@@ -1,6 +1,6 @@
 import { cocFetch, encodeTag, CocApiError } from "@/lib/coc";
 
-// --- Tipos del subset de /currentwar que usamos ---
+// --- Tipos del subset de guerra que usamos (vale para /currentwar y CWL) ---
 interface CocWarAttack {
   attackerTag: string;
   defenderTag: string;
@@ -16,23 +16,26 @@ interface CocWarMember {
   attacks?: CocWarAttack[];
 }
 interface CocWarSide {
-  tag: string;
+  tag?: string;
   name: string;
-  clanLevel: number;
-  attacks: number;
-  stars: number;
-  destructionPercentage: number;
+  stars?: number;
+  destructionPercentage?: number;
   members?: CocWarMember[];
 }
-interface CocCurrentWar {
+export interface CocCurrentWar {
   state: "notInWar" | "preparation" | "inWar" | "warEnded";
   teamSize?: number;
   attacksPerMember?: number;
-  preparationStartTime?: string;
   startTime?: string;
   endTime?: string;
   clan?: CocWarSide;
   opponent?: CocWarSide;
+}
+interface CocLeagueGroup {
+  state?: string;
+  season?: string;
+  clans?: { tag: string; name: string }[];
+  rounds?: { warTags: string[] }[];
 }
 
 // --- Estructura normalizada para la vista ---
@@ -46,7 +49,9 @@ export interface WarMemberRow {
 }
 export interface WarView {
   state: CocCurrentWar["state"];
-  isPrivate: boolean; // el currentwar está en privado (403)
+  isPrivate: boolean;
+  isCwl: boolean; // guerra de Liga de Clanes (CWL)
+  round: number | null; // ronda de CWL (1-7)
   teamSize: number | null;
   attacksPerMember: number;
   opponentName: string | null;
@@ -54,10 +59,10 @@ export interface WarView {
   opponentStars: number | null;
   clanDestruction: number | null;
   opponentDestruction: number | null;
-  startTime: string | null; // ISO
-  endTime: string | null; // ISO
-  members: WarMemberRow[]; // ordenados por mapPosition
-  pending: WarMemberRow[]; // solo los que tienen ataques pendientes
+  startTime: string | null;
+  endTime: string | null;
+  members: WarMemberRow[];
+  pending: WarMemberRow[];
 }
 
 /** Parsea el formato de fecha compacto de CoC ("20260707T194500.000Z") a ISO. */
@@ -68,26 +73,36 @@ export function parseCocTime(s: string | undefined | null): string | null {
   return `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`;
 }
 
-export async function getCurrentWar(
-  clanTag = process.env.COC_CLAN_TAG ?? "",
-): Promise<WarView> {
-  let raw: CocCurrentWar;
-  try {
-    raw = await cocFetch<CocCurrentWar>(
-      `/clans/${encodeTag(clanTag)}/currentwar`,
-    );
-  } catch (err) {
-    // Un clan con el registro de guerra en privado devuelve 403 aquí.
-    if (err instanceof CocApiError && err.status === 403) {
-      return emptyWar("notInWar", true);
+function tagEq(a?: string, b?: string): boolean {
+  if (!a || !b) return false;
+  return a.replace(/^#/, "").toUpperCase() === b.replace(/^#/, "").toUpperCase();
+}
+
+async function mapPool<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let i = 0;
+  async function run() {
+    while (i < items.length) {
+      const idx = i++;
+      out[idx] = await fn(items[idx]);
     }
-    throw err;
   }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
+  return out;
+}
 
-  if (raw.state === "notInWar") return emptyWar("notInWar", false);
+// Construye la vista normalizada. En CWL nuestro clan puede venir como clan u
+// opponent, así que elegimos "nosotros" por el tag.
+function buildView(
+  raw: CocCurrentWar,
+  opts: { isCwl: boolean; round: number | null; clanTag: string },
+): WarView {
+  const usIsClan = !opts.isCwl || tagEq(raw.clan?.tag, opts.clanTag);
+  const us = usIsClan ? raw.clan : raw.opponent;
+  const them = usIsClan ? raw.opponent : raw.clan;
+  const attacksPerMember = raw.attacksPerMember ?? (opts.isCwl ? 1 : 2);
 
-  const attacksPerMember = raw.attacksPerMember ?? 2; // guerra normal = 2
-  const members: WarMemberRow[] = (raw.clan?.members ?? [])
+  const members: WarMemberRow[] = (us?.members ?? [])
     .map((m) => {
       const used = m.attacks?.length ?? 0;
       return {
@@ -104,13 +119,15 @@ export async function getCurrentWar(
   return {
     state: raw.state,
     isPrivate: false,
+    isCwl: opts.isCwl,
+    round: opts.round,
     teamSize: raw.teamSize ?? null,
     attacksPerMember,
-    opponentName: raw.opponent?.name ?? null,
-    clanStars: raw.clan?.stars ?? null,
-    opponentStars: raw.opponent?.stars ?? null,
-    clanDestruction: raw.clan?.destructionPercentage ?? null,
-    opponentDestruction: raw.opponent?.destructionPercentage ?? null,
+    opponentName: them?.name ?? null,
+    clanStars: us?.stars ?? null,
+    opponentStars: them?.stars ?? null,
+    clanDestruction: us?.destructionPercentage ?? null,
+    opponentDestruction: them?.destructionPercentage ?? null,
     startTime: parseCocTime(raw.startTime),
     endTime: parseCocTime(raw.endTime),
     members,
@@ -118,10 +135,171 @@ export async function getCurrentWar(
   };
 }
 
+function warPriority(state: string): number {
+  return state === "inWar" ? 3 : state === "preparation" ? 2 : state === "warEnded" ? 1 : 0;
+}
+
+// Rondas de CWL con warTags reales (descarta #0 = no empezada).
+async function fetchLeagueGroup(clanTag: string): Promise<{ round: number; tag: string }[]> {
+  let group: CocLeagueGroup;
+  try {
+    group = await cocFetch<CocLeagueGroup>(`/clans/${encodeTag(clanTag)}/currentwar/leaguegroup`);
+  } catch (err) {
+    if (err instanceof CocApiError && (err.status === 404 || err.status === 403)) return [];
+    throw err;
+  }
+  return (group.rounds ?? []).flatMap((r, i) =>
+    (r.warTags ?? []).filter((t) => t && t !== "#0").map((tag) => ({ round: i + 1, tag })),
+  );
+}
+
+async function fetchWars(
+  refs: { round: number; tag: string }[],
+  clanTag: string,
+): Promise<{ round: number; raw: CocCurrentWar }[]> {
+  const results = await mapPool(refs, 6, async (r) => {
+    try {
+      const raw = await cocFetch<CocCurrentWar>(`/clanwarleagues/wars/${encodeTag(r.tag)}`);
+      return { round: r.round, raw };
+    } catch {
+      return null;
+    }
+  });
+  return results.filter(
+    (x): x is { round: number; raw: CocCurrentWar } =>
+      x != null && (tagEq(x.raw.clan?.tag, clanTag) || tagEq(x.raw.opponent?.tag, clanTag)),
+  );
+}
+
+// Guerra CWL "actual" de nuestro clan: mira las 2 últimas rondas con datos y
+// elige la que esté en guerra (o la más reciente en preparación/terminada).
+async function getCurrentCwlWar(clanTag: string): Promise<WarView | null> {
+  const refs = await fetchLeagueGroup(clanTag);
+  if (!refs.length) return null;
+  const maxRound = Math.max(...refs.map((r) => r.round));
+  const subset = refs.filter((r) => r.round >= maxRound - 1); // últimas 2 rondas
+  const ours = await fetchWars(subset, clanTag);
+  if (!ours.length) return null;
+  ours.sort(
+    (a, b) =>
+      warPriority(b.raw.state) - warPriority(a.raw.state) ||
+      new Date(b.raw.startTime ?? 0).getTime() - new Date(a.raw.startTime ?? 0).getTime(),
+  );
+  const chosen = ours[0];
+  return buildView(chosen.raw, { isCwl: true, round: chosen.round, clanTag });
+}
+
+export async function getCurrentWar(
+  clanTag = process.env.COC_CLAN_TAG ?? "",
+): Promise<WarView> {
+  let raw: CocCurrentWar | null = null;
+  let wasPrivate = false;
+  try {
+    raw = await cocFetch<CocCurrentWar>(`/clans/${encodeTag(clanTag)}/currentwar`);
+  } catch (err) {
+    if (err instanceof CocApiError && err.status === 403) wasPrivate = true;
+    else throw err;
+  }
+
+  // Guerra normal en curso.
+  if (raw && raw.state !== "notInWar") {
+    return buildView(raw, { isCwl: false, round: null, clanTag });
+  }
+
+  // Si no hay guerra normal, probar CWL.
+  const cwl = await getCurrentCwlWar(clanTag).catch(() => null);
+  if (cwl) return cwl;
+
+  return emptyWar("notInWar", wasPrivate);
+}
+
+// --- Captura de participación en guerra (para el histórico) ---
+export interface WarRecord {
+  warTag: string; // clave única (warTag real en CWL, sintético en guerra normal)
+  isCwl: boolean;
+  state: string;
+  teamSize: number | null;
+  opponentName: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  result: string | null;
+  attacks: {
+    attackerTag: string;
+    defenderTag: string;
+    stars: number;
+    destruction: number;
+    order: number;
+  }[];
+}
+
+function toRecord(
+  raw: CocCurrentWar,
+  opts: { warTag: string; isCwl: boolean; clanTag: string },
+): WarRecord {
+  const usIsClan = !opts.isCwl || tagEq(raw.clan?.tag, opts.clanTag);
+  const us = usIsClan ? raw.clan : raw.opponent;
+  const them = usIsClan ? raw.opponent : raw.clan;
+  let result: string | null = null;
+  if (raw.state === "warEnded" && us && them) {
+    const cs = us.stars ?? 0;
+    const os = them.stars ?? 0;
+    const cd = us.destructionPercentage ?? 0;
+    const od = them.destructionPercentage ?? 0;
+    result = cs > os ? "win" : cs < os ? "lose" : cd > od ? "win" : cd < od ? "lose" : "tie";
+  }
+  const attacks = (us?.members ?? []).flatMap((m) =>
+    (m.attacks ?? []).map((a) => ({
+      attackerTag: a.attackerTag,
+      defenderTag: a.defenderTag,
+      stars: a.stars,
+      destruction: a.destructionPercentage,
+      order: a.order,
+    })),
+  );
+  return {
+    warTag: opts.warTag,
+    isCwl: opts.isCwl,
+    state: raw.state,
+    teamSize: raw.teamSize ?? null,
+    opponentName: them?.name ?? null,
+    startTime: parseCocTime(raw.startTime),
+    endTime: parseCocTime(raw.endTime),
+    result,
+    attacks,
+  };
+}
+
+// Devuelve las guerras a registrar: la normal si la hay, o TODAS nuestras
+// guerras de CWL (una por ronda con datos).
+export async function getWarRecords(
+  clanTag = process.env.COC_CLAN_TAG ?? "",
+): Promise<WarRecord[]> {
+  let raw: CocCurrentWar | null = null;
+  try {
+    raw = await cocFetch<CocCurrentWar>(`/clans/${encodeTag(clanTag)}/currentwar`);
+  } catch (err) {
+    if (!(err instanceof CocApiError && err.status === 403)) throw err;
+  }
+
+  if (raw && (raw.state === "inWar" || raw.state === "warEnded")) {
+    return [toRecord(raw, { warTag: `n-${raw.startTime ?? "?"}`, isCwl: false, clanTag })];
+  }
+
+  // CWL: registrar todas nuestras guerras de todas las rondas con datos.
+  const refs = await fetchLeagueGroup(clanTag);
+  if (!refs.length) return [];
+  const ours = await fetchWars(refs, clanTag);
+  return ours
+    .filter((x) => x.raw.state === "inWar" || x.raw.state === "warEnded")
+    .map((x) => toRecord(x.raw, { warTag: refs.find((r) => r.round === x.round)?.tag ?? `cwl-${x.round}`, isCwl: true, clanTag }));
+}
+
 function emptyWar(state: CocCurrentWar["state"], isPrivate: boolean): WarView {
   return {
     state,
     isPrivate,
+    isCwl: false,
+    round: null,
     teamSize: null,
     attacksPerMember: 2,
     opponentName: null,
@@ -140,15 +318,11 @@ function emptyWar(state: CocCurrentWar["state"], isPrivate: boolean): WarView {
 export function buildWarNotice(war: WarView): string {
   if (war.state !== "inWar" || war.pending.length === 0) return "";
   const lines = war.pending.map(
-    (m) =>
-      `• ${m.name} — ${m.attacksPending} ataque${m.attacksPending > 1 ? "s" : ""}`,
+    (m) => `• ${m.name} — ${m.attacksPending} ataque${m.attacksPending > 1 ? "s" : ""}`,
   );
   const total = war.pending.reduce((n, m) => n + m.attacksPending, 0);
-  return [
-    `⚔️ AVISO DE GUERRA vs ${war.opponentName ?? "rival"}`,
-    `Quedan ${total} ataques pendientes:`,
-    ...lines,
-    ``,
-    `¡A por ellos! 💪`,
-  ].join("\n");
+  const titulo = war.isCwl
+    ? `⚔️ AVISO CWL${war.round ? ` (Ronda ${war.round})` : ""} vs ${war.opponentName ?? "rival"}`
+    : `⚔️ AVISO DE GUERRA vs ${war.opponentName ?? "rival"}`;
+  return [titulo, `Quedan ${total} ataques pendientes:`, ...lines, ``, `¡A por ellos! 💪`].join("\n");
 }

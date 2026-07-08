@@ -57,9 +57,16 @@ export default async function WarPage() {
     <AppShell email={user?.email}>
       <div className="mb-4 flex items-baseline justify-between gap-2">
         <h1 className="ribbon-title text-xl text-ink [text-shadow:none]">Guerra</h1>
-        <span className="rounded-full bg-surface-2 px-3 py-1 text-xs font-extrabold text-ink-soft">
-          {STATE_LABEL[war.state]}
-        </span>
+        <div className="flex items-center gap-2">
+          {war.isCwl && (
+            <span className="rounded-full bg-gold/25 px-3 py-1 text-xs font-extrabold text-gold-deep">
+              CWL{war.round ? ` · Ronda ${war.round}` : ""}
+            </span>
+          )}
+          <span className="rounded-full bg-surface-2 px-3 py-1 text-xs font-extrabold text-ink-soft">
+            {STATE_LABEL[war.state]}
+          </span>
+        </div>
       </div>
 
       {war.isPrivate && (

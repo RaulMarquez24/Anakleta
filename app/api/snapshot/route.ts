@@ -137,13 +137,13 @@ export async function POST(req: NextRequest) {
       .insert(snapshotRows);
     if (snapErr) throw snapErr;
 
-    // Grabación de la guerra actual (para el histórico de participación).
+    // Grabación de la guerra actual / CWL (para el histórico de participación).
     // Resiliente: si falla (p.ej. war log privado), no tumba la captura.
-    let war: WarCaptureResult;
+    let war: WarCaptureResult | { error: string };
     try {
       war = await captureWar(supabase, capturedAt);
     } catch (e) {
-      war = { recorded: false, reason: `error: ${String(e)}` };
+      war = { error: String(e) };
     }
 
     return NextResponse.json({
