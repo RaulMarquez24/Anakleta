@@ -44,17 +44,39 @@ function agoShort(iso: string): string {
   return `${Math.round(h / 24)}d`;
 }
 
+interface LiveWar {
+  pending: { tag: string; name: string }[];
+  endsAt: string | null;
+  label: string;
+}
+
+function hoursLeft(iso: string | null): string {
+  if (!iso) return "";
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return "0h";
+  const h = Math.floor(ms / 3_600_000);
+  const m = Math.floor((ms % 3_600_000) / 60_000);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
 export function ActivityList({
   members,
   thresholdDays,
   warsInPeriod,
+  liveWar,
 }: {
   members: ActivityRow[];
   thresholdDays: number;
   warsInPeriod: number;
+  liveWar: LiveWar | null;
 }) {
   const [filter, setFilter] = useState<Filter>("todos");
   const [sort, setSort] = useState<Sort>("kick");
+
+  const pendingSet = useMemo(
+    () => new Set((liveWar?.pending ?? []).map((p) => p.tag)),
+    [liveWar],
+  );
 
   const counts = useMemo(
     () => ({
@@ -98,6 +120,21 @@ export function ActivityList({
 
   return (
     <>
+      {/* Aviso en vivo: guerra en curso con gente sin atacar */}
+      {liveWar && liveWar.pending.length > 0 && (
+        <Link
+          href="/war"
+          className="mb-4 block rounded-2xl border-2 border-banner/50 bg-banner/10 p-3.5 transition hover:bg-banner/15"
+        >
+          <p className="font-extrabold text-banner">
+            ⏰ Quedan {hoursLeft(liveWar.endsAt)} · {liveWar.pending.length} sin atacar
+          </p>
+          <p className="text-sm text-ink-soft">
+            {liveWar.label} — {liveWar.pending.map((p) => p.name).join(", ")}
+          </p>
+        </Link>
+      )}
+
       {/* Filtros */}
       <div className="mb-3 flex flex-wrap gap-2">
         {FILTERS.map((f) => (
@@ -173,7 +210,15 @@ export function ActivityList({
                 )}
                 {m.warMissed > 0 && (
                   <span className="rounded-lg bg-banner/12 px-2 py-1 text-banner">
-                    {m.warMissed} sin atacar
+                    sin atacar
+                    {m.missedRounds.length > 0
+                      ? `: ${m.missedRounds.map((r) => `R${r}`).join(", ")}`
+                      : ` (${m.warMissed})`}
+                  </span>
+                )}
+                {pendingSet.has(m.tag) && (
+                  <span className="rounded-lg bg-gold/20 px-2 py-1 text-gold-deep">
+                    ⏰ pendiente hoy
                   </span>
                 )}
               </div>

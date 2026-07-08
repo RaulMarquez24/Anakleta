@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getActivityReport } from "@/lib/history";
+import { getCurrentWar } from "@/lib/war";
 import { createAuthServerClient } from "@/lib/supabase/auth-server";
 import { AppShell } from "@/components/AppShell";
 import { ActivityList } from "@/components/ActivityList";
@@ -11,7 +12,20 @@ export default async function ActividadPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const report = await getActivityReport();
+  const [report, war] = await Promise.all([
+    getActivityReport(),
+    getCurrentWar().catch(() => null),
+  ]);
+
+  // Aviso en vivo: guerra en curso con gente sin atacar y tiempo restante.
+  const liveWar =
+    war && war.state === "inWar"
+      ? {
+          pending: war.pending.map((m) => ({ tag: m.tag, name: m.name })),
+          endsAt: war.endTime,
+          label: war.isCwl ? `CWL${war.round ? ` · Ronda ${war.round}` : ""}` : "la guerra",
+        }
+      : null;
 
   return (
     <AppShell email={user?.email}>
@@ -33,6 +47,7 @@ export default async function ActividadPage() {
         members={report.members}
         thresholdDays={report.thresholdDays}
         warsInPeriod={report.warsInPeriod}
+        liveWar={liveWar}
       />
 
       <p className="mt-3 text-xs text-ink-soft">

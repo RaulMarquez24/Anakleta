@@ -103,7 +103,8 @@ export interface ActivityRow {
   ratio: number | null;
   warsPlayed: number; // rondas/guerras del último mes en las que estuvo alineado
   warAttacks: number; // ataques usados en guerra el último mes
-  warMissed: number; // rondas alineado sin atacar (último mes)
+  warMissed: number; // rondas TERMINADAS alineado sin atacar (último mes)
+  missedRounds: number[]; // qué rondas de CWL falló (terminadas)
   warStars: number; // estrellas de guerra del último mes
   category: ActivityCategory;
   kickScore: number; // mayor = más candidato a echar (orden por defecto)
@@ -210,27 +211,52 @@ export async function getActivityReport(): Promise<ActivityReport> {
   }
 
   // Participación en guerra del último mes (desde la alineación war_members).
-  const { data: warRows } = await supabase.from("wars").select("id").gte("start_time", since);
+  // Un "sin atacar" SOLO cuenta si la guerra ya terminó: la ronda en curso no
+  // penaliza (aún queda tiempo).
+  const { data: warRows } = await supabase
+    .from("wars")
+    .select("id, state, round")
+    .gte("start_time", since);
   const warIds = (warRows ?? []).map((w) => w.id as number);
   const warsInPeriod = warIds.length;
+  const warState = new Map<number, string>();
+  const warRound = new Map<number, number | null>();
+  for (const w of warRows ?? []) {
+    warState.set(w.id as number, (w.state as string) ?? "");
+    warRound.set(w.id as number, (w.round as number | null) ?? null);
+  }
 
-  const warStat = new Map<string, { played: number; attacks: number; missed: number; stars: number }>();
+  interface WarStat {
+    played: number;
+    attacks: number;
+    missed: number;
+    missedRounds: number[];
+    stars: number;
+  }
+  const warStat = new Map<string, WarStat>();
   if (warIds.length > 0) {
     const { data: wm } = await supabase
       .from("war_members")
-      .select("tag, attacks_used, stars")
+      .select("war_id, tag, attacks_used, stars")
       .in("war_id", warIds)
       .limit(50000);
     for (const m of wm ?? []) {
       const tag = m.tag as string;
-      if (!warStat.has(tag)) warStat.set(tag, { played: 0, attacks: 0, missed: 0, stars: 0 });
+      const wid = m.war_id as number;
+      if (!warStat.has(tag)) warStat.set(tag, { played: 0, attacks: 0, missed: 0, missedRounds: [], stars: 0 });
       const s = warStat.get(tag)!;
       const used = (m.attacks_used as number | null) ?? 0;
       s.played++;
       s.attacks += used;
-      if (used === 0) s.missed++;
       s.stars += (m.stars as number | null) ?? 0;
+      // Solo cuenta como fallo si la guerra terminó.
+      if (used === 0 && warState.get(wid) === "warEnded") {
+        s.missed++;
+        const r = warRound.get(wid);
+        if (r != null) s.missedRounds.push(r);
+      }
     }
+    for (const s of warStat.values()) s.missedRounds.sort((a, b) => a - b);
   }
 
   const rowsOut: ActivityRow[] = active.map((m) => {
@@ -269,7 +295,7 @@ export async function getActivityReport(): Promise<ActivityReport> {
     const received = last?.donations_received ?? null;
     const ratio = received && received > 0 ? donations! / received : null;
 
-    const w = warStat.get(tag) ?? { played: 0, attacks: 0, missed: 0, stars: 0 };
+    const w = warStat.get(tag) ?? { played: 0, attacks: 0, missed: 0, missedRounds: [], stars: 0 };
 
     const fs = m.first_seen_at ? new Date(m.first_seen_at as string).getTime() : null;
     const isNew = fs != null && now - fs < 7 * DAY_MS && fs - baseline > 12 * 3_600_000;
@@ -313,6 +339,7 @@ export async function getActivityReport(): Promise<ActivityReport> {
       warsPlayed: w.played,
       warAttacks: w.attacks,
       warMissed: w.missed,
+      missedRounds: w.missedRounds,
       warStars: w.stars,
       category,
       kickScore,
