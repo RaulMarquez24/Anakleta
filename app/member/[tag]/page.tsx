@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getMemberHistory } from "@/lib/history";
+import { getMemberHistory, getActivityReport, type ActivityRow } from "@/lib/history";
+import { getMemberWarLog } from "@/lib/war-history";
 import { createAuthServerClient } from "@/lib/supabase/auth-server";
 import { AppShell } from "@/components/AppShell";
 import { LineChart, type ChartPoint } from "@/components/LineChart";
+import { seasonLabel } from "@/components/WarBits";
 
 export const dynamic = "force-dynamic";
 
@@ -13,13 +15,32 @@ const ROLE_LABEL: Record<string, string> = {
   admin: "Veterano",
   member: "Miembro",
 };
+const CAT_LABEL: Record<string, { label: string; cls: string }> = {
+  expulsion: { label: "🔴 Expulsión", cls: "bg-banner/15 text-banner" },
+  revisar: { label: "🟡 Revisar", cls: "bg-gold/25 text-gold-deep" },
+  destacado: { label: "🟢 Destacado", cls: "bg-grass/15 text-grass" },
+  ok: { label: "OK", cls: "bg-surface-2 text-ink-soft" },
+  mando: { label: "Mando", cls: "bg-sky/15 text-sky" },
+};
+const LEAGUE_VS: Record<string, string> = {
+  muy_alta: "Liga muy alta p/ su TH",
+  alta: "Liga alta p/ su TH",
+  normal: "Liga adecuada p/ su TH",
+  baja: "Liga baja p/ su TH",
+  muy_baja: "Liga muy baja p/ su TH",
+};
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
-  return new Intl.DateTimeFormat("es-ES", {
-    dateStyle: "medium",
-    timeZone: "Europe/Madrid",
-  }).format(new Date(iso));
+  return new Intl.DateTimeFormat("es-ES", { dateStyle: "medium", timeZone: "Europe/Madrid" }).format(
+    new Date(iso),
+  );
+}
+function agoShort(iso: string): string {
+  const h = (Date.now() - new Date(iso).getTime()) / 3_600_000;
+  if (h < 1) return "hace un momento";
+  if (h < 24) return `hace ${Math.round(h)}h`;
+  return `hace ${Math.round(h / 24)}d`;
 }
 
 function Stat({ label, children }: { label: string; children: React.ReactNode }) {
@@ -31,42 +52,60 @@ function Stat({ label, children }: { label: string; children: React.ReactNode })
   );
 }
 
-export default async function MemberPage({
-  params,
-}: {
-  params: Promise<{ tag: string }>;
-}) {
+function rankOf(members: ActivityRow[], tag: string, value: (m: ActivityRow) => number): number {
+  return [...members].sort((a, b) => value(b) - value(a)).findIndex((m) => m.tag === tag) + 1;
+}
+
+export default async function MemberPage({ params }: { params: Promise<{ tag: string }> }) {
   const supabase = await createAuthServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   const { tag } = await params;
-  const history = await getMemberHistory(decodeURIComponent(tag));
+  const decoded = decodeURIComponent(tag);
+  const [history, report, warLog] = await Promise.all([
+    getMemberHistory(decoded),
+    getActivityReport("todo").catch(() => null),
+    getMemberWarLog(decoded),
+  ]);
   if (!history) notFound();
+
+  const row = report?.members.find((m) => m.tag === decoded) ?? null;
+  const total = report?.members.length ?? 0;
+  const ranks = row
+    ? {
+        don: rankOf(report!.members, decoded, (m) => m.donations ?? 0),
+        stars: rankOf(report!.members, decoded, (m) => m.warStars),
+        part: rankOf(report!.members, decoded, (m) => m.participationScore),
+      }
+    : null;
 
   const isNew =
     history.isActive &&
     history.firstSeenAt != null &&
     Date.now() - new Date(history.firstSeenAt).getTime() < 7 * 86_400_000;
 
-  const toPoint = (
-    key: "donations" | "donationsReceived" | "trophies",
-  ): ChartPoint[] =>
+  const toPoint = (key: "donations" | "donationsReceived" | "trophies"): ChartPoint[] =>
     history.snapshots
       .filter((s) => s[key] != null)
       .map((s) => ({ t: new Date(s.capturedAt).getTime(), v: s[key] as number }));
 
   return (
     <AppShell email={user?.email} title={history.name}>
-      <div className="mb-4 flex items-center justify-between gap-2">
+      <div className="mb-3 flex items-center justify-between gap-2">
         <Link href="/" className="text-sm font-bold text-sky hover:underline">
           ← Miembros
         </Link>
         <div className="flex items-center gap-2">
           {isNew && (
-            <span className="rounded-full bg-grass/20 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-grass">
+            <span className="rounded-full bg-grass/20 px-2 py-0.5 text-[10px] font-extrabold uppercase text-grass">
               Nuevo
+            </span>
+          )}
+          {row && (
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-extrabold ${CAT_LABEL[row.category].cls}`}>
+              {CAT_LABEL[row.category].label}
             </span>
           )}
           {!history.isActive && (
@@ -77,10 +116,52 @@ export default async function MemberPage({
         </div>
       </div>
 
-      <p className="mb-4 text-sm font-semibold text-ink-soft">
-        {history.role ? (ROLE_LABEL[history.role] ?? history.role) : "—"} · TH {history.townHall ?? "—"} ·{" "}
-        {history.snapshots.length} capturas
+      <p className="mb-3 text-sm font-semibold text-ink-soft">
+        {history.role ? (ROLE_LABEL[history.role] ?? history.role) : "—"} · TH {history.townHall ?? "—"} · Nv{" "}
+        {history.current.expLevel ?? "—"}
+        {row?.leagueVsTh && <> · {LEAGUE_VS[row.leagueVsTh]}</>}
       </p>
+
+      {/* Ranking en el clan */}
+      {ranks && (
+        <div className="mb-4 flex flex-wrap gap-2 text-xs font-bold">
+          <span className="rounded-lg bg-surface-2 px-2.5 py-1 text-ink">🎁 #{ranks.don} donaciones</span>
+          <span className="rounded-lg bg-surface-2 px-2.5 py-1 text-ink">⭐ #{ranks.stars} guerra</span>
+          <span className="rounded-lg bg-surface-2 px-2.5 py-1 text-ink">🏅 #{ranks.part} participación</span>
+          <span className="self-center text-ink-soft">de {total}</span>
+        </div>
+      )}
+
+      {/* Actividad + faltillas */}
+      {row && (
+        <div className="mb-5 rounded-2xl border border-line bg-surface p-4">
+          <p className="mb-1 text-sm font-bold text-ink">
+            {row.staleDays == null
+              ? "Sin datos de actividad"
+              : row.staleDays < 1
+                ? "Activo hoy"
+                : `Última actividad hace ${Math.round(row.staleDays)} día${Math.round(row.staleDays) === 1 ? "" : "s"}${row.capped ? "+" : ""}`}
+          </p>
+          {row.flags.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {row.flags.map((f) => (
+                <span key={f} className="rounded-lg bg-banner/12 px-2 py-1 text-[11px] font-bold text-banner">
+                  {f}
+                </span>
+              ))}
+            </div>
+          )}
+          {row.recent.length > 0 && (
+            <ul className="text-xs text-ink-soft">
+              {row.recent.map((s) => (
+                <li key={s.key}>
+                  {s.icon} {s.label} — {agoShort(s.at)} ({fmtDate(s.at)})
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {/* Estadísticas actuales */}
       <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -94,7 +175,7 @@ export default async function MemberPage({
           </span>
         </Stat>
         <Stat label="Copas (ranked)">{history.current.trophies ?? "—"}</Stat>
-        <Stat label="Estrellas de guerra">⭐ {history.current.warStars ?? "—"}</Stat>
+        <Stat label="Estrellas de guerra (total)">⭐ {history.current.warStars ?? "—"}</Stat>
         <Stat label="Ataques / Defensas ganados">
           {history.current.attackWins ?? "—"} / {history.current.defenseWins ?? "—"}
         </Stat>
@@ -111,14 +192,77 @@ export default async function MemberPage({
             : "—"}
         </Stat>
         <Stat label="Alta (aprox.)">{fmtDate(history.firstSeenAt)}</Stat>
+        <Stat label="Capturas">{history.snapshots.length}</Stat>
       </div>
 
+      {/* Historial de guerra por temporada */}
+      {warLog.seasons.length > 0 && (
+        <section className="mb-5">
+          <h2 className="mb-2 font-extrabold text-ink">Guerra por temporada (CWL)</h2>
+          <div className="overflow-hidden rounded-2xl border border-line bg-surface">
+            <table className="w-full text-sm">
+              <thead className="bg-surface-2 text-left text-ink-soft">
+                <tr>
+                  <th className="px-3 py-2 font-bold">Temporada</th>
+                  <th className="px-3 py-2 text-right font-bold">Atacó</th>
+                  <th className="px-3 py-2 text-right font-bold">⭐</th>
+                  <th className="px-3 py-2 text-right font-bold">Sin atacar</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {warLog.seasons.map((s) => (
+                  <tr key={s.season}>
+                    <td className="px-3 py-2 font-bold text-ink">{seasonLabel(s.season)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{s.attacks}/{s.rounds}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-gold-deep">{s.stars}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {s.missed > 0 ? <span className="font-bold text-banner">{s.missed}</span> : "0"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* Últimas guerras */}
+      {warLog.wars.length > 0 && (
+        <section className="mb-5">
+          <h2 className="mb-2 font-extrabold text-ink">Últimas guerras</h2>
+          <div className="overflow-hidden rounded-2xl border border-line bg-surface">
+            <ul className="divide-y divide-line">
+              {warLog.wars.slice(0, 12).map((w) => (
+                <li key={w.warId}>
+                  <Link href={`/guerra/${w.warId}`} className="flex items-center gap-3 px-3.5 py-2.5 hover:bg-surface-2/60">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-bold text-ink">
+                        {w.isCwl ? `CWL R${w.round}` : "Guerra"} · vs {w.opponentName ?? "—"}
+                      </p>
+                      <p className="text-xs text-ink-soft">{fmtDate(w.startTime)}</p>
+                    </div>
+                    {w.attacksUsed > 0 ? (
+                      <span className="text-sm font-bold text-gold-deep">⭐ {w.stars}</span>
+                    ) : (
+                      <span className="rounded-full bg-banner/15 px-2 py-0.5 text-xs font-extrabold text-banner">
+                        No atacó
+                      </span>
+                    )}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      )}
+
+      {/* Gráficas */}
       <section className="space-y-4">
         <div className="rounded-2xl border border-line bg-surface p-4">
           <h2 className="mb-2 flex items-center gap-2 font-extrabold text-gold-deep">
-            <span aria-hidden>🏆</span> Trofeos
+            <span aria-hidden>🏆</span> Copas (evolución)
           </h2>
-          <LineChart series={[{ label: "Trofeos", color: "var(--gold-deep)", points: toPoint("trophies") }]} />
+          <LineChart series={[{ label: "Copas", color: "var(--gold-deep)", points: toPoint("trophies") }]} />
         </div>
 
         <div className="rounded-2xl border border-line bg-surface p-4">
@@ -139,9 +283,6 @@ export default async function MemberPage({
               { label: "Recibidas", color: "var(--sky)", points: toPoint("donationsReceived") },
             ]}
           />
-          <p className="mt-2 text-xs text-ink-soft">
-            Las caídas bruscas a ~0 son el reseteo de temporada, no inactividad.
-          </p>
         </div>
       </section>
     </AppShell>

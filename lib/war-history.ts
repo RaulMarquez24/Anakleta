@@ -229,6 +229,77 @@ export async function getWarAlert(): Promise<WarAlert | null> {
   };
 }
 
+export interface MemberWarEntry {
+  warId: number;
+  isCwl: boolean;
+  season: string | null;
+  round: number | null;
+  opponentName: string | null;
+  startTime: string | null;
+  attacksUsed: number;
+  stars: number;
+}
+export interface MemberSeasonStat {
+  season: string;
+  rounds: number;
+  attacks: number;
+  missed: number;
+  stars: number;
+}
+
+// Historial de guerra de un miembro: cada guerra en la que estuvo alineado + un
+// resumen por temporada de CWL.
+export async function getMemberWarLog(
+  tag: string,
+): Promise<{ wars: MemberWarEntry[]; seasons: MemberSeasonStat[] }> {
+  const supabase = createServerClient();
+  const { data: wm } = await supabase
+    .from("war_members")
+    .select("war_id, attacks_used, stars")
+    .eq("tag", tag)
+    .limit(5000);
+  if (!wm || wm.length === 0) return { wars: [], seasons: [] };
+
+  const ids = [...new Set(wm.map((m) => m.war_id as number))];
+  const { data: warRows } = await supabase
+    .from("wars")
+    .select("id, is_cwl, season, round, opponent_name, start_time, state")
+    .in("id", ids);
+  const warById = new Map((warRows ?? []).map((w) => [w.id as number, w]));
+
+  const wars: MemberWarEntry[] = wm
+    .map((m) => {
+      const w = warById.get(m.war_id as number);
+      return {
+        warId: m.war_id as number,
+        isCwl: Boolean(w?.is_cwl),
+        season: (w?.season as string | null) ?? null,
+        round: (w?.round as number | null) ?? null,
+        opponentName: (w?.opponent_name as string | null) ?? null,
+        startTime: (w?.start_time as string | null) ?? null,
+        attacksUsed: (m.attacks_used as number | null) ?? 0,
+        stars: (m.stars as number | null) ?? 0,
+      };
+    })
+    .sort((a, b) => new Date(b.startTime ?? 0).getTime() - new Date(a.startTime ?? 0).getTime());
+
+  const seasonMap = new Map<string, MemberSeasonStat>();
+  for (const w of wars) {
+    if (!w.isCwl || !w.season) continue;
+    if (!seasonMap.has(w.season))
+      seasonMap.set(w.season, { season: w.season, rounds: 0, attacks: 0, missed: 0, stars: 0 });
+    const s = seasonMap.get(w.season)!;
+    s.rounds++;
+    s.attacks += w.attacksUsed;
+    s.stars += w.stars;
+    const ended = (warById.get(w.warId)?.state as string) === "warEnded";
+    if (w.attacksUsed === 0 && ended) s.missed++;
+  }
+  const seasons = [...seasonMap.values()].sort((a, b) => b.season.localeCompare(a.season));
+
+  return { wars, seasons };
+}
+
 // Detalle de una guerra: cabecera + alineación de nuestro clan.
 export async function getWarDetail(
   id: number,
