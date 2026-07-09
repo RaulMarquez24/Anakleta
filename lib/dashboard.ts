@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { createServerClient } from "@/lib/supabase/server";
 
 // Las donaciones "cuentan negativo" (leeching) solo si donó poco (< 1000) Y le
@@ -70,7 +71,11 @@ export interface DashboardData {
 // Devuelve una vista de cada miembro activo con su última captura y el delta
 // respecto a la anterior. Las capturas son clan-wide (mismo captured_at para
 // todos), así que basta con localizar los dos timestamps más recientes.
-export async function getMembersOverview(): Promise<DashboardData> {
+export const getMembersOverview = unstable_cache(getMembersOverviewImpl, ["members-overview"], {
+  revalidate: 300,
+});
+
+async function getMembersOverviewImpl(): Promise<DashboardData> {
   const supabase = createServerClient();
 
   // Los dos captured_at más recientes (distintos).

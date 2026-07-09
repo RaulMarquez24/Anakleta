@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { cocFetch, encodeTag, CocApiError } from "@/lib/coc";
 
 // --- Tipos del subset de guerra que usamos (vale para /currentwar y CWL) ---
@@ -197,7 +198,11 @@ async function getCurrentCwlWar(clanTag: string): Promise<WarView | null> {
   return buildView(chosen.raw, { isCwl: true, round: chosen.round, clanTag });
 }
 
-export async function getCurrentWar(
+export const getCurrentWar = unstable_cache(getCurrentWarImpl, ["current-war"], {
+  revalidate: 120,
+});
+
+async function getCurrentWarImpl(
   clanTag = process.env.COC_CLAN_TAG ?? "",
 ): Promise<WarView> {
   let raw: CocCurrentWar | null = null;

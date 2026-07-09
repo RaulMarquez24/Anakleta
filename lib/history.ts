@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { createServerClient } from "@/lib/supabase/server";
 import { donationsNegative } from "@/lib/dashboard";
 
@@ -31,7 +32,11 @@ export interface MemberHistory {
   }[];
 }
 
-export async function getMemberHistory(tag: string): Promise<MemberHistory | null> {
+export const getMemberHistory = unstable_cache(getMemberHistoryImpl, ["member-history"], {
+  revalidate: 300,
+});
+
+async function getMemberHistoryImpl(tag: string): Promise<MemberHistory | null> {
   const supabase = createServerClient();
 
   const { data: member } = await supabase
@@ -170,7 +175,11 @@ export interface Departure {
 
 // Registro de abandonos: todos los que ya no están en el clan (is_active=false),
 // del más reciente al más antiguo.
-export async function getDepartures(): Promise<Departure[]> {
+export const getDepartures = unstable_cache(getDeparturesImpl, ["departures"], {
+  revalidate: 300,
+});
+
+async function getDeparturesImpl(): Promise<Departure[]> {
   const supabase = createServerClient();
   const { data } = await supabase
     .from("members")
@@ -206,7 +215,13 @@ const SIGNALS = [
 type SignalRow = { capturedAt: string } & Record<(typeof SIGNALS)[number], number | null>;
 
 // Última actividad detectada (multi-señal) + participación en guerra del último mes.
-export async function getActivityReport(
+export const getActivityReport = unstable_cache(
+  getActivityReportImpl,
+  ["activity-report"],
+  { revalidate: 300 },
+);
+
+async function getActivityReportImpl(
   period: ActivityPeriod = "semana",
 ): Promise<ActivityReport> {
   const supabase = createServerClient();
