@@ -83,6 +83,8 @@ export default async function ClanHomePage({
     revisar: week.members.filter((m) => m.category === "revisar").length,
     destacables: week.members.filter((m) => m.category === "destacado").length,
   };
+  // "Al día": el resto (total − los tres cubos de gestión).
+  const alDia = Math.max(0, week.members.length - cats.expulsar - cats.revisar - cats.destacables);
 
   // Resumen/tops del periodo elegido.
   const activos = report.members.length;
@@ -215,7 +217,11 @@ export default async function ClanHomePage({
           <p className="font-extrabold text-ink">Gestión de esta semana</p>
           <span className="text-ink-soft">›</span>
         </div>
-        <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+          <div className="rounded-xl bg-sky/12 py-2">
+            <p className="text-2xl font-extrabold text-sky">{alDia}</p>
+            <p className="text-[11px] font-bold text-ink-soft">🔵 Al día</p>
+          </div>
           <div className="rounded-xl bg-gold/12 py-2">
             <p className="text-2xl font-extrabold text-gold-deep">{cats.revisar}</p>
             <p className="text-[11px] font-bold text-ink-soft">🟡 A revisar</p>
