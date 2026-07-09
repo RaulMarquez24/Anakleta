@@ -36,13 +36,6 @@ function fmtDate(iso: string | null): string {
     new Date(iso),
   );
 }
-function agoShort(iso: string): string {
-  const h = (Date.now() - new Date(iso).getTime()) / 3_600_000;
-  if (h < 1) return "hace un momento";
-  if (h < 24) return `hace ${Math.round(h)}h`;
-  return `hace ${Math.round(h / 24)}d`;
-}
-
 function Stat({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-line bg-surface p-3">
@@ -213,10 +206,10 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
                 {row.recent.map((s) => (
                   <span
                     key={s.key}
-                    title={fmtDate(s.at)}
+                    title={`Detectado en la captura del ${fmtDate(s.at)}`}
                     className="inline-flex items-center gap-1 rounded-lg bg-surface-2 px-2 py-1 text-[11px] font-bold text-ink-soft"
                   >
-                    {s.icon} {s.label} · {agoShort(s.at)}
+                    {s.icon} {s.label}
                   </span>
                 ))}
               </div>
@@ -244,8 +237,7 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
             ? history.current.capitalContributions.toLocaleString("es-ES")
             : "—"}
         </Stat>
-        <Stat label="Alta (aprox.)">{fmtDate(history.firstSeenAt)}</Stat>
-        <Stat label="Capturas">{history.snapshots.length}</Stat>
+        <Stat label="Visto desde (aprox.)">{fmtDate(history.firstSeenAt)}</Stat>
       </div>
 
       {/* Historial de guerra por temporada */}

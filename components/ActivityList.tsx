@@ -52,13 +52,6 @@ function ago(days: number | null, capped: boolean): string {
   return `${d}d sin actividad${capped ? "+" : ""}`;
 }
 
-function agoShort(iso: string): string {
-  const h = (Date.now() - new Date(iso).getTime()) / 3_600_000;
-  if (h < 1) return "ahora";
-  if (h < 24) return `${Math.round(h)}h`;
-  return `${Math.round(h / 24)}d`;
-}
-
 const PERIODS: { key: ActivityPeriod; label: string }[] = [
   { key: "semana", label: "Semana" },
   { key: "mes", label: "Mes" },
@@ -253,10 +246,11 @@ export function ActivityList({
                 </div>
               )}
 
-              {/* Señales recientes (discreto) */}
+              {/* Señales recientes (discreto): qué se movió, sin hora (el snapshot
+                  es cada 6h; la recencia real la da "activo hoy / Nd" de arriba). */}
               {m.recent.length > 0 && (
                 <p className="text-[11px] text-ink-soft/80">
-                  {m.recent.slice(0, 5).map((s) => `${s.icon} ${agoShort(s.at)}`).join("   ")}
+                  {m.recent.slice(0, 5).map((s) => `${s.icon} ${s.label}`).join("  ·  ")}
                 </p>
               )}
             </Link>
