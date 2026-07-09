@@ -12,7 +12,7 @@ const DISMISS_KEY = "pwa-install-dismissed";
 // Sugerencia de instalar la app como PWA. No aparece si ya está instalada
 // (display-mode standalone) ni si el usuario la descartó. En iOS/Safari (que no
 // soporta el prompt nativo) muestra las instrucciones manuales.
-export function PwaInstall() {
+export function PwaInstall({ raised = false }: { raised?: boolean }) {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   const [iosHint, setIosHint] = useState(false);
   const [show, setShow] = useState(false);
@@ -64,7 +64,11 @@ export function PwaInstall() {
   if (!show) return null;
 
   return (
-    <div className="fixed inset-x-0 bottom-16 z-30 mx-auto max-w-5xl px-3 sm:bottom-3">
+    <div
+      className={`fixed inset-x-0 z-30 mx-auto max-w-5xl px-3 ${
+        raised ? "bottom-36 sm:bottom-20" : "bottom-16 sm:bottom-3"
+      }`}
+    >
       <div className="flex items-center gap-3 rounded-2xl border border-gold/40 bg-surface p-3 shadow-xl">
         <span aria-hidden className="text-2xl leading-none">
           📲

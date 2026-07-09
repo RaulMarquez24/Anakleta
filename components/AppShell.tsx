@@ -64,7 +64,7 @@ export async function AppShell({
         <WarAlertBubble pendingCount={alert.pendingCount} endsAt={alert.endsAt} label={alert.label} />
       )}
 
-      <PwaInstall />
+      <PwaInstall raised={!!alert} />
       <AppNav variant="bottom" />
     </div>
   );
