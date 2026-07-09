@@ -170,9 +170,9 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
         )}
 
         {row && (
-          <div className="space-y-3 border-t border-line px-4 py-3">
-            {/* Veredicto + actividad: la cabecera del estado */}
-            <div className="flex flex-wrap items-center gap-2">
+          <>
+            {/* Veredicto + actividad */}
+            <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-3">
               <span className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${CAT_LABEL[row.category].cls}`}>
                 {CAT_LABEL[row.category].label}
               </span>
@@ -203,8 +203,8 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
 
             {/* Alertas (faltillas) */}
             {row.flags.length > 0 && (
-              <div>
-                <p className="mb-1 text-[10px] font-extrabold uppercase tracking-wide text-banner">
+              <div className="border-t border-line px-4 py-3">
+                <p className="mb-1.5 text-[10px] font-extrabold uppercase tracking-wide text-banner">
                   ⚠️ Alertas
                 </p>
                 <div className="flex flex-wrap gap-1.5">
@@ -222,8 +222,8 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
 
             {/* Actividad reciente (qué señales se movieron) */}
             {row.recent.length > 0 && (
-              <div>
-                <p className="mb-1 text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">
+              <div className="border-t border-line px-4 py-3">
+                <p className="mb-1.5 text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">
                   Actividad reciente
                 </p>
                 <div className="flex flex-wrap gap-1.5">
@@ -239,7 +239,7 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
                 </div>
               </div>
             )}
-          </div>
+          </>
         )}
       </div>
 
