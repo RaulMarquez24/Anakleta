@@ -133,7 +133,6 @@ export type ActivityPeriod = "semana" | "mes" | "todo";
 const SIGNAL_META: Record<(typeof SIGNALS)[number], { icon: string; label: string }> = {
   donations: { icon: "🎁", label: "Donó" },
   donations_received: { icon: "📥", label: "Pidió tropas" },
-  trophies: { icon: "🏆", label: "Copas" },
   attack_wins: { icon: "⚔️", label: "Atacó" },
   war_stars: { icon: "⭐", label: "Guerra" },
   capital_contributions: { icon: "🏛️", label: "Capital" },
@@ -201,13 +200,16 @@ async function getDeparturesImpl(): Promise<Departure[]> {
 const THRESHOLD_DAYS = 7; // a partir de aquí, candidato a limpiar
 
 // Contadores que, si SUBEN entre dos capturas, prueban que la persona estuvo
-// online: donar, atacar en multi (copas/attackWins), estrellas de guerra, aporte
-// a la capital, XP, y pedir tropas. Solo miramos subidas: una bajada de
-// donaciones es el reseteo de temporada, no inactividad.
+// online: donar, atacar en multi (attackWins), estrellas de guerra, aporte a la
+// capital, XP, y pedir tropas. Solo miramos subidas: una bajada de donaciones es
+// el reseteo de temporada, no inactividad.
+// OJO: las copas (trophies) NO van aquí. Suben también cuando te atacan y te
+// defiendes, así que un cambio de copas no prueba que la persona jugara. Lo que
+// importa de las copas es el nivel SEMANAL (rango de liga + si hizo copas esta
+// semana), no el movimiento diario. Se leen aparte (lastTrophies) para el flag.
 const SIGNALS = [
   "donations",
   "donations_received",
-  "trophies",
   "attack_wins",
   "war_stars",
   "capital_contributions",
@@ -246,7 +248,7 @@ async function getActivityReportImpl(
   const { data: snaps } = await supabase
     .from("member_snapshots")
     .select(
-      `member_tag, captured_at, war_preference, town_hall, league_tier_id, league_tier_name, league_tier_icon, ${SIGNALS.join(", ")}`,
+      `member_tag, captured_at, war_preference, town_hall, trophies, league_tier_id, league_tier_name, league_tier_icon, ${SIGNALS.join(", ")}`,
     )
     .gte("captured_at", since)
     .order("captured_at", { ascending: true })
@@ -255,6 +257,7 @@ async function getActivityReportImpl(
   const byTag = new Map<string, SignalRow[]>();
   const lastWarPref = new Map<string, string | null>();
   const lastTH = new Map<string, number | null>();
+  const lastTrophies = new Map<string, number | null>();
   const lastTierId = new Map<string, number | null>();
   const lastTier = new Map<string, { name: string | null; icon: string | null }>();
   for (const s of (snaps ?? []) as unknown as Record<string, unknown>[]) {
@@ -265,6 +268,7 @@ async function getActivityReportImpl(
     byTag.get(tag)!.push(row);
     lastWarPref.set(tag, (s.war_preference as string | null) ?? null);
     lastTH.set(tag, (s.town_hall as number | null) ?? null);
+    lastTrophies.set(tag, (s.trophies as number | null) ?? null);
     lastTierId.set(tag, (s.league_tier_id as number | null) ?? null);
     lastTier.set(tag, {
       name: (s.league_tier_name as string | null) ?? null,
@@ -416,7 +420,7 @@ async function getActivityReportImpl(
     const ratio = received && received > 0 ? donations! / received : null;
     const donNeg = donationsNegative(donations, received);
     // Copas actuales (ranked). Se resetea cada lunes: 0 = sin competitivo esta semana.
-    const lastTrophies = snapRows.length > 0 ? snapRows[snapRows.length - 1].trophies : null;
+    const trophies = lastTrophies.get(tag) ?? null;
 
     // Tendencia de donaciones vs periodo anterior.
     let donationsTrend: "up" | "down" | "flat" | null = null;
@@ -445,7 +449,7 @@ async function getActivityReportImpl(
     const flags: string[] = [];
     if (enoughData && donationsPeriod === 0 && receivedPeriod === 0) flags.push("🚫 No dona ni pide");
     if (warsInPeriod > 0 && w.played === 0) flags.push("🚫 No juega guerras");
-    if (lastTrophies != null && lastTrophies === 0) flags.push("🎯 Sin competitivo esta semana");
+    if (trophies != null && trophies === 0) flags.push("🎯 Sin competitivo esta semana");
     if (lastWarPref.get(tag) === "out") flags.push("💤 Guerra desactivada");
 
     const isStaff = role === "leader" || role === "coLeader";
@@ -491,7 +495,7 @@ async function getActivityReportImpl(
       leagueTierId: lastTierId.get(tag) ?? null,
       leagueTierName: lastTier.get(tag)?.name ?? null,
       leagueTierIcon: lastTier.get(tag)?.icon ?? null,
-      trophies: lastTrophies,
+      trophies,
       leagueVsTh,
       donationsTrend,
       lastActivityAt,
