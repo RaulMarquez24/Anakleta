@@ -19,7 +19,7 @@ const ROLE_CLS: Record<string, string> = {
   member: "bg-surface-2 text-ink-soft",
 };
 
-export default async function InspeccionarPage({
+export default async function InspeccionarClanPage({
   params,
 }: {
   params: Promise<{ tag: string }>;
@@ -28,7 +28,6 @@ export default async function InspeccionarPage({
   const { tag } = await params;
   const decoded = decodeURIComponent(tag);
 
-  // Tiempo real, sin guardar: si falla (privado/inexistente), lo indicamos.
   let clan: CocClan | null = null;
   try {
     clan = await getClan<CocClan>(decoded);
@@ -39,7 +38,7 @@ export default async function InspeccionarPage({
   const members = [...(clan?.memberList ?? [])].sort((a, b) => a.clanRank - b.clanRank);
 
   return (
-    <AppShell email={user?.email} title={clan?.name ? `🔍 ${clan.name}` : "Inspeccionar clan"} back="/war">
+    <AppShell email={user?.email} title={clan?.name ? `🛡️ ${clan.name}` : "Inspeccionar clan"} back="/inspeccionar">
       {!clan ? (
         <div className="rounded-2xl border border-line bg-surface p-8 text-center">
           <p className="text-3xl">🔍</p>
@@ -49,7 +48,6 @@ export default async function InspeccionarPage({
         </div>
       ) : (
         <>
-          {/* Perfil del clan */}
           <div className="mb-4 rounded-2xl border border-line bg-surface p-4">
             <div className="flex items-center gap-3">
               {clan.badgeUrls?.medium && (
@@ -101,7 +99,6 @@ export default async function InspeccionarPage({
             </div>
           </div>
 
-          {/* Miembros */}
           <div className="overflow-hidden rounded-2xl border border-line bg-surface">
             <ul className="divide-y divide-line">
               {members.map((m, i) => {
@@ -137,8 +134,7 @@ export default async function InspeccionarPage({
           </div>
 
           <p className="mt-3 text-xs text-ink-soft">
-            Datos en vivo de la API de Clash of Clans. No se guardan: al salir de esta pantalla
-            desaparecen.
+            Datos en vivo de la API de Clash of Clans. No se guardan: al salir desaparecen.
           </p>
         </>
       )}

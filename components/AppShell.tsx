@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Search } from "lucide-react";
 import { AppNav } from "@/components/AppNav";
 import { WarAlertBubble } from "@/components/WarAlertBubble";
 import { getWarAlert } from "@/lib/war-history";
@@ -49,8 +49,17 @@ export async function AppShell({
             )}
           </div>
 
+          {/* Lupa: inspeccionar cualquier clan/jugador por tag (siempre visible) */}
+          <Link
+            href="/inspeccionar"
+            aria-label="Inspeccionar clan o jugador"
+            className="absolute right-3 flex-none rounded-full p-1.5 text-white transition hover:bg-white/15"
+          >
+            <Search className="h-6 w-6" />
+          </Link>
+
           {/* Nav + email a la derecha (solo escritorio; no descentra en móvil) */}
-          <div className="absolute right-3 hidden items-center gap-3 sm:flex">
+          <div className="absolute right-14 hidden items-center gap-3 sm:flex">
             <AppNav variant="top" />
             {email && (
               <span className="hidden max-w-[16ch] truncate rounded-full bg-black/15 px-2.5 py-1 text-xs font-semibold text-[#f6d9b0] md:inline">

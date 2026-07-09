@@ -69,7 +69,7 @@ export default async function WarPage() {
           inspect={
             war.opponentTag
               ? {
-                  href: `/inspeccionar/${encodeURIComponent(war.opponentTag)}`,
+                  href: `/inspeccionar/clan/${encodeURIComponent(war.opponentTag)}`,
                   badgeUrl: war.opponentBadgeUrl,
                   name: war.opponentName,
                 }
