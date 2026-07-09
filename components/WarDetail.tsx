@@ -1,4 +1,14 @@
 import { fmtDate } from "@/components/WarBits";
+import { ThImage } from "@/components/ThImage";
+
+export interface OpponentMember {
+  tag: string;
+  name: string;
+  townHall: number;
+  mapPosition: number;
+  starsTaken: number;
+  destructionTaken: number;
+}
 
 export interface UnifiedWarMember {
   tag: string;
@@ -44,10 +54,17 @@ export function WarDetail({
   war,
   members,
   clanName,
+  opponent,
 }: {
   war: UnifiedWar;
   members: UnifiedWarMember[];
   clanName?: string | null;
+  opponent?: {
+    tag: string | null;
+    level: number | null;
+    badgeUrl: string | null;
+    members: OpponentMember[];
+  };
 }) {
   const inWar = war.state === "inWar";
   const prep = war.state === "preparation";
@@ -142,6 +159,57 @@ export function WarDetail({
             </ul>
           </div>
         ))}
+
+      {/* Inspeccionar rival: su alineación y qué bases quedan por rematar */}
+      {opponent && opponent.members.length > 0 && (
+        <details className="group overflow-hidden rounded-2xl border border-line bg-surface">
+          <summary className="flex cursor-pointer list-none items-center gap-3 p-4 [&::-webkit-details-marker]:hidden">
+            {opponent.badgeUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={opponent.badgeUrl} alt="" width={32} height={32} className="h-8 w-8 flex-none" />
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="block font-extrabold text-ink">🔍 Inspeccionar rival</span>
+              <span className="block truncate text-xs text-ink-soft">
+                {war.opponentName ?? "Rival"}
+                {opponent.level ? ` · Nv ${opponent.level}` : ""} · {opponent.members.length} bases
+              </span>
+            </span>
+            <span aria-hidden className="text-ink-soft transition group-open:rotate-180">▾</span>
+          </summary>
+          <ul className="divide-y divide-line border-t border-line">
+            {opponent.members.map((m) => (
+              <li key={m.tag} className="flex items-center gap-3 px-3.5 py-2.5">
+                <span className="w-6 flex-none text-center text-sm font-bold text-ink-soft">
+                  {m.mapPosition}
+                </span>
+                <ThImage th={m.townHall} size={26} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-bold text-ink">{m.name}</p>
+                  <p className="text-xs text-ink-soft">TH{m.townHall}</p>
+                </div>
+                <span className="flex items-center gap-1.5 text-sm font-bold">
+                  <span
+                    className={
+                      m.starsTaken === 3
+                        ? "text-grass"
+                        : m.starsTaken > 0
+                          ? "text-gold-deep"
+                          : "text-ink-soft"
+                    }
+                  >
+                    {starGlyphs(m.starsTaken)}
+                  </span>
+                  <span className="tabular-nums text-ink-soft">{Math.round(m.destructionTaken)}%</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="border-t border-line px-3.5 py-2 text-[11px] text-ink-soft">
+            ★ = estrellas que ya le hemos hecho a cada base (☆ = pendiente de rematar).
+          </p>
+        </details>
+      )}
 
       {/* Alineación con detalle por jugador */}
       {members.length > 0 && (

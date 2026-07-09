@@ -15,10 +15,13 @@ interface CocWarMember {
   townhallLevel: number;
   mapPosition: number;
   attacks?: CocWarAttack[];
+  bestOpponentAttack?: { stars: number; destructionPercentage: number };
 }
 interface CocWarSide {
   tag?: string;
   name: string;
+  clanLevel?: number;
+  badgeUrls?: { small?: string; medium?: string; large?: string };
   stars?: number;
   destructionPercentage?: number;
   members?: CocWarMember[];
@@ -50,6 +53,16 @@ export interface WarMemberRow {
   stars: number; // estrellas conseguidas (suma de sus ataques)
   destruction: number; // % sumado de sus ataques
 }
+// Base rival (para inspeccionar al enemigo): posición, TH y estrellas que YA le
+// hemos hecho (su mejor defensa recibida) para saber a quién queda por rematar.
+export interface OpponentMemberRow {
+  tag: string;
+  name: string;
+  townHall: number;
+  mapPosition: number;
+  starsTaken: number; // estrellas que le hemos hecho
+  destructionTaken: number;
+}
 export interface WarView {
   state: CocCurrentWar["state"];
   isPrivate: boolean;
@@ -58,6 +71,9 @@ export interface WarView {
   teamSize: number | null;
   attacksPerMember: number;
   opponentName: string | null;
+  opponentTag: string | null;
+  opponentLevel: number | null;
+  opponentBadgeUrl: string | null;
   clanStars: number | null;
   opponentStars: number | null;
   clanDestruction: number | null;
@@ -66,6 +82,7 @@ export interface WarView {
   endTime: string | null;
   members: WarMemberRow[];
   pending: WarMemberRow[];
+  opponentMembers: OpponentMemberRow[];
 }
 
 /** Parsea el formato de fecha compacto de CoC ("20260707T194500.000Z") a ISO. */
@@ -121,6 +138,17 @@ function buildView(
     })
     .sort((a, b) => a.mapPosition - b.mapPosition);
 
+  const opponentMembers: OpponentMemberRow[] = (them?.members ?? [])
+    .map((m) => ({
+      tag: m.tag,
+      name: m.name,
+      townHall: m.townhallLevel,
+      mapPosition: m.mapPosition,
+      starsTaken: m.bestOpponentAttack?.stars ?? 0,
+      destructionTaken: m.bestOpponentAttack?.destructionPercentage ?? 0,
+    }))
+    .sort((a, b) => a.mapPosition - b.mapPosition);
+
   return {
     state: raw.state,
     isPrivate: false,
@@ -129,6 +157,9 @@ function buildView(
     teamSize: raw.teamSize ?? null,
     attacksPerMember,
     opponentName: them?.name ?? null,
+    opponentTag: them?.tag ?? null,
+    opponentLevel: them?.clanLevel ?? null,
+    opponentBadgeUrl: them?.badgeUrls?.medium ?? them?.badgeUrls?.small ?? null,
     clanStars: us?.stars ?? null,
     opponentStars: them?.stars ?? null,
     clanDestruction: us?.destructionPercentage ?? null,
@@ -137,6 +168,7 @@ function buildView(
     endTime: parseCocTime(raw.endTime),
     members,
     pending: members.filter((m) => m.attacksPending > 0),
+    opponentMembers,
   };
 }
 
@@ -366,6 +398,9 @@ function emptyWar(state: CocCurrentWar["state"], isPrivate: boolean): WarView {
     teamSize: null,
     attacksPerMember: 2,
     opponentName: null,
+    opponentTag: null,
+    opponentLevel: null,
+    opponentBadgeUrl: null,
     clanStars: null,
     opponentStars: null,
     clanDestruction: null,
@@ -374,6 +409,7 @@ function emptyWar(state: CocCurrentWar["state"], isPrivate: boolean): WarView {
     endTime: null,
     members: [],
     pending: [],
+    opponentMembers: [],
   };
 }
 

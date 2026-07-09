@@ -66,6 +66,12 @@ export default async function WarPage() {
           }}
           members={war.members}
           clanName={clanName}
+          opponent={{
+            tag: war.opponentTag,
+            level: war.opponentLevel,
+            badgeUrl: war.opponentBadgeUrl,
+            members: war.opponentMembers,
+          }}
         />
       )}
     </AppShell>
