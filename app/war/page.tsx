@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getCurrentWar, type WarView } from "@/lib/war";
 import { getClanName } from "@/lib/dashboard";
 import { getCurrentUser } from "@/lib/supabase/current-user";
@@ -66,13 +67,29 @@ export default async function WarPage() {
           }}
           members={war.members}
           clanName={clanName}
-          opponent={{
-            tag: war.opponentTag,
-            level: war.opponentLevel,
-            badgeUrl: war.opponentBadgeUrl,
-            members: war.opponentMembers,
-          }}
         />
+      )}
+
+      {/* Inspeccionar el clan rival en tiempo real (no se guarda) */}
+      {showDetail && war.opponentTag && (
+        <Link
+          href={`/inspeccionar/${encodeURIComponent(war.opponentTag)}`}
+          className="mt-4 flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 hover:bg-surface-2/60"
+        >
+          {war.opponentBadgeUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={war.opponentBadgeUrl} alt="" width={36} height={36} className="h-9 w-9 flex-none" />
+          ) : (
+            <span className="text-xl">🔍</span>
+          )}
+          <span className="min-w-0 flex-1">
+            <span className="block font-extrabold text-ink">Inspeccionar clan rival</span>
+            <span className="block truncate text-xs text-ink-soft">
+              {war.opponentName ?? "Rival"} · perfil y miembros en vivo
+            </span>
+          </span>
+          <span aria-hidden className="text-ink-soft">›</span>
+        </Link>
       )}
     </AppShell>
   );
