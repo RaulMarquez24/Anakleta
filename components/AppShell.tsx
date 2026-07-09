@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Search } from "lucide-react";
 import { AppNav } from "@/components/AppNav";
 import { BackButton } from "@/components/BackButton";
 import { WarAlertBubble } from "@/components/WarAlertBubble";
@@ -46,9 +45,9 @@ export async function AppShell({
           <Link
             href="/inspeccionar"
             aria-label="Inspeccionar clan o jugador"
-            className="absolute right-3 flex-none rounded-full p-1.5 text-white transition hover:bg-white/15"
+            className="absolute right-3 flex-none rounded-full p-1.5 transition hover:bg-white/15"
           >
-            <Search className="h-6 w-6" />
+            <span aria-hidden className="text-2xl leading-none">🔍</span>
           </Link>
 
           {/* Nav + email a la derecha (solo escritorio; no descentra en móvil) */}
