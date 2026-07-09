@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { ArrowLeft, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { AppNav } from "@/components/AppNav";
+import { BackButton } from "@/components/BackButton";
 import { WarAlertBubble } from "@/components/WarAlertBubble";
 import { getWarAlert } from "@/lib/war-history";
 
@@ -23,15 +24,7 @@ export async function AppShell({
     <div className="min-h-full pb-20 sm:pb-6">
       <header className="sticky top-0 z-30 border-b-2 border-gold/40 bg-gradient-to-b from-banner to-banner-dark shadow-lg">
         <div className="relative mx-auto flex max-w-5xl items-center justify-center px-4 py-3">
-          {back && (
-            <Link
-              href={back}
-              aria-label="Volver"
-              className="absolute left-3 flex-none rounded-full p-1.5 text-white transition hover:bg-white/15"
-            >
-              <ArrowLeft className="h-6 w-6" />
-            </Link>
-          )}
+          {back && <BackButton fallback={back} />}
 
           {/* Marca / título centrado */}
           <div className="min-w-0 text-center">
