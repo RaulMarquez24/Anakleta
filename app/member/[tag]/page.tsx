@@ -170,9 +170,9 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
         )}
 
         {row && (
-          <div className="border-t border-line px-4 py-3">
-            {/* Veredicto: categoría + liga vs su TH */}
-            <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          <div className="space-y-3 border-t border-line px-4 py-3">
+            {/* Veredicto + actividad: la cabecera del estado */}
+            <div className="flex flex-wrap items-center gap-2">
               <span className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${CAT_LABEL[row.category].cls}`}>
                 {CAT_LABEL[row.category].label}
               </span>
@@ -184,42 +184,59 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
                   {LEAGUE_VS[row.leagueVsTh].icon} {LEAGUE_VS[row.leagueVsTh].label} p/ su TH
                 </span>
               )}
-            </div>
-            <p
-              className={`mb-2 flex items-center gap-1.5 text-sm font-bold ${
-                row.staleDays != null && row.staleDays < 1 ? "text-grass" : "text-ink-soft"
-              }`}
-            >
               <span
-                aria-hidden
-                className={`h-2.5 w-2.5 rounded-full ${row.staleDays != null && row.staleDays < 1 ? "bg-grass-bright ring-4 ring-grass/20" : "bg-ink-soft/40"}`}
-              />
-              {row.staleDays == null
-                ? "Sin datos de actividad"
-                : row.staleDays < 1
-                  ? "Activo hoy"
-                  : `Última actividad hace ${Math.round(row.staleDays)} día${Math.round(row.staleDays) === 1 ? "" : "s"}${row.capped ? "+" : ""}`}
-            </p>
+                className={`ml-auto flex items-center gap-1.5 text-xs font-bold ${
+                  row.staleDays != null && row.staleDays < 1 ? "text-grass" : "text-ink-soft"
+                }`}
+              >
+                <span
+                  aria-hidden
+                  className={`h-2 w-2 rounded-full ${row.staleDays != null && row.staleDays < 1 ? "bg-grass-bright ring-4 ring-grass/20" : "bg-ink-soft/40"}`}
+                />
+                {row.staleDays == null
+                  ? "Sin datos"
+                  : row.staleDays < 1
+                    ? "Activo hoy"
+                    : `Hace ${Math.round(row.staleDays)}d${row.capped ? "+" : ""}`}
+              </span>
+            </div>
+
+            {/* Alertas (faltillas) */}
             {row.flags.length > 0 && (
-              <div className="mb-2 flex flex-wrap gap-1.5">
-                {row.flags.map((f) => (
-                  <span key={f} className="rounded-lg bg-banner/12 px-2 py-1 text-[11px] font-bold text-banner">
-                    {f}
-                  </span>
-                ))}
+              <div>
+                <p className="mb-1 text-[10px] font-extrabold uppercase tracking-wide text-banner">
+                  ⚠️ Alertas
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {row.flags.map((f) => (
+                    <span
+                      key={f}
+                      className="rounded-lg bg-banner/12 px-2 py-1 text-[11px] font-bold text-banner"
+                    >
+                      {f}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
+
+            {/* Actividad reciente (qué señales se movieron) */}
             {row.recent.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {row.recent.map((s) => (
-                  <span
-                    key={s.key}
-                    title={`Detectado en la captura del ${fmtDate(s.at)}`}
-                    className="inline-flex items-center gap-1 rounded-lg bg-surface-2 px-2 py-1 text-[11px] font-bold text-ink-soft"
-                  >
-                    {s.icon} {s.label}
-                  </span>
-                ))}
+              <div>
+                <p className="mb-1 text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">
+                  Actividad reciente
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {row.recent.map((s) => (
+                    <span
+                      key={s.key}
+                      title={`Detectado en la captura del ${fmtDate(s.at)}`}
+                      className="inline-flex items-center gap-1 rounded-lg bg-grass/12 px-2 py-1 text-[11px] font-bold text-grass"
+                    >
+                      {s.icon} {s.label}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
           </div>
