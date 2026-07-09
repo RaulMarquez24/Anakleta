@@ -64,13 +64,10 @@ export default async function MemberLeaguePage({
               </div>
               <div className="flex flex-wrap gap-1.5 text-xs font-bold">
                 <span className="rounded-lg bg-surface-2 px-2 py-1 text-ink">
-                  ⚔️ Ataques {s.attackWins}/{s.maxBattles}
-                </span>
-                <span className="rounded-lg bg-surface-2 px-2 py-1 text-ink">
-                  ⭐ {s.attackStars} ataque
+                  ⚔️ {s.attackWins}/{s.maxBattles} batallas
                 </span>
                 <span className="rounded-lg bg-surface-2 px-2 py-1 text-ink-soft">
-                  🛡️ {s.defenseStars} defensa
+                  🛡️ {s.defenseStars} ⭐ en contra
                 </span>
                 {s.attackWins < s.maxBattles && (
                   <span className="rounded-lg bg-banner/12 px-2 py-1 text-banner">
@@ -84,8 +81,10 @@ export default async function MemberLeaguePage({
       )}
 
       <p className="mt-3 text-xs text-ink-soft">
-        &ldquo;Ataques X/{"{max}"}&rdquo; = batallas jugadas de las disponibles esa semana. El ranked se
-        reinicia cada semana, por eso hay una fila por semana.
+        &ldquo;X/{"{max}"} batallas&rdquo; = batallas jugadas de las disponibles esa semana (así ves si
+        cumple sus ataques). &ldquo;⭐ en contra&rdquo; = estrellas que le hicieron defendiendo. La API
+        no expone las estrellas de ataque en este ranked, por eso no se muestran. El ranked se reinicia
+        cada semana: una fila por semana.
       </p>
     </AppShell>
   );
