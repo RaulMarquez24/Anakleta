@@ -33,27 +33,52 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-bg p-4">
-      <div className="w-full max-w-sm">
-        {/* Logo del clan (ya incluye nombre y lema) */}
-        <div className="mb-6 text-center">
-          <h1 className="sr-only">Añakleta · Fuerza y Unión</h1>
-          <Image
-            src="/logo.jpg"
-            alt="Escudo del clan Añakleta"
-            width={200}
-            height={200}
-            priority
-            className="mx-auto h-auto w-44 rounded-3xl shadow-xl sm:w-48"
-          />
+    <main
+      className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10"
+      style={{
+        background:
+          "radial-gradient(125% 80% at 50% -8%, #45301b 0%, #241608 52%, #140c06 100%)",
+      }}
+    >
+      {/* Luz de antorcha tras el escudo (la apuesta atmosférica) */}
+      <div
+        aria-hidden
+        className="ember-glow pointer-events-none absolute left-1/2 top-[14%] h-72 w-72 rounded-full"
+        style={{ background: "radial-gradient(circle, rgba(244,183,64,0.4), transparent 70%)" }}
+      />
+      {/* Viñeta para dar profundidad */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{ boxShadow: "inset 0 0 220px rgba(0,0,0,0.65)" }}
+      />
+
+      <div className="relative z-10 w-full max-w-sm">
+        {/* Escudo (lleva el nombre y el lema del clan) */}
+        <div className="mb-8 flex flex-col items-center text-center">
+          <div className="crest-float crest-in">
+            <Image
+              src="/logo.jpg"
+              alt="Escudo del clan Añakleta"
+              width={200}
+              height={200}
+              priority
+              className="h-32 w-32 rounded-3xl shadow-[0_0_55px_rgba(244,183,64,0.35)] ring-2 ring-gold/50 sm:h-36 sm:w-36"
+            />
+          </div>
+          <p className="rise-in mt-5 text-[11px] font-extrabold uppercase tracking-[0.42em] text-[#e7c78e]">
+            Sala de mando
+          </p>
         </div>
 
+        {/* Panel de acceso */}
         <form
           onSubmit={onSubmit}
-          className="space-y-4 rounded-2xl border border-line bg-surface p-6 shadow-xl"
+          className="rise-in space-y-4 rounded-2xl border border-gold/25 bg-white/[0.045] p-6 shadow-2xl backdrop-blur-sm"
+          style={{ animationDelay: "0.08s" }}
         >
           <div className="space-y-1.5">
-            <label htmlFor="email" className="block text-sm font-bold text-ink">
+            <label htmlFor="email" className="block text-xs font-bold uppercase tracking-wide text-[#c9af84]">
               Email
             </label>
             <input
@@ -62,13 +87,14 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-ink outline-none focus:border-sky"
               autoComplete="email"
+              placeholder="tu@email.com"
+              className="w-full rounded-xl border border-white/10 bg-black/25 px-3.5 py-2.5 text-[#f6e9d2] placeholder-[#8a7a5c] outline-none transition focus:border-gold/70 focus:ring-2 focus:ring-gold/25"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="password" className="block text-sm font-bold text-ink">
+            <label htmlFor="password" className="block text-xs font-bold uppercase tracking-wide text-[#c9af84]">
               Contraseña
             </label>
             <input
@@ -77,13 +103,17 @@ export default function LoginPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-ink outline-none focus:border-sky"
               autoComplete="current-password"
+              placeholder="••••••••"
+              className="w-full rounded-xl border border-white/10 bg-black/25 px-3.5 py-2.5 text-[#f6e9d2] placeholder-[#8a7a5c] outline-none transition focus:border-gold/70 focus:ring-2 focus:ring-gold/25"
             />
           </div>
 
           {error && (
-            <p role="alert" className="rounded-lg bg-banner/12 px-3 py-2 text-sm font-semibold text-banner">
+            <p
+              role="alert"
+              className="rounded-lg border border-banner/40 bg-banner/20 px-3 py-2 text-sm font-semibold text-[#ffc2bb]"
+            >
               {error}
             </p>
           )}
@@ -91,11 +121,16 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-grass px-4 py-3 text-base font-extrabold text-white shadow-sm transition hover:brightness-110 disabled:opacity-50"
+            className="w-full rounded-xl px-4 py-3 text-base font-extrabold text-[#2a1808] shadow-lg transition hover:brightness-105 active:translate-y-px disabled:opacity-60"
+            style={{ backgroundImage: "linear-gradient(to bottom, #f7c34e, #c9860f)" }}
           >
             {loading ? "Entrando…" : "Entrar"}
           </button>
         </form>
+
+        <p className="rise-in mt-5 text-center text-[11px] text-[#a8916e]" style={{ animationDelay: "0.16s" }}>
+          Acceso por invitación · líder y colíderes
+        </p>
       </div>
     </main>
   );
