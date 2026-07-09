@@ -115,9 +115,9 @@ export default async function ClanHomePage({
             <img
               src={data.clanBadgeUrl}
               alt=""
-              width={56}
-              height={56}
-              className="h-14 w-14 flex-none"
+              width={80}
+              height={80}
+              className="h-20 w-20 flex-none"
               style={{ objectFit: "contain" }}
             />
           ) : (
@@ -125,27 +125,30 @@ export default async function ClanHomePage({
               src="/logo.jpg"
               alt=""
               aria-hidden
-              width={56}
-              height={56}
-              className="h-14 w-14 flex-none rounded-2xl shadow-[0_0_0_2px_var(--gold)]"
+              width={80}
+              height={80}
+              className="h-20 w-20 flex-none rounded-2xl shadow-[0_0_0_2px_var(--gold)]"
             />
           )}
           <div className="min-w-0 flex-1">
-            <p className="truncate text-xl font-extrabold text-ink">{data.clanName ?? "Añakleta"}</p>
-            <p className="text-xs font-semibold text-ink-soft">
-              {data.members.length} miembros
-              {data.clanLevel != null && <> · nivel {data.clanLevel}</>}
-            </p>
+            <p className="truncate text-2xl font-extrabold text-ink">{data.clanName ?? "Añakleta"}</p>
             {data.clanWarLeague && (
               <span className="mt-1 inline-block rounded-full bg-gold/20 px-2 py-0.5 text-[11px] font-extrabold text-gold-deep">
                 ⚔️ {data.clanWarLeague}
               </span>
             )}
           </div>
+          {/* Miembros: badge grande a la derecha */}
+          <div className="flex-none rounded-xl bg-surface-2 px-3 py-1.5 text-center">
+            <p className="text-2xl font-extrabold leading-none text-ink">{data.members.length}</p>
+            <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-ink-soft">miembros</p>
+          </div>
         </div>
 
         {data.clanDescription && (
-          <p className="mt-3 whitespace-pre-line text-sm text-ink-soft">{data.clanDescription}</p>
+          <p className="mt-3 whitespace-pre-line text-[12px] leading-snug text-ink-soft">
+            {data.clanDescription}
+          </p>
         )}
 
         {/* Datos rápidos del clan */}
@@ -220,19 +223,19 @@ export default async function ClanHomePage({
         <div className="grid grid-cols-4 gap-2 text-center">
           <div className="rounded-xl bg-sky/12 py-2">
             <p className="text-2xl font-extrabold text-sky">{alDia}</p>
-            <p className="text-[11px] font-bold text-ink-soft">🔵 Al día</p>
+            <p className="text-[11px] font-bold text-ink-soft">Al día</p>
           </div>
           <div className="rounded-xl bg-gold/12 py-2">
             <p className="text-2xl font-extrabold text-gold-deep">{cats.revisar}</p>
-            <p className="text-[11px] font-bold text-ink-soft">🟡 A revisar</p>
+            <p className="text-[11px] font-bold text-ink-soft">A revisar</p>
           </div>
           <div className="rounded-xl bg-banner/12 py-2">
             <p className="text-2xl font-extrabold text-banner">{cats.expulsar}</p>
-            <p className="text-[11px] font-bold text-ink-soft">🔴 A echar</p>
+            <p className="text-[11px] font-bold text-ink-soft">A echar</p>
           </div>
           <div className="rounded-xl bg-grass/12 py-2">
             <p className="text-2xl font-extrabold text-grass">{cats.destacables}</p>
-            <p className="text-[11px] font-bold text-ink-soft">🟢 Destacables</p>
+            <p className="text-[11px] font-bold text-ink-soft">Destacables</p>
           </div>
         </div>
       </Link>
