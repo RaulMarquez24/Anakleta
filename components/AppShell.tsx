@@ -22,9 +22,9 @@ export async function AppShell({
 
   return (
     <div className="min-h-full pb-20 sm:pb-6">
-      <header className="bg-banner">
-        <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
-          {back ? (
+      <header className="sticky top-0 z-30 border-b-2 border-gold/40 bg-gradient-to-b from-banner to-banner-dark shadow-lg">
+        <div className="mx-auto flex max-w-5xl items-center gap-2.5 px-4 py-3">
+          {back && (
             <Link
               href={back}
               aria-label="Volver"
@@ -32,20 +32,19 @@ export async function AppShell({
             >
               <ArrowLeft className="h-6 w-6" />
             </Link>
-          ) : (
-            <Link href="/" aria-label="Inicio" className="flex-none">
-              <Image
-                src="/logo.jpg"
-                alt=""
-                aria-hidden
-                width={44}
-                height={44}
-                className="h-11 w-11 rounded-xl shadow-[0_0_0_2px_rgba(255,255,255,.35)]"
-              />
-            </Link>
           )}
+          <Link href="/" aria-label="Inicio" className="flex-none">
+            <Image
+              src="/logo.jpg"
+              alt=""
+              aria-hidden
+              width={44}
+              height={44}
+              className="h-11 w-11 rounded-xl shadow-[0_0_0_2px_rgba(255,255,255,.35)]"
+            />
+          </Link>
           <div className="min-w-0">
-            <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#f6d9b0]">
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#f6d9b0]">
               Añakleta
             </p>
             <p className="ribbon-title truncate text-2xl leading-none">{title}</p>
@@ -56,7 +55,7 @@ export async function AppShell({
               <AppNav variant="top" />
             </div>
             {email && (
-              <span className="hidden max-w-[14ch] truncate text-xs text-[#f6d9b0] md:inline">
+              <span className="hidden max-w-[16ch] truncate rounded-full bg-black/15 px-2.5 py-1 text-xs font-semibold text-[#f6d9b0] md:inline">
                 {email}
               </span>
             )}
