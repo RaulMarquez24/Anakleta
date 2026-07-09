@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { fmtDate } from "@/components/WarBits";
 
 export interface UnifiedWarMember {
@@ -44,10 +45,12 @@ export function WarDetail({
   war,
   members,
   clanName,
+  inspect,
 }: {
   war: UnifiedWar;
   members: UnifiedWarMember[];
   clanName?: string | null;
+  inspect?: { href: string; badgeUrl: string | null; name: string | null };
 }) {
   const inWar = war.state === "inWar";
   const prep = war.state === "preparation";
@@ -142,6 +145,28 @@ export function WarDetail({
             </ul>
           </div>
         ))}
+
+      {/* Inspeccionar el clan rival en tiempo real (no se guarda) */}
+      {inspect && (
+        <Link
+          href={inspect.href}
+          className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 hover:bg-surface-2/60"
+        >
+          {inspect.badgeUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={inspect.badgeUrl} alt="" width={36} height={36} className="h-9 w-9 flex-none" />
+          ) : (
+            <span className="text-xl">🔍</span>
+          )}
+          <span className="min-w-0 flex-1">
+            <span className="block font-extrabold text-ink">Inspeccionar clan rival</span>
+            <span className="block truncate text-xs text-ink-soft">
+              {inspect.name ?? "Rival"} · perfil y miembros en vivo
+            </span>
+          </span>
+          <span aria-hidden className="text-ink-soft">›</span>
+        </Link>
+      )}
 
       {/* Alineación con detalle por jugador */}
       {members.length > 0 && (
