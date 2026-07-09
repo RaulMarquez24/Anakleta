@@ -75,6 +75,7 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
   const total = report?.members.length ?? 0;
   const ranks = row
     ? {
+        liga: rankOf(report!.members, decoded, (m) => m.leagueTierId ?? -1),
         don: rankOf(report!.members, decoded, (m) => m.donations ?? 0),
         stars: rankOf(report!.members, decoded, (m) => m.warStars),
         part: rankOf(report!.members, decoded, (m) => m.participationScore),
@@ -155,11 +156,16 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
         </div>
 
         {ranks && (
-          <div className="border-t border-line px-4 py-3">
-            <p className="mb-1.5 text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">
-              Ranking en el clan · de {total}
+          <Link href="/ranking" className="block border-t border-line px-4 py-3 hover:bg-surface-2/50">
+            <p className="mb-1.5 flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">
+              <span>Ranking en el clan · de {total}</span>
+              <span className="text-ink-soft">ver todo ›</span>
             </p>
-            <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="grid grid-cols-4 gap-2 text-center">
+              <div>
+                <p className="text-[11px] text-ink-soft">🏆 Liga</p>
+                <p className="text-xl font-extrabold text-ink">#{ranks.liga}</p>
+              </div>
               <div>
                 <p className="text-[11px] text-ink-soft">🎁 Dona</p>
                 <p className="text-xl font-extrabold text-ink">#{ranks.don}</p>
@@ -173,7 +179,7 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
                 <p className="text-xl font-extrabold text-ink">#{ranks.part}</p>
               </div>
             </div>
-          </div>
+          </Link>
         )}
 
         {row && (

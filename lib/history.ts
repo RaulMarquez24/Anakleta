@@ -101,8 +101,10 @@ export interface ActivityRow {
   role: string | null;
   isNew: boolean;
   townHall: number | null;
+  leagueTierId: number | null; // rango real (monótono): mayor = mejor liga
   leagueTierName: string | null;
   leagueTierIcon: string | null;
+  trophies: number | null; // copas actuales (se resetean cada semana; solo display)
   // Liga comparada con los del mismo TH en el clan.
   leagueVsTh: "muy_alta" | "alta" | "normal" | "baja" | "muy_baja" | null;
   donationsTrend: "up" | "down" | "flat" | null; // vs periodo anterior
@@ -486,8 +488,10 @@ async function getActivityReportImpl(
       role,
       isNew,
       townHall: lastTH.get(tag) ?? null,
+      leagueTierId: lastTierId.get(tag) ?? null,
       leagueTierName: lastTier.get(tag)?.name ?? null,
       leagueTierIcon: lastTier.get(tag)?.icon ?? null,
+      trophies: lastTrophies,
       leagueVsTh,
       donationsTrend,
       lastActivityAt,

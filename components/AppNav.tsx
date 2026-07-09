@@ -12,7 +12,12 @@ const ITEMS = [
     icon: "⚔️",
     match: (p: string) => p.startsWith("/guerra") || p.startsWith("/liga") || p.startsWith("/war"),
   },
-  { href: "/estadisticas", label: "Stats", icon: "📊", match: (p: string) => p.startsWith("/estadisticas") },
+  {
+    href: "/estadisticas",
+    label: "Stats",
+    icon: "📊",
+    match: (p: string) => p.startsWith("/estadisticas") || p.startsWith("/ranking"),
+  },
 ];
 
 export function AppNav({ variant }: { variant: "top" | "bottom" }) {

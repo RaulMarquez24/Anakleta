@@ -75,6 +75,19 @@ export default async function EstadisticasPage({
         ))}
       </div>
 
+      {/* Ranking del clan (sección propia) */}
+      <Link
+        href="/ranking"
+        className="mb-4 flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 hover:bg-surface-2/60"
+      >
+        <span className="text-2xl">🏆</span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-extrabold text-ink">Ranking del clan</span>
+          <span className="block text-xs text-ink-soft">Liga · donaciones · guerra · participación</span>
+        </span>
+        <span aria-hidden className="text-ink-soft">›</span>
+      </Link>
+
       {/* Totales */}
       <div className="mb-6 grid grid-cols-2 gap-3">
         <Stat label="Donaciones" value={report.clanDonations.toLocaleString("es-ES")} sub={`media ${media}/miembro`} />
