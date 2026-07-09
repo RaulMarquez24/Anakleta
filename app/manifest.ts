@@ -14,6 +14,9 @@ export default function manifest(): MetadataRoute.Manifest {
       { src: "/icon.png", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/icon.png", sizes: "512x512", type: "image/png", purpose: "any" },
       { src: "/icon.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      // Capa monocroma para los "iconos con tema" (Material You): silueta que el
+      // sistema tiñe, como hacen las apps que se ven limpias en ese modo.
+      { src: "/icon-mono.png", sizes: "512x512", type: "image/png", purpose: "monochrome" },
     ],
   };
 }
