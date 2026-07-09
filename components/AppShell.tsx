@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppNav } from "@/components/AppNav";
 import { BackButton } from "@/components/BackButton";
 import { HeaderSearch } from "@/components/HeaderSearch";
+import { PwaInstall } from "@/components/PwaInstall";
 import { WarAlertBubble } from "@/components/WarAlertBubble";
 import { getWarAlert } from "@/lib/war-history";
 
@@ -63,6 +64,7 @@ export async function AppShell({
         <WarAlertBubble pendingCount={alert.pendingCount} endsAt={alert.endsAt} label={alert.label} />
       )}
 
+      <PwaInstall />
       <AppNav variant="bottom" />
     </div>
   );

@@ -57,6 +57,6 @@ export const config = {
   matcher: [
     // Todo salvo /api (protegido por CRON_SECRET), estáticos de Next, y archivos
     // de imagen del /public (logo, iconos): esos no deben redirigir a /login.
-    "/((?!api|set-password|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico)$).*)",
+    "/((?!api|set-password|sw.js|manifest.webmanifest|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico)$).*)",
   ],
 };
