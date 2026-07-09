@@ -11,10 +11,10 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: "#1a1108",
     theme_color: "#b32c22",
     icons: [
-      // maskable = llena el icono de borde a borde (sin plato blanco ni encogerlo).
-      { src: "/icon-v2.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
-      { src: "/icon-v2.png", sizes: "192x192", type: "image/png", purpose: "any" },
-      { src: "/icon-v2.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      // Icono ya preparado a borde de borde (maskable = llena el hueco, sin plato).
+      { src: "/icon-v3.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      { src: "/icon-v3.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/icon-v3.png", sizes: "512x512", type: "image/png", purpose: "any" },
       // Capa monocroma para los "iconos con tema" (Material You).
       { src: "/icon-mono.png", sizes: "512x512", type: "image/png", purpose: "monochrome" },
     ],
