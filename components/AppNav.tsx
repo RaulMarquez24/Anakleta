@@ -2,23 +2,24 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Castle, Users, Activity, Swords, UserRound, type LucideIcon } from "lucide-react";
 
-const ITEMS = [
-  { href: "/", label: "Clan", icon: "🏠", match: (p: string) => p === "/" || p.startsWith("/ranking") },
+const ITEMS: { href: string; label: string; Icon: LucideIcon; match: (p: string) => boolean }[] = [
+  { href: "/", label: "Clan", Icon: Castle, match: (p) => p === "/" || p.startsWith("/ranking") },
   {
     href: "/miembros",
     label: "Miembros",
-    icon: "👥",
-    match: (p: string) => p.startsWith("/miembros") || p.startsWith("/member") || p.startsWith("/bajas"),
+    Icon: Users,
+    match: (p) => p.startsWith("/miembros") || p.startsWith("/member") || p.startsWith("/bajas"),
   },
-  { href: "/actividad", label: "Actividad", icon: "🔥", match: (p: string) => p.startsWith("/actividad") },
+  { href: "/actividad", label: "Actividad", Icon: Activity, match: (p) => p.startsWith("/actividad") },
   {
     href: "/guerras",
     label: "Guerras",
-    icon: "⚔️",
-    match: (p: string) => p.startsWith("/guerra") || p.startsWith("/liga") || p.startsWith("/war"),
+    Icon: Swords,
+    match: (p) => p.startsWith("/guerra") || p.startsWith("/liga") || p.startsWith("/war"),
   },
-  { href: "/perfil", label: "Perfil", icon: "🙍", match: (p: string) => p.startsWith("/perfil") },
+  { href: "/perfil", label: "Perfil", Icon: UserRound, match: (p) => p.startsWith("/perfil") },
 ];
 
 export function AppNav({ variant }: { variant: "top" | "bottom" }) {
@@ -40,12 +41,11 @@ export function AppNav({ variant }: { variant: "top" | "bottom" }) {
               className="flex flex-col items-center gap-1 py-2"
             >
               <span
-                aria-hidden
-                className={`flex h-7 w-14 items-center justify-center rounded-full text-xl leading-none transition ${
+                className={`flex h-7 w-14 items-center justify-center rounded-full transition ${
                   active ? "bg-gold/25 text-gold-deep" : "text-ink-soft"
                 }`}
               >
-                {it.icon}
+                <it.Icon className="h-[22px] w-[22px]" strokeWidth={active ? 2.6 : 2} />
               </span>
               <span
                 className={`text-[11px] font-extrabold ${active ? "text-gold-deep" : "text-ink-soft"}`}
@@ -68,13 +68,11 @@ export function AppNav({ variant }: { variant: "top" | "bottom" }) {
             key={it.href}
             href={it.href}
             aria-current={active ? "page" : undefined}
-            className={`rounded-full px-3 py-1.5 text-sm font-extrabold transition ${
-              active
-                ? "bg-gold text-banner-dark"
-                : "text-[#f6d9b0] hover:bg-white/10"
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-extrabold transition ${
+              active ? "bg-gold text-banner-dark" : "text-[#f6d9b0] hover:bg-white/10"
             }`}
           >
-            <span aria-hidden className="mr-1">{it.icon}</span>
+            <it.Icon className="h-4 w-4" strokeWidth={2.4} />
             {it.label}
           </Link>
         );
