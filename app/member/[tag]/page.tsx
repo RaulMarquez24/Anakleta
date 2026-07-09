@@ -6,6 +6,7 @@ import { createAuthServerClient } from "@/lib/supabase/auth-server";
 import { AppShell } from "@/components/AppShell";
 import { LineChart, type ChartPoint } from "@/components/LineChart";
 import { ThImage } from "@/components/ThImage";
+import { CopyTag } from "@/components/CopyTag";
 import { seasonLabel } from "@/components/WarBits";
 
 export const dynamic = "force-dynamic";
@@ -111,11 +112,12 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
           </div>
         </div>
 
-        {/* Rol + veredicto */}
+        {/* Rol + tag + veredicto */}
         <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-2.5">
           <span className="text-sm font-bold text-ink">
             {history.role ? (ROLE_LABEL[history.role] ?? history.role) : "—"}
           </span>
+          <CopyTag tag={history.tag} />
           {row?.leagueVsTh && (
             <span className="text-[11px] font-bold text-ink-soft">· {LEAGUE_VS[row.leagueVsTh]}</span>
           )}
