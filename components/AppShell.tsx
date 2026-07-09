@@ -23,37 +23,40 @@ export async function AppShell({
   return (
     <div className="min-h-full pb-20 sm:pb-6">
       <header className="sticky top-0 z-30 border-b-2 border-gold/40 bg-gradient-to-b from-banner to-banner-dark shadow-lg">
-        <div className="mx-auto flex max-w-5xl items-center gap-2.5 px-4 py-3">
+        <div className="relative mx-auto flex max-w-5xl items-center justify-center px-4 py-3">
           {back && (
             <Link
               href={back}
               aria-label="Volver"
-              className="-ml-1 flex-none rounded-full p-1.5 text-white transition hover:bg-white/15"
+              className="absolute left-3 flex-none rounded-full p-1.5 text-white transition hover:bg-white/15"
             >
               <ArrowLeft className="h-6 w-6" />
             </Link>
           )}
-          <Link href="/" aria-label="Inicio" className="flex-none">
-            <Image
-              src="/logo.jpg"
-              alt=""
-              aria-hidden
-              width={44}
-              height={44}
-              className="h-11 w-11 rounded-xl shadow-[0_0_0_2px_rgba(255,255,255,.35)]"
-            />
-          </Link>
-          <div className="min-w-0">
-            <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#f6d9b0]">
-              Añakleta
-            </p>
-            <p className="ribbon-title truncate text-2xl leading-none">{title}</p>
+
+          {/* Marca centrada: logo + título */}
+          <div className="flex items-center gap-2.5">
+            <Link href="/" aria-label="Inicio" className="flex-none">
+              <Image
+                src="/logo.jpg"
+                alt=""
+                aria-hidden
+                width={44}
+                height={44}
+                className="h-11 w-11 rounded-xl shadow-[0_0_0_2px_rgba(255,255,255,.35)]"
+              />
+            </Link>
+            <div className="min-w-0 text-left">
+              <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#f6d9b0]">
+                Añakleta
+              </p>
+              <p className="ribbon-title truncate text-2xl leading-none">{title}</p>
+            </div>
           </div>
 
-          <div className="ml-auto flex items-center gap-3">
-            <div className="hidden sm:block">
-              <AppNav variant="top" />
-            </div>
+          {/* Nav + email a la derecha (solo escritorio; no descentra en móvil) */}
+          <div className="absolute right-3 hidden items-center gap-3 sm:flex">
+            <AppNav variant="top" />
             {email && (
               <span className="hidden max-w-[16ch] truncate rounded-full bg-black/15 px-2.5 py-1 text-xs font-semibold text-[#f6d9b0] md:inline">
                 {email}
