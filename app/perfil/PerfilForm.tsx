@@ -73,7 +73,7 @@ function LinkTagCard({
   const alreadyLinked = linkedTag && !relink && !result?.ok;
 
   return (
-    <Card title="Tu jugador de Clash">
+    <Card title="🔗 Tu jugador de Clash">
       {alreadyLinked ? (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
@@ -151,7 +151,7 @@ function PasswordCard() {
   }
 
   return (
-    <Card title="Cambiar contraseña">
+    <Card title="🔒 Cambiar contraseña">
       <form onSubmit={submit} className="space-y-3">
         <div>
           <label className="mb-1 block text-xs font-bold text-ink-soft">Nueva contraseña</label>
