@@ -95,24 +95,36 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
     <AppShell email={user?.email} title={history.name} back="/">
       {/* Hero: identidad + rankings + actividad */}
       <div className="mb-5 overflow-hidden rounded-2xl border border-line bg-surface">
-        <div className="flex items-center gap-3 p-4">
-          {history.current.leagueTierIcon && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={history.current.leagueTierIcon} alt="" width={40} height={40} className="h-10 w-10 flex-none" />
-          )}
-          <div className="min-w-0 flex-1">
-            <p className="text-lg font-extrabold text-ink">
+        {/* Liga | TH */}
+        <div className="grid grid-cols-2 divide-x divide-line">
+          <div className="flex flex-col items-center gap-1 p-4 text-center">
+            {history.current.leagueTierIcon ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={history.current.leagueTierIcon} alt="" width={52} height={52} style={{ height: 52, width: 52 }} />
+            ) : (
+              <span className="text-4xl">🏅</span>
+            )}
+            <p className="font-extrabold leading-tight text-ink">
               {history.current.leagueTierName?.replace(" League", "") ?? "Sin rango"}
             </p>
-            <p className="text-xs font-semibold text-ink-soft">
-              {history.role ? (ROLE_LABEL[history.role] ?? history.role) : "—"} · TH {history.townHall ?? "—"} · Nv{" "}
-              {history.current.expLevel ?? "—"}
-            </p>
-            {row?.leagueVsTh && (
-              <p className="text-[11px] font-bold text-ink-soft">{LEAGUE_VS[row.leagueVsTh]}</p>
-            )}
+            <p className="text-sm font-extrabold text-gold-deep">🏆 {history.current.trophies ?? "—"}</p>
           </div>
-          <div className="flex flex-none flex-col items-end gap-1">
+          <div className="flex flex-col items-center gap-1 p-4 text-center">
+            <span className="text-4xl leading-none">🏰</span>
+            <p className="text-xl font-extrabold text-ink">TH {history.townHall ?? "—"}</p>
+            <p className="text-xs font-semibold text-ink-soft">Nivel {history.current.expLevel ?? "—"}</p>
+          </div>
+        </div>
+
+        {/* Rol + veredicto */}
+        <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-2.5">
+          <span className="text-sm font-bold text-ink">
+            {history.role ? (ROLE_LABEL[history.role] ?? history.role) : "—"}
+          </span>
+          {row?.leagueVsTh && (
+            <span className="text-[11px] font-bold text-ink-soft">· {LEAGUE_VS[row.leagueVsTh]}</span>
+          )}
+          <span className="ml-auto flex items-center gap-1.5">
             {row && (
               <span className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${CAT_LABEL[row.category].cls}`}>
                 {CAT_LABEL[row.category].label}
@@ -128,7 +140,7 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
                 Fuera
               </span>
             )}
-          </div>
+          </span>
         </div>
 
         {ranks && (
