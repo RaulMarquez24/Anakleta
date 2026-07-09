@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import type { MemberOverviewRow } from "@/lib/dashboard";
+import { ThImage } from "@/components/ThImage";
 
 type SortKey =
   | "rank"
@@ -79,17 +80,7 @@ function TierBadge({ m }: { m: MemberOverviewRow }) {
 function ThInline({ th }: { th: number | null }) {
   return (
     <span className="inline-flex items-center gap-1.5">
-      {th != null && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={`/th/${th}.webp`}
-          alt=""
-          width={22}
-          height={22}
-          style={{ height: 22, width: 22, objectFit: "contain" }}
-          loading="lazy"
-        />
-      )}
+      <ThImage th={th} size={22} />
       <span className="font-semibold text-ink">TH {th ?? "—"}</span>
     </span>
   );
@@ -245,17 +236,7 @@ export function MembersTable({ members }: { members: MemberOverviewRow[] }) {
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex items-center justify-center gap-1.5">
-                      {m.townHall != null && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={`/th/${m.townHall}.webp`}
-                          alt=""
-                          width={26}
-                          height={26}
-                          style={{ height: 26, width: 26, objectFit: "contain" }}
-                          loading="lazy"
-                        />
-                      )}
+                      <ThImage th={m.townHall} size={26} />
                       <span className="tabular-nums text-ink-soft">{m.townHall ?? "—"}</span>
                     </div>
                   </td>
