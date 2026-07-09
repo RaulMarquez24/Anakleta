@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { AppNav } from "@/components/AppNav";
@@ -34,30 +33,20 @@ export async function AppShell({
             </Link>
           )}
 
-          {/* Marca centrada: logo + título */}
-          <div className="flex items-center gap-2.5">
-            <Link href="/" aria-label="Inicio" className="flex-none">
-              <Image
-                src="/logo.jpg"
-                alt=""
-                aria-hidden
-                width={44}
-                height={44}
-                className="h-11 w-11 rounded-xl shadow-[0_0_0_2px_rgba(255,255,255,.35)]"
-              />
-            </Link>
-            <div className="min-w-0 text-left">
-              {back ? (
-                <>
-                  <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#f6d9b0]">
-                    Añakleta
-                  </p>
-                  <p className="ribbon-title truncate text-2xl leading-none">{title}</p>
-                </>
-              ) : (
+          {/* Marca / título centrado */}
+          <div className="min-w-0 text-center">
+            {back ? (
+              <>
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#f6d9b0]">
+                  Añakleta
+                </p>
+                <p className="ribbon-title truncate text-2xl leading-none">{title}</p>
+              </>
+            ) : (
+              <Link href="/" aria-label="Inicio">
                 <p className="ribbon-title truncate text-3xl leading-none">Añakleta</p>
-              )}
-            </div>
+              </Link>
+            )}
           </div>
 
           {/* Nav + email a la derecha (solo escritorio; no descentra en móvil) */}
