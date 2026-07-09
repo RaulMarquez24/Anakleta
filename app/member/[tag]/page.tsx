@@ -17,6 +17,12 @@ const ROLE_LABEL: Record<string, string> = {
   admin: "Veterano",
   member: "Miembro",
 };
+const ROLE_CLS: Record<string, string> = {
+  leader: "bg-gold/25 text-gold-deep",
+  coLeader: "bg-sky/15 text-sky",
+  admin: "bg-magenta/15 text-magenta",
+  member: "bg-surface-2 text-ink-soft",
+};
 const CAT_LABEL: Record<string, { label: string; cls: string }> = {
   expulsion: { label: "🔴 Expulsión", cls: "bg-banner/15 text-banner" },
   revisar: { label: "🟡 Revisar", cls: "bg-gold/25 text-gold-deep" },
@@ -24,12 +30,14 @@ const CAT_LABEL: Record<string, { label: string; cls: string }> = {
   ok: { label: "OK", cls: "bg-surface-2 text-ink-soft" },
   mando: { label: "Mando", cls: "bg-sky/15 text-sky" },
 };
-const LEAGUE_VS: Record<string, string> = {
-  muy_alta: "Liga muy alta p/ su TH",
-  alta: "Liga alta p/ su TH",
-  normal: "Liga adecuada p/ su TH",
-  baja: "Liga baja p/ su TH",
-  muy_baja: "Liga muy baja p/ su TH",
+// Liga respecto a su TH: chip con color e icono (verde adecuada, azul por
+// encima, ámbar/rojo por debajo).
+const LEAGUE_VS: Record<string, { label: string; cls: string; icon: string }> = {
+  muy_alta: { label: "Liga muy alta", cls: "bg-sky/15 text-sky", icon: "⏫" },
+  alta: { label: "Liga alta", cls: "bg-sky/15 text-sky", icon: "↑" },
+  normal: { label: "Liga adecuada", cls: "bg-grass/15 text-grass", icon: "✓" },
+  baja: { label: "Liga baja", cls: "bg-gold/25 text-gold-deep", icon: "↓" },
+  muy_baja: { label: "Liga muy baja", cls: "bg-banner/15 text-banner", icon: "⏬" },
 };
 
 function fmtDate(iso: string | null): string {
@@ -113,31 +121,42 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
         </div>
 
         {/* Rol + tag + veredicto */}
-        <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-2.5">
-          <span className="text-sm font-bold text-ink">
-            {history.role ? (ROLE_LABEL[history.role] ?? history.role) : "—"}
-          </span>
-          <CopyTag tag={history.tag} />
+        <div className="space-y-2 border-t border-line px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wide ${
+                ROLE_CLS[history.role ?? "member"] ?? "bg-surface-2 text-ink-soft"
+              }`}
+            >
+              {history.role ? (ROLE_LABEL[history.role] ?? history.role) : "—"}
+            </span>
+            <CopyTag tag={history.tag} />
+            <span className="ml-auto flex items-center gap-1.5">
+              {row && (
+                <span className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${CAT_LABEL[row.category].cls}`}>
+                  {CAT_LABEL[row.category].label}
+                </span>
+              )}
+              {isNew && (
+                <span className="rounded-full bg-grass/20 px-2 py-0.5 text-[10px] font-extrabold uppercase text-grass">
+                  Nuevo
+                </span>
+              )}
+              {!history.isActive && (
+                <span className="rounded-full bg-banner/15 px-2 py-0.5 text-[10px] font-extrabold uppercase text-banner">
+                  Fuera
+                </span>
+              )}
+            </span>
+          </div>
           {row?.leagueVsTh && (
-            <span className="text-[11px] font-bold text-ink-soft">· {LEAGUE_VS[row.leagueVsTh]}</span>
+            <span
+              title="Su liga comparada con los compañeros del mismo ayuntamiento"
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${LEAGUE_VS[row.leagueVsTh].cls}`}
+            >
+              {LEAGUE_VS[row.leagueVsTh].icon} {LEAGUE_VS[row.leagueVsTh].label} p/ su TH
+            </span>
           )}
-          <span className="ml-auto flex items-center gap-1.5">
-            {row && (
-              <span className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${CAT_LABEL[row.category].cls}`}>
-                {CAT_LABEL[row.category].label}
-              </span>
-            )}
-            {isNew && (
-              <span className="rounded-full bg-grass/20 px-2 py-0.5 text-[10px] font-extrabold uppercase text-grass">
-                Nuevo
-              </span>
-            )}
-            {!history.isActive && (
-              <span className="rounded-full bg-banner/15 px-2 py-0.5 text-[10px] font-extrabold uppercase text-banner">
-                Fuera
-              </span>
-            )}
-          </span>
         </div>
 
         {ranks && (
