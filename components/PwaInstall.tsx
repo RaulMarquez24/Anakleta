@@ -1,67 +1,31 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
-}
+import { usePwaInstall } from "@/components/usePwaInstall";
 
 const DISMISS_KEY = "pwa-install-dismissed";
 
-// Sugerencia de instalar la app como PWA. No aparece si ya está instalada
-// (display-mode standalone) ni si el usuario la descartó. En iOS/Safari (que no
-// soporta el prompt nativo) muestra las instrucciones manuales.
+// Banner que sugiere instalar la app. Se puede descartar (y no vuelve a molestar),
+// pero el botón fijo de Perfil siempre queda disponible para instalar.
 export function PwaInstall({ raised = false }: { raised?: boolean }) {
-  const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
-  const [iosHint, setIosHint] = useState(false);
-  const [show, setShow] = useState(false);
+  const { canInstall, installed, isIos, install } = usePwaInstall();
+  const [dismissed, setDismissed] = useState(true);
 
   useEffect(() => {
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
-    }
-
-    const nav = navigator as Navigator & { standalone?: boolean };
-    const standalone =
-      window.matchMedia("(display-mode: standalone)").matches || nav.standalone === true;
-    if (standalone) return;
-    if (localStorage.getItem(DISMISS_KEY) === "1") return;
-
-    const onPrompt = (e: Event) => {
-      e.preventDefault();
-      setDeferred(e as BeforeInstallPromptEvent);
-      setShow(true);
-    };
-    window.addEventListener("beforeinstallprompt", onPrompt);
-
-    // iOS Safari no dispara beforeinstallprompt: instrucciones manuales.
-    const ua = navigator.userAgent;
-    const isIos = /iphone|ipad|ipod/i.test(ua);
-    const isSafari = /^((?!chrome|android|crios|fxios).)*safari/i.test(ua);
-    if (isIos && isSafari) {
-      setIosHint(true);
-      setShow(true);
-    }
-
-    return () => window.removeEventListener("beforeinstallprompt", onPrompt);
+    setDismissed(localStorage.getItem(DISMISS_KEY) === "1");
   }, []);
 
-  function dismiss() {
-    setShow(false);
-    localStorage.setItem(DISMISS_KEY, "1");
-  }
-
-  async function install() {
-    if (!deferred) return;
-    await deferred.prompt();
-    await deferred.userChoice;
-    setDeferred(null);
-    setShow(false);
-    localStorage.setItem(DISMISS_KEY, "1");
-  }
-
+  const show = !installed && !dismissed && (canInstall || isIos);
   if (!show) return null;
+
+  function dismiss() {
+    setDismissed(true);
+    localStorage.setItem(DISMISS_KEY, "1");
+  }
+  async function onInstall() {
+    await install();
+    dismiss();
+  }
 
   return (
     <div
@@ -76,14 +40,14 @@ export function PwaInstall({ raised = false }: { raised?: boolean }) {
         <div className="min-w-0 flex-1">
           <p className="text-sm font-extrabold text-ink">Instala Añakleta</p>
           <p className="text-xs text-ink-soft">
-            {iosHint
+            {isIos && !canInstall
               ? "Toca Compartir → «Añadir a pantalla de inicio»."
               : "Ábrela como app, a pantalla completa y de un toque."}
           </p>
         </div>
-        {!iosHint && (
+        {canInstall && (
           <button
-            onClick={install}
+            onClick={onInstall}
             className="flex-none rounded-full bg-gold px-3.5 py-1.5 text-sm font-extrabold text-banner-dark transition hover:brightness-105"
           >
             Instalar

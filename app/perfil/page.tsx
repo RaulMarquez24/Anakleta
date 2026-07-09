@@ -4,6 +4,7 @@ import { getMyPlayerTag } from "@/lib/profile";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { AppShell } from "@/components/AppShell";
 import { ThImage } from "@/components/ThImage";
+import { InstallAppCard } from "@/components/InstallAppCard";
 import { PerfilForm } from "./PerfilForm";
 
 export const dynamic = "force-dynamic";
@@ -74,6 +75,10 @@ export default async function PerfilPage() {
       )}
 
       <PerfilForm email={user?.email ?? null} linkedTag={linkedTag} linkedName={linkedName} />
+
+      <div className="mt-4">
+        <InstallAppCard />
+      </div>
 
       {/* Cerrar sesión */}
       <form action="/auth/signout" method="post" className="mt-5">
