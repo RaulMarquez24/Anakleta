@@ -28,6 +28,11 @@ export interface CwlSeasonSummary {
   from: string | null; // primera guerra de la temporada
 }
 
+export interface WarAttackDetail {
+  stars: number;
+  destruction: number;
+  order: number;
+}
 export interface WarMemberDetail {
   tag: string;
   name: string;
@@ -36,6 +41,7 @@ export interface WarMemberDetail {
   attacksUsed: number;
   stars: number;
   destruction: number;
+  attacks: WarAttackDetail[]; // cada ataque individual (de war_attacks), en orden
 }
 
 const WAR_COLS =
@@ -324,11 +330,30 @@ async function getWarDetailImpl(
   const { data: war } = await supabase.from("wars").select(WAR_COLS).eq("id", id).maybeSingle();
   if (!war) return null;
 
-  const { data: members } = await supabase
-    .from("war_members")
-    .select("tag, name, map_position, town_hall, attacks_used, stars, destruction")
-    .eq("war_id", id)
-    .order("map_position", { ascending: true });
+  const [{ data: members }, { data: atks }] = await Promise.all([
+    supabase
+      .from("war_members")
+      .select("tag, name, map_position, town_hall, attacks_used, stars, destruction")
+      .eq("war_id", id)
+      .order("map_position", { ascending: true }),
+    supabase
+      .from("war_attacks")
+      .select("attacker_tag, stars, destruction, attack_order")
+      .eq("war_id", id)
+      .order("attack_order", { ascending: true }),
+  ]);
+
+  // Agrupa los ataques individuales por atacante (nuestro miembro).
+  const attacksByTag = new Map<string, WarAttackDetail[]>();
+  for (const a of atks ?? []) {
+    const tag = a.attacker_tag as string;
+    if (!attacksByTag.has(tag)) attacksByTag.set(tag, []);
+    attacksByTag.get(tag)!.push({
+      stars: (a.stars as number | null) ?? 0,
+      destruction: Number(a.destruction ?? 0),
+      order: (a.attack_order as number | null) ?? 0,
+    });
+  }
 
   return {
     war: toSummary(war as Record<string, unknown>),
@@ -340,6 +365,7 @@ async function getWarDetailImpl(
       attacksUsed: (m.attacks_used as number | null) ?? 0,
       stars: (m.stars as number | null) ?? 0,
       destruction: (m.destruction as number | null) ?? 0,
+      attacks: attacksByTag.get(m.tag as string) ?? [],
     })),
   };
 }

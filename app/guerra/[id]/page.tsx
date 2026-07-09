@@ -63,6 +63,7 @@ export default async function GuerraDetailPage({
           attacksPending: Math.max(0, attacksPerMember - m.attacksUsed),
           stars: m.stars,
           destruction: m.destruction,
+          attacks: m.attacks,
         }))}
       />
 

@@ -114,12 +114,9 @@ export async function POST(req: NextRequest) {
         donations_received: m.donationsReceived,
         trophies: m.trophies,
         builder_trophies: m.builderBaseTrophies ?? null,
-        clan_rank: m.clanRank,
         town_hall: m.townHallLevel,
         role: m.role,
-        // Sistema de ligas nuevo + XP:
-        league_id: m.league?.id ?? null,
-        league_name: m.league?.name ?? null,
+        // Sistema de ligas nuevo (Ranked) + XP:
         league_tier_id: m.leagueTier?.id ?? null,
         league_tier_name: m.leagueTier?.name ?? null,
         league_tier_icon: m.leagueTier?.iconUrls?.small ?? null,

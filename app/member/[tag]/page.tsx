@@ -211,6 +211,7 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
       {/* Estadísticas actuales */}
       <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
         <Stat label="Copas (ranked)">{history.current.trophies ?? "—"}</Stat>
+        <Stat label="Copas Constructor">🔨 {history.current.builderTrophies ?? "—"}</Stat>
         <Stat label="Estrellas de guerra (total)">⭐ {history.current.warStars ?? "—"}</Stat>
         <Stat label="Ataques / Defensas ganados">
           {history.current.attackWins ?? "—"} / {history.current.defenseWins ?? "—"}

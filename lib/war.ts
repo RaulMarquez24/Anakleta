@@ -313,8 +313,11 @@ function toRecord(
 
 // Devuelve las guerras a registrar: la normal si la hay, o TODAS nuestras
 // guerras de CWL (una por ronda con datos).
+// `finalizedTags`: warTags de CWL ya guardados como terminados. Se saltan (no se
+// vuelven a descargar ni reescribir: una ronda cerrada ya no cambia).
 export async function getWarRecords(
   clanTag = process.env.COC_CLAN_TAG ?? "",
+  finalizedTags: Set<string> = new Set(),
 ): Promise<WarRecord[]> {
   let raw: CocCurrentWar | null = null;
   try {
@@ -335,10 +338,12 @@ export async function getWarRecords(
     ];
   }
 
-  // CWL: registrar todas nuestras guerras de todas las rondas con datos.
+  // CWL: registrar nuestras guerras de las rondas con datos, saltando las que ya
+  // están guardadas como terminadas (no cambian; ahorra ~decenas de llamadas).
   const { season, refs } = await fetchLeagueGroup(clanTag);
-  if (!refs.length) return [];
-  const ours = await fetchWars(refs, clanTag);
+  const pending = refs.filter((r) => !finalizedTags.has(r.tag));
+  if (!pending.length) return [];
+  const ours = await fetchWars(pending, clanTag);
   return ours
     .filter((x) => x.raw.state === "inWar" || x.raw.state === "warEnded")
     .map((x) =>

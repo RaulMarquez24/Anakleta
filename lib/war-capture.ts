@@ -14,7 +14,18 @@ export async function captureWar(
   supabase: SupabaseClient,
   capturedAt: string,
 ): Promise<WarCaptureResult> {
-  const records = await getWarRecords();
+  // Rondas de CWL ya guardadas como terminadas: no hace falta volver a bajarlas
+  // ni reescribirlas (una guerra cerrada ya no cambia).
+  const { data: finalized } = await supabase
+    .from("wars")
+    .select("war_tag")
+    .eq("state", "warEnded")
+    .eq("is_cwl", true);
+  const finalizedTags = new Set(
+    (finalized ?? []).map((w) => w.war_tag as string).filter(Boolean),
+  );
+
+  const records = await getWarRecords(undefined, finalizedTags);
   let recorded = 0;
   let attacks = 0;
   let cwl = false;

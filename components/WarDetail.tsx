@@ -11,6 +11,12 @@ export interface UnifiedWarMember {
   attacksPending: number;
   stars: number;
   destruction: number;
+  attacks?: { stars: number; destruction: number; order: number }[];
+}
+
+// "⭐⭐⭐" según estrellas (0-3).
+function starGlyphs(n: number): string {
+  return "★★★".slice(0, n).padEnd(3, "☆");
 }
 export interface UnifiedWar {
   state: string;
@@ -113,6 +119,20 @@ export function WarDetail({ war, members }: { war: UnifiedWar; members: UnifiedW
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-bold text-ink">{m.name}</p>
                       <p className="text-xs text-ink-soft">TH{m.townHall}</p>
+                      {m.attacks && m.attacks.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {m.attacks.map((a, i) => (
+                            <span
+                              key={i}
+                              className="inline-flex items-center gap-1 rounded-md bg-surface-2 px-1.5 py-0.5 text-[11px] font-bold"
+                              title={`Ataque ${a.order}`}
+                            >
+                              <span className="text-gold-deep">{starGlyphs(a.stars)}</span>
+                              <span className="tabular-nums text-ink-soft">{Math.round(a.destruction)}%</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     {m.attacksUsed > 0 && (
                       <span className="flex items-center gap-2 text-sm font-bold">

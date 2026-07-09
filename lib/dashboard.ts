@@ -18,7 +18,6 @@ interface SnapRow {
   donations: number | null;
   donations_received: number | null;
   trophies: number | null;
-  clan_rank: number | null;
   town_hall: number | null;
   role: string | null;
   league_tier_id: number | null;
@@ -32,14 +31,13 @@ interface SnapRow {
 }
 
 const SNAP_COLS =
-  "member_tag, captured_at, donations, donations_received, trophies, clan_rank, town_hall, role, league_tier_id, league_tier_name, league_tier_icon, exp_level, war_stars, attack_wins, war_preference, capital_contributions";
+  "member_tag, captured_at, donations, donations_received, trophies, town_hall, role, league_tier_id, league_tier_name, league_tier_icon, exp_level, war_stars, attack_wins, war_preference, capital_contributions";
 
 export interface MemberOverviewRow {
   tag: string;
   name: string;
   role: string | null;
   townHall: number | null;
-  clanRank: number | null;
   donations: number | null;
   donationsReceived: number | null;
   trophies: number | null;
@@ -187,7 +185,6 @@ async function getMembersOverviewImpl(): Promise<DashboardData> {
       name: m.name as string,
       role: (m.role as string | null) ?? null,
       townHall: (cur?.town_hall as number | undefined) ?? (m.town_hall as number | null) ?? null,
-      clanRank: (cur?.clan_rank as number | undefined) ?? null,
       donations,
       donationsReceived: received,
       trophies,

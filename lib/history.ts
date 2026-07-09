@@ -18,6 +18,7 @@ export interface MemberHistory {
     leagueTierIcon: string | null;
     expLevel: number | null;
     trophies: number | null;
+    builderTrophies: number | null;
     warStars: number | null;
     attackWins: number | null;
     defenseWins: number | null;
@@ -50,7 +51,7 @@ async function getMemberHistoryImpl(tag: string): Promise<MemberHistory | null> 
   const { data: snaps } = await supabase
     .from("member_snapshots")
     .select(
-      "captured_at, donations, donations_received, trophies, league_tier_name, league_tier_icon, exp_level, war_stars, attack_wins, defense_wins, war_preference, capital_contributions",
+      "captured_at, donations, donations_received, trophies, builder_trophies, league_tier_name, league_tier_icon, exp_level, war_stars, attack_wins, defense_wins, war_preference, capital_contributions",
     )
     .eq("member_tag", tag)
     .order("captured_at", { ascending: true });
@@ -71,6 +72,7 @@ async function getMemberHistoryImpl(tag: string): Promise<MemberHistory | null> 
       leagueTierIcon: (last?.league_tier_icon as string | null) ?? null,
       expLevel: (last?.exp_level as number | null) ?? null,
       trophies: (last?.trophies as number | null) ?? null,
+      builderTrophies: (last?.builder_trophies as number | null) ?? null,
       warStars: (last?.war_stars as number | null) ?? null,
       attackWins: (last?.attack_wins as number | null) ?? null,
       defenseWins: (last?.defense_wins as number | null) ?? null,

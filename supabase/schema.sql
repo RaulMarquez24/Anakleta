@@ -33,12 +33,15 @@ create table if not exists member_snapshots (
   donations_received  int,
   trophies            int,
   builder_trophies    int,
-  clan_rank           int,
   town_hall           int,
   role                text
 );
 create index if not exists member_snapshots_tag_time_idx
   on member_snapshots (member_tag, captured_at desc);
+-- La actividad, las estadísticas y las tendencias del clan filtran por fecha
+-- sobre todos los miembros: índice por captured_at.
+create index if not exists member_snapshots_time_idx
+  on member_snapshots (captured_at);
 
 -- Guerras (normales y CWL).
 create table if not exists wars (
@@ -66,8 +69,8 @@ create table if not exists war_attacks (
 
 -- Sistema de ligas nuevo (Ranked) + XP + datos por jugador (enriquecimiento).
 -- El leagueTier es el "rango real": su id es creciente y sirve para ordenar.
-alter table member_snapshots add column if not exists league_id            int;
-alter table member_snapshots add column if not exists league_name          text;
+-- (El sistema de ligas antiguo —league_id/league_name— se descartó: lo sustituye
+-- leagueTier.)
 alter table member_snapshots add column if not exists league_tier_id       int;
 alter table member_snapshots add column if not exists league_tier_name     text;
 alter table member_snapshots add column if not exists league_tier_icon     text;
