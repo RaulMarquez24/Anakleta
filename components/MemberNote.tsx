@@ -3,18 +3,35 @@
 import { useState } from "react";
 import { setMemberNote } from "@/app/miembros/actions";
 
-// Comentario manual opcional para cualquier miembro (activo o ex): motivo de
-// expulsión, recordatorio, etc.
+// "raul@x.com" -> "raul"; fecha corta.
+function who(email: string | null): string {
+  if (!email) return "";
+  return email.split("@")[0];
+}
+function shortDate(iso: string | null): string {
+  if (!iso) return "";
+  return new Intl.DateTimeFormat("es-ES", { dateStyle: "short", timeZone: "Europe/Madrid" }).format(
+    new Date(iso),
+  );
+}
+
+// Comentario manual opcional para cualquier miembro (activo o ex), con autor.
 export function MemberNote({
   tag,
   initialNote,
+  initialBy = null,
+  initialAt = null,
   placeholder = "Ej.: buen atacante / avisar de guerra / a prueba…",
 }: {
   tag: string;
   initialNote: string | null;
+  initialBy?: string | null;
+  initialAt?: string | null;
   placeholder?: string;
 }) {
   const [note, setNote] = useState(initialNote ?? "");
+  const [by, setBy] = useState<string | null>(initialBy);
+  const [at, setAt] = useState<string | null>(initialAt);
   const [draft, setDraft] = useState(initialNote ?? "");
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -25,6 +42,8 @@ export function MemberNote({
     setSaving(false);
     if (r.ok) {
       setNote(draft.trim());
+      setBy(r.by ?? null);
+      setAt(r.at ?? null);
       setEditing(false);
     }
   }
@@ -63,13 +82,16 @@ export function MemberNote({
   }
 
   if (note) {
+    const meta = [who(by), shortDate(at)].filter(Boolean).join(" · ");
     return (
       <button
         onClick={() => setEditing(true)}
         className="mt-1.5 block text-left text-xs text-ink-soft transition hover:text-ink"
         title="Editar nota"
       >
-        📝 {note} <span className="text-ink-soft/70 underline">editar</span>
+        📝 {note}
+        {meta && <span className="text-ink-soft/70"> — {meta}</span>}{" "}
+        <span className="text-ink-soft/70 underline">editar</span>
       </button>
     );
   }

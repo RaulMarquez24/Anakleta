@@ -26,5 +26,8 @@ alter table clans add column if not exists required_trophies int;
 alter table clans add column if not exists war_wins          int;
 alter table clans add column if not exists war_win_streak    int;
 
--- 4) Comentario manual por miembro (nota en ex-miembros: motivo de expulsión…).
-alter table members add column if not exists note text;
+-- 4) Comentario manual por miembro (nota en ex-miembros: motivo de expulsión…)
+--    con autor y fecha de quién la puso.
+alter table members add column if not exists note    text;
+alter table members add column if not exists note_by text;
+alter table members add column if not exists note_at timestamptz;

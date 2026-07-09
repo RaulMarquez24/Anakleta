@@ -13,6 +13,8 @@ export interface MemberHistory {
   firstSeenAt: string | null;
   lastSeenAt: string | null;
   note: string | null; // comentario manual
+  noteBy: string | null;
+  noteAt: string | null;
   // Valores más recientes (última captura):
   current: {
     leagueTierName: string | null;
@@ -69,6 +71,8 @@ async function getMemberHistoryImpl(tag: string): Promise<MemberHistory | null> 
     firstSeenAt: (member.first_seen_at as string | null) ?? null,
     lastSeenAt: (member.last_seen_at as string | null) ?? null,
     note: (member.note as string | null) ?? null,
+    noteBy: (member.note_by as string | null) ?? null,
+    noteAt: (member.note_at as string | null) ?? null,
     current: {
       leagueTierName: (last?.league_tier_name as string | null) ?? null,
       leagueTierIcon: (last?.league_tier_icon as string | null) ?? null,
@@ -177,6 +181,8 @@ export interface Departure {
   firstSeenAt: string | null; // cuándo entró (aprox.)
   lastSeenAt: string | null; // última vez visto antes de irse
   note: string | null; // comentario manual (p. ej. "expulsado por X")
+  noteBy: string | null; // quién puso la nota
+  noteAt: string | null; // cuándo
 }
 
 // Registro de abandonos: todos los que ya no están en el clan (is_active=false),
@@ -202,6 +208,8 @@ async function getDeparturesImpl(): Promise<Departure[]> {
     firstSeenAt: (m.first_seen_at as string | null) ?? null,
     lastSeenAt: (m.last_seen_at as string | null) ?? null,
     note: (m.note as string | null) ?? null,
+    noteBy: (m.note_by as string | null) ?? null,
+    noteAt: (m.note_at as string | null) ?? null,
   }));
 }
 

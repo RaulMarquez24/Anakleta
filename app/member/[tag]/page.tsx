@@ -252,7 +252,12 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
       {/* Nota manual del jugador */}
       <div className="mb-5 rounded-2xl border border-line bg-surface p-4">
         <p className="text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">Nota</p>
-        <MemberNote tag={history.tag} initialNote={history.note} />
+        <MemberNote
+          tag={history.tag}
+          initialNote={history.note}
+          initialBy={history.noteBy}
+          initialAt={history.noteAt}
+        />
       </div>
 
       {/* Historial de liga (ranked semanal, bajo demanda) */}

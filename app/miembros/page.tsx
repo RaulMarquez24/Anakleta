@@ -86,7 +86,13 @@ export default async function MiembrosPage({
                         Alta {fmtDate(d.firstSeenAt)}
                         {stay != null && <> · estuvo {stay} día{stay === 1 ? "" : "s"}</>}
                       </p>
-                      <MemberNote tag={d.tag} initialNote={d.note} placeholder="Ej.: expulsado por inactivo / se fue solo / tóxico…" />
+                      <MemberNote
+                        tag={d.tag}
+                        initialNote={d.note}
+                        initialBy={d.noteBy}
+                        initialAt={d.noteAt}
+                        placeholder="Ej.: expulsado por inactivo / se fue solo / tóxico…"
+                      />
                     </div>
                     <span className="mt-0.5 whitespace-nowrap rounded-full bg-banner/12 px-2.5 py-1 text-xs font-extrabold text-banner">
                       Se fue {fmtDate(d.lastSeenAt)}
