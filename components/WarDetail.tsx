@@ -1,5 +1,3 @@
-import { buildNoticeText } from "@/lib/war";
-import { WarNotice } from "@/app/war/WarNotice";
 import { fmtDate } from "@/components/WarBits";
 
 export interface UnifiedWarMember {
@@ -12,11 +10,6 @@ export interface UnifiedWarMember {
   stars: number;
   destruction: number;
   attacks?: { stars: number; destruction: number; order: number }[];
-}
-
-// "⭐⭐⭐" según estrellas (0-3).
-function starGlyphs(n: number): string {
-  return "★★★".slice(0, n).padEnd(3, "☆");
 }
 export interface UnifiedWar {
   state: string;
@@ -33,6 +26,11 @@ export interface UnifiedWar {
   attacksPerMember: number;
 }
 
+// "★★★" según estrellas (0-3), con las que faltan en hueco.
+function starGlyphs(n: number): string {
+  return "★★★".slice(0, n).padEnd(3, "☆");
+}
+
 function timeLeft(iso: string | null): string | null {
   if (!iso) return null;
   const ms = new Date(iso).getTime() - Date.now();
@@ -42,62 +40,100 @@ function timeLeft(iso: string | null): string | null {
   return `${h}h ${m}m`;
 }
 
-function Card({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="rounded-2xl border border-line bg-surface p-4">
-      <p className="text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">{label}</p>
-      <p className="mt-1 text-lg font-extrabold text-ink">{value}</p>
-      {sub && <p className="text-sm text-ink-soft">{sub}</p>}
-    </div>
-  );
-}
-
 export function WarDetail({ war, members }: { war: UnifiedWar; members: UnifiedWarMember[] }) {
   const inWar = war.state === "inWar";
   const prep = war.state === "preparation";
   const pending = members.filter((m) => m.attacksPending > 0);
   const attacked = members.filter((m) => m.attacksUsed > 0).length;
 
-  const noticeText =
-    inWar && pending.length > 0
-      ? buildNoticeText({
-          opponentName: war.opponentName,
-          isCwl: war.isCwl,
-          round: war.round,
-          pending: pending.map((m) => ({ name: m.name, attacksPending: m.attacksPending })),
-        })
-      : "";
+  const cs = war.clanStars ?? 0;
+  const os = war.opponentStars ?? 0;
+  const cd = war.clanDestruction ?? 0;
+  const od = war.opponentDestruction ?? 0;
+  const winning = cs > os || (cs === os && cd > od);
+  const tied = cs === os && cd === od;
 
-  const timeCard = prep
-    ? { label: "Empieza en", value: timeLeft(war.startTime) ?? "—", sub: fmtDate(war.startTime) }
+  // Pastilla de estado (marcador): en guerra = cómo vas; terminada = resultado.
+  const statePill = prep
+    ? { text: "Preparación", cls: "bg-sky/15 text-sky" }
+    : tied
+      ? { text: inWar ? "Empate" : "Empate", cls: "bg-surface-2 text-ink-soft" }
+      : winning
+        ? { text: inWar ? "Vas ganando" : "Victoria", cls: "bg-grass/15 text-grass" }
+        : { text: inWar ? "Vas perdiendo" : "Derrota", cls: "bg-banner/15 text-banner" };
+
+  const time = prep
+    ? { label: "Empieza en", value: timeLeft(war.startTime) ?? fmtDate(war.startTime) }
     : inWar
-      ? { label: "Termina en", value: timeLeft(war.endTime) ?? "—", sub: fmtDate(war.endTime) }
-      : { label: "Terminó", value: fmtDate(war.endTime), sub: undefined };
+      ? { label: "Termina en", value: timeLeft(war.endTime) ?? "—" }
+      : { label: "Terminó", value: fmtDate(war.endTime) };
 
   return (
     <div className="space-y-4">
-      {/* Marcador */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Card
-          label="Rival"
-          value={war.opponentName ?? "—"}
-          sub={war.teamSize ? `${war.teamSize} vs ${war.teamSize}` : undefined}
-        />
-        <Card
-          label="Marcador"
-          value={`⭐ ${war.clanStars ?? "—"} — ${war.opponentStars ?? "—"}`}
-          sub={`${war.clanDestruction?.toFixed(1) ?? "—"}% vs ${war.opponentDestruction?.toFixed(1) ?? "—"}%`}
-        />
-        <Card label={timeCard.label} value={timeCard.value} sub={timeCard.sub} />
+      {/* Marcador compacto */}
+      <div className="overflow-hidden rounded-2xl border border-line bg-surface">
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center">
+          <div className="p-4 text-center">
+            <p className="mb-1 text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">
+              Nosotros
+            </p>
+            <p className="text-3xl font-extrabold leading-none text-gold-deep">⭐ {cs}</p>
+            <p className="mt-1 text-xs font-semibold text-ink-soft">{cd.toFixed(1)}%</p>
+          </div>
+          <div className="flex flex-col items-center px-1 text-ink-soft">
+            <span className="text-[10px] font-bold uppercase tracking-wide">
+              {war.teamSize ? `${war.teamSize} v ${war.teamSize}` : "—"}
+            </span>
+            <span className="text-lg font-extrabold">–</span>
+          </div>
+          <div className="p-4 text-center">
+            <p className="mb-1 truncate text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">
+              {war.opponentName ?? "Rival"}
+            </p>
+            <p className="text-3xl font-extrabold leading-none text-ink">⭐ {os}</p>
+            <p className="mt-1 text-xs font-semibold text-ink-soft">{od.toFixed(1)}%</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-2 border-t border-line px-4 py-2.5">
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-extrabold ${statePill.cls}`}>
+            {statePill.text}
+          </span>
+          <span className="text-sm">
+            <span className="text-ink-soft">{time.label} </span>
+            <span className="font-extrabold text-ink">{time.value}</span>
+          </span>
+        </div>
       </div>
 
-      {/* Aviso copiable (solo en guerra con pendientes) */}
-      {noticeText && <WarNotice text={noticeText} />}
-      {inWar && pending.length === 0 && members.length > 0 && (
-        <div className="rounded-2xl border border-grass/40 bg-grass/10 p-4 font-bold text-grass">
-          ✅ Todos los ataques usados. ¡Nada pendiente!
-        </div>
-      )}
+      {/* Faltan por atacar (resumen rápido; solo mientras hay guerra) */}
+      {(inWar || prep) &&
+        (pending.length === 0 ? (
+          <div className="rounded-2xl border border-grass/40 bg-grass/10 p-4 text-center font-bold text-grass">
+            ✅ Todos han atacado
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-line bg-surface p-4">
+            <div className="mb-2.5 flex items-center gap-2">
+              <span className="rounded-full bg-banner/15 px-2.5 py-0.5 text-xs font-extrabold text-banner">
+                {pending.length}
+              </span>
+              <h2 className="font-extrabold text-ink">Faltan por atacar</h2>
+            </div>
+            <ul className="space-y-2">
+              {pending.map((m) => (
+                <li key={m.tag} className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 truncate font-bold text-ink">
+                    {m.name}{" "}
+                    <span className="text-xs font-semibold text-ink-soft">TH{m.townHall}</span>
+                  </span>
+                  <span className="flex-none text-xs font-extrabold text-banner">
+                    {m.attacksPending} ataque{m.attacksPending > 1 ? "s" : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
 
       {/* Alineación con detalle por jugador */}
       {members.length > 0 && (
