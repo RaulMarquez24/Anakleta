@@ -210,6 +210,19 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
         )}
       </div>
 
+      {/* Historial de liga (ranked semanal, bajo demanda) */}
+      <Link
+        href={`/member/${encodeURIComponent(decoded)}/liga`}
+        className="mb-5 flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 hover:bg-surface-2/60"
+      >
+        <span className="text-2xl">🏆</span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-extrabold text-ink">Ver historial de liga</span>
+          <span className="block text-xs text-ink-soft">Copas, puesto y sus ataques semana a semana</span>
+        </span>
+        <span aria-hidden className="text-ink-soft">›</span>
+      </Link>
+
       {/* Estadísticas actuales */}
       <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
         <Stat label="Copas (ranked)">{history.current.trophies ?? "—"}</Stat>
