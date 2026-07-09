@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getMembersOverview } from "@/lib/dashboard";
 import { getDepartures } from "@/lib/history";
 import { getMyPlayerTag } from "@/lib/profile";
-import { createAuthServerClient } from "@/lib/supabase/auth-server";
+import { getCurrentUser } from "@/lib/supabase/current-user";
 import { AppShell } from "@/components/AppShell";
 import { MembersTable } from "@/components/MembersTable";
 
@@ -35,10 +35,7 @@ export default async function MiembrosPage({
   const sp = await searchParams;
   const tab = sp.tab === "ex" ? "ex" : "activos";
 
-  const supabase = await createAuthServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   const [data, departures, myTag] = await Promise.all([
     getMembersOverview(),

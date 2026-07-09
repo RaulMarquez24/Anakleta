@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getMembersOverview } from "@/lib/dashboard";
 import { getMyPlayerTag } from "@/lib/profile";
-import { createAuthServerClient } from "@/lib/supabase/auth-server";
+import { getCurrentUser } from "@/lib/supabase/current-user";
 import { AppShell } from "@/components/AppShell";
 import { ThImage } from "@/components/ThImage";
 import { PerfilForm } from "./PerfilForm";
@@ -16,10 +16,7 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 export default async function PerfilPage() {
-  const supabase = await createAuthServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   const [linkedTag, data] = await Promise.all([getMyPlayerTag(), getMembersOverview()]);
   const me = linkedTag ? data.members.find((m) => m.tag === linkedTag) ?? null : null;

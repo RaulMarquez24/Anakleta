@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getMemberHistory, getActivityReport, type ActivityRow } from "@/lib/history";
 import { getMemberWarLog } from "@/lib/war-history";
 import { getMyPlayerTag } from "@/lib/profile";
-import { createAuthServerClient } from "@/lib/supabase/auth-server";
+import { getCurrentUser } from "@/lib/supabase/current-user";
 import { AppShell } from "@/components/AppShell";
 import { LineChart, type ChartPoint } from "@/components/LineChart";
 import { ThImage } from "@/components/ThImage";
@@ -61,10 +61,7 @@ function rankOf(members: ActivityRow[], tag: string, value: (m: ActivityRow) => 
 }
 
 export default async function MemberPage({ params }: { params: Promise<{ tag: string }> }) {
-  const supabase = await createAuthServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   const { tag } = await params;
   const decoded = decodeURIComponent(tag);

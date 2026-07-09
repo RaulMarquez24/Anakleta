@@ -1,13 +1,10 @@
-import { createAuthServerClient } from "@/lib/supabase/auth-server";
 import { createServerClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/current-user";
 
 // Tag de CoC vinculado al usuario actual (o null). Resiliente: si la tabla
 // profiles aún no existe (migración sin correr), devuelve null.
 export async function getMyPlayerTag(): Promise<string | null> {
-  const auth = await createAuthServerClient();
-  const {
-    data: { user },
-  } = await auth.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return null;
 
   const svc = createServerClient();
