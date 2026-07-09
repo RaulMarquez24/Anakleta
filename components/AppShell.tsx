@@ -47,10 +47,16 @@ export async function AppShell({
               />
             </Link>
             <div className="min-w-0 text-left">
-              <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#f6d9b0]">
-                Añakleta
-              </p>
-              <p className="ribbon-title truncate text-2xl leading-none">{title}</p>
+              {back ? (
+                <>
+                  <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#f6d9b0]">
+                    Añakleta
+                  </p>
+                  <p className="ribbon-title truncate text-2xl leading-none">{title}</p>
+                </>
+              ) : (
+                <p className="ribbon-title truncate text-3xl leading-none">Añakleta</p>
+              )}
             </div>
           </div>
 

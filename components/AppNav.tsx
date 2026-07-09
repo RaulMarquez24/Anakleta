@@ -37,12 +37,21 @@ export function AppNav({ variant }: { variant: "top" | "bottom" }) {
               key={it.href}
               href={it.href}
               aria-current={active ? "page" : undefined}
-              className={`flex flex-col items-center gap-0.5 py-2.5 text-xs font-extrabold ${
-                active ? "text-gold-deep" : "text-ink-soft"
-              }`}
+              className="flex flex-col items-center gap-1 py-2"
             >
-              <span aria-hidden className="text-2xl leading-none">{it.icon}</span>
-              {it.label}
+              <span
+                aria-hidden
+                className={`flex h-7 w-14 items-center justify-center rounded-full text-xl leading-none transition ${
+                  active ? "bg-gold/25 text-gold-deep" : "text-ink-soft"
+                }`}
+              >
+                {it.icon}
+              </span>
+              <span
+                className={`text-[11px] font-extrabold ${active ? "text-gold-deep" : "text-ink-soft"}`}
+              >
+                {it.label}
+              </span>
             </Link>
           );
         })}
