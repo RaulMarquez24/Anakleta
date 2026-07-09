@@ -195,13 +195,12 @@ export function MembersTable({ members }: { members: MemberOverviewRow[] }) {
                 {m.isNew && <NewBadge />}
                 <span className="ml-auto"><WarPref pref={m.warPreference} /></span>
               </div>
-              {/* TH y Liga, apilados y con el mismo estilo (imagen + etiqueta) */}
-              <div className="mb-2 space-y-1 text-sm">
+              {/* Todo inline: liga · TH · nivel */}
+              <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                <TierBadge m={m} />
+                <span className="text-ink-soft">·</span>
                 <ThInline th={m.townHall} />
-                <div className="flex items-center gap-2">
-                  <TierBadge m={m} />
-                  <span className="text-ink-soft">· Nv {m.expLevel ?? "—"}</span>
-                </div>
+                <span className="text-ink-soft">· Nv {m.expLevel ?? "—"}</span>
               </div>
               <div className="mb-2 flex flex-wrap gap-1.5">
                 <span className="rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink">🏆 {m.trophies ?? "—"}</span>
