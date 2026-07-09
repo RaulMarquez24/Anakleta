@@ -20,7 +20,12 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) {
-      setError("Email o contraseña incorrectos.");
+      const rateLimited = error.status === 429 || /rate limit/i.test(error.message);
+      setError(
+        rateLimited
+          ? "Demasiados intentos. Espera un momento y vuelve a intentarlo."
+          : "Email o contraseña incorrectos.",
+      );
       return;
     }
     router.replace("/");
