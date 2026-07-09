@@ -41,22 +41,29 @@ export function WarAlertBubble({
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Tick de 1s con foco; pausa al ocultar; al volver, re-sincroniza y refresca datos.
+  // Con la pestaña visible:
+  //  - tick de 1s para mover la cuenta atrás,
+  //  - refresco de datos cada 3 min (re-pide pendientes/tiempo reales al servidor),
+  //    aunque nadie toque nada mientras la web está en primer plano.
+  // Ambos se pausan al ocultar; al volver, re-sincroniza y refresca al instante.
   useEffect(() => {
-    let timer: ReturnType<typeof setInterval> | null = null;
+    const REFRESH_MS = 180_000;
+    let tick: ReturnType<typeof setInterval> | null = null;
+    let refresh: ReturnType<typeof setInterval> | null = null;
     const start = () => {
-      if (timer == null) timer = setInterval(() => setNow(Date.now()), 1000);
+      if (tick == null) tick = setInterval(() => setNow(Date.now()), 1000);
+      if (refresh == null) refresh = setInterval(() => router.refresh(), REFRESH_MS);
     };
     const stop = () => {
-      if (timer != null) {
-        clearInterval(timer);
-        timer = null;
-      }
+      if (tick != null) clearInterval(tick);
+      if (refresh != null) clearInterval(refresh);
+      tick = null;
+      refresh = null;
     };
     const onVisibility = () => {
       if (document.visibilityState === "visible") {
         setNow(Date.now());
-        router.refresh(); // vuelve a pedir pendientes/tiempo reales al servidor
+        router.refresh(); // al volver, dato fresco al instante
         start();
       } else {
         stop();
