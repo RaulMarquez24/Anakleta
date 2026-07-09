@@ -131,6 +131,7 @@ function LinkTagCard({
 
 function PasswordCard() {
   const [supabase] = useState(() => createBrowserClient());
+  const [open, setOpen] = useState(false);
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
   const [busy, setBusy] = useState(false);
@@ -148,6 +149,22 @@ function PasswordCard() {
     setPw("");
     setPw2("");
     setMsg({ ok: true, text: "Contraseña actualizada." });
+  }
+
+  if (!open) {
+    return (
+      <Card title="🔒 Contraseña">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-ink-soft">¿Quieres cambiar tu contraseña?</p>
+          <button
+            onClick={() => setOpen(true)}
+            className="flex-none rounded-full border border-line px-4 py-2 text-sm font-extrabold text-ink transition hover:bg-surface-2"
+          >
+            Cambiar
+          </button>
+        </div>
+      </Card>
+    );
   }
 
   return (
@@ -172,9 +189,23 @@ function PasswordCard() {
             onChange={(e) => setPw2(e.target.value)}
           />
         </div>
-        <button type="submit" disabled={busy} className={btnCls}>
-          {busy ? "Guardando…" : "Actualizar contraseña"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button type="submit" disabled={busy} className={btnCls}>
+            {busy ? "Guardando…" : "Actualizar contraseña"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              setPw("");
+              setPw2("");
+              setMsg(null);
+            }}
+            className="rounded-full px-4 py-2 text-sm font-bold text-ink-soft transition hover:bg-surface-2"
+          >
+            Cancelar
+          </button>
+        </div>
       </form>
       {msg && (
         <p className={`mt-3 text-sm font-bold ${msg.ok ? "text-grass" : "text-banner"}`}>
