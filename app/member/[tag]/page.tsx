@@ -120,41 +120,24 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
           </div>
         </div>
 
-        {/* Rol + tag + veredicto */}
-        <div className="space-y-2 border-t border-line px-4 py-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wide ${
-                ROLE_CLS[history.role ?? "member"] ?? "bg-surface-2 text-ink-soft"
-              }`}
-            >
-              {history.role ? (ROLE_LABEL[history.role] ?? history.role) : "—"}
+        {/* Rol · tag · estado */}
+        <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-3">
+          <span
+            className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wide ${
+              ROLE_CLS[history.role ?? "member"] ?? "bg-surface-2 text-ink-soft"
+            }`}
+          >
+            {history.role ? (ROLE_LABEL[history.role] ?? history.role) : "—"}
+          </span>
+          <CopyTag tag={history.tag} />
+          {isNew && (
+            <span className="rounded-full bg-grass/20 px-2 py-0.5 text-[10px] font-extrabold uppercase text-grass">
+              Nuevo
             </span>
-            <CopyTag tag={history.tag} />
-            <span className="ml-auto flex items-center gap-1.5">
-              {row && (
-                <span className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${CAT_LABEL[row.category].cls}`}>
-                  {CAT_LABEL[row.category].label}
-                </span>
-              )}
-              {isNew && (
-                <span className="rounded-full bg-grass/20 px-2 py-0.5 text-[10px] font-extrabold uppercase text-grass">
-                  Nuevo
-                </span>
-              )}
-              {!history.isActive && (
-                <span className="rounded-full bg-banner/15 px-2 py-0.5 text-[10px] font-extrabold uppercase text-banner">
-                  Fuera
-                </span>
-              )}
-            </span>
-          </div>
-          {row?.leagueVsTh && (
-            <span
-              title="Su liga comparada con los compañeros del mismo ayuntamiento"
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${LEAGUE_VS[row.leagueVsTh].cls}`}
-            >
-              {LEAGUE_VS[row.leagueVsTh].icon} {LEAGUE_VS[row.leagueVsTh].label} p/ su TH
+          )}
+          {!history.isActive && (
+            <span className="rounded-full bg-banner/15 px-2 py-0.5 text-[10px] font-extrabold uppercase text-banner">
+              Fuera
             </span>
           )}
         </div>
@@ -188,6 +171,20 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
 
         {row && (
           <div className="border-t border-line px-4 py-3">
+            {/* Veredicto: categoría + liga vs su TH */}
+            <div className="mb-2 flex flex-wrap items-center gap-1.5">
+              <span className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${CAT_LABEL[row.category].cls}`}>
+                {CAT_LABEL[row.category].label}
+              </span>
+              {row.leagueVsTh && (
+                <span
+                  title="Su liga comparada con los compañeros del mismo ayuntamiento"
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-extrabold ${LEAGUE_VS[row.leagueVsTh].cls}`}
+                >
+                  {LEAGUE_VS[row.leagueVsTh].icon} {LEAGUE_VS[row.leagueVsTh].label} p/ su TH
+                </span>
+              )}
+            </div>
             <p
               className={`mb-2 flex items-center gap-1.5 text-sm font-bold ${
                 row.staleDays != null && row.staleDays < 1 ? "text-grass" : "text-ink-soft"
