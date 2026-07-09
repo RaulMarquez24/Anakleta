@@ -74,6 +74,28 @@ function TierBadge({ m }: { m: MemberOverviewRow }) {
   );
 }
 
+// Foto del ayuntamiento (imágenes locales en /public/th/{n}.webp, TH 1–18).
+function ThBadge({ th, size = 34 }: { th: number | null; size?: number }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {th != null && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={`/th/${th}.webp`}
+          alt=""
+          width={size}
+          height={size}
+          style={{ height: size, width: size, objectFit: "contain" }}
+          loading="lazy"
+        />
+      )}
+      <span className="rounded-full bg-sky px-2 py-0.5 text-[11px] font-extrabold text-white">
+        TH{th ?? "—"}
+      </span>
+    </span>
+  );
+}
+
 function WarPref({ pref }: { pref: string | null }) {
   if (pref === "in")
     return <span className="rounded-md bg-grass/15 px-1.5 py-0.5 text-[11px] font-bold text-grass" title="Entra a guerra">⚔️ Sí</span>;
@@ -172,7 +194,7 @@ export function MembersTable({ members }: { members: MemberOverviewRow[] }) {
                 <span className="text-base font-extrabold text-ink">{m.name}</span>
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide ${rb.cls}`}>{rb.label}</span>
                 {m.isNew && <NewBadge />}
-                <span className="ml-auto rounded-full bg-sky px-2.5 py-0.5 text-[11px] font-extrabold text-white">TH{m.townHall ?? "—"}</span>
+                <span className="ml-auto"><ThBadge th={m.townHall} /></span>
               </div>
               <div className="mb-2 flex items-center gap-2 text-sm">
                 <TierBadge m={m} />
@@ -220,7 +242,22 @@ export function MembersTable({ members }: { members: MemberOverviewRow[] }) {
                     <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${rb.cls}`}>{rb.label}</span>
                     {m.isNew && <span className="ml-1"><NewBadge /></span>}
                   </td>
-                  <td className="px-3 py-2 text-center text-ink-soft">{m.townHall ?? "—"}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center justify-center gap-1.5">
+                      {m.townHall != null && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={`/th/${m.townHall}.webp`}
+                          alt=""
+                          width={26}
+                          height={26}
+                          style={{ height: 26, width: 26, objectFit: "contain" }}
+                          loading="lazy"
+                        />
+                      )}
+                      <span className="tabular-nums text-ink-soft">{m.townHall ?? "—"}</span>
+                    </div>
+                  </td>
                   <td className="px-3 py-2 text-center text-ink-soft tabular-nums">{m.expLevel ?? "—"}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{m.trophies ?? "—"}</td>
                   <td className="px-3 py-2 text-center"><WarPref pref={m.warPreference} /></td>
