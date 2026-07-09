@@ -39,6 +39,8 @@ create table if not exists members (
   last_seen_at   timestamptz default now(),
   is_active      boolean default true   -- false cuando desaparece de la lista (se fue / lo echaron)
 );
+-- Comentario manual opcional (p. ej. motivo de expulsión en ex-miembros).
+alter table members add column if not exists note text;
 
 -- Serie temporal: una fila por miembro y captura. El corazón de la app.
 create table if not exists member_snapshots (

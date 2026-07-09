@@ -5,6 +5,7 @@ import { getMyPlayerTag } from "@/lib/profile";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { AppShell } from "@/components/AppShell";
 import { MembersTable } from "@/components/MembersTable";
+import { DepartureNote } from "@/components/DepartureNote";
 
 export const dynamic = "force-dynamic";
 
@@ -74,7 +75,7 @@ export default async function MiembrosPage({
               {departures.map((d) => {
                 const stay = daysBetween(d.firstSeenAt, d.lastSeenAt);
                 return (
-                  <li key={d.tag} className="flex items-center gap-3 px-3.5 py-2.5">
+                  <li key={d.tag} className="flex items-start gap-3 px-3.5 py-2.5">
                     <div className="min-w-0 flex-1">
                       <span className="font-bold text-ink">{d.name}</span>
                       <span className="ml-2 text-xs text-ink-soft">
@@ -85,8 +86,9 @@ export default async function MiembrosPage({
                         Alta {fmtDate(d.firstSeenAt)}
                         {stay != null && <> · estuvo {stay} día{stay === 1 ? "" : "s"}</>}
                       </p>
+                      <DepartureNote tag={d.tag} initialNote={d.note} />
                     </div>
-                    <span className="whitespace-nowrap rounded-full bg-banner/12 px-2.5 py-1 text-xs font-extrabold text-banner">
+                    <span className="mt-0.5 whitespace-nowrap rounded-full bg-banner/12 px-2.5 py-1 text-xs font-extrabold text-banner">
                       Se fue {fmtDate(d.lastSeenAt)}
                     </span>
                   </li>

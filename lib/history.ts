@@ -174,19 +174,22 @@ export interface Departure {
   townHall: number | null;
   firstSeenAt: string | null; // cuándo entró (aprox.)
   lastSeenAt: string | null; // última vez visto antes de irse
+  note: string | null; // comentario manual (p. ej. "expulsado por X")
 }
 
 // Registro de abandonos: todos los que ya no están en el clan (is_active=false),
 // del más reciente al más antiguo.
 export const getDepartures = unstable_cache(getDeparturesImpl, ["departures"], {
   revalidate: 300,
+  tags: ["departures"],
 });
 
 async function getDeparturesImpl(): Promise<Departure[]> {
   const supabase = createServerClient();
+  // select("*") a propósito: así no rompe si aún no está migrada la columna note.
   const { data } = await supabase
     .from("members")
-    .select("tag, name, role, town_hall, first_seen_at, last_seen_at")
+    .select("*")
     .eq("is_active", false)
     .order("last_seen_at", { ascending: false });
   return (data ?? []).map((m) => ({
@@ -196,6 +199,7 @@ async function getDeparturesImpl(): Promise<Departure[]> {
     townHall: (m.town_hall as number | null) ?? null,
     firstSeenAt: (m.first_seen_at as string | null) ?? null,
     lastSeenAt: (m.last_seen_at as string | null) ?? null,
+    note: (m.note as string | null) ?? null,
   }));
 }
 
