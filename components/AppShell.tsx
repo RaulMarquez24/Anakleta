@@ -33,14 +33,16 @@ export async function AppShell({
               <ArrowLeft className="h-6 w-6" />
             </Link>
           ) : (
-            <Image
-              src="/logo.jpg"
-              alt=""
-              aria-hidden
-              width={44}
-              height={44}
-              className="h-11 w-11 flex-none rounded-xl shadow-[0_0_0_2px_rgba(255,255,255,.35)]"
-            />
+            <Link href="/" aria-label="Inicio" className="flex-none">
+              <Image
+                src="/logo.jpg"
+                alt=""
+                aria-hidden
+                width={44}
+                height={44}
+                className="h-11 w-11 rounded-xl shadow-[0_0_0_2px_rgba(255,255,255,.35)]"
+              />
+            </Link>
           )}
           <div className="min-w-0">
             <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#f6d9b0]">

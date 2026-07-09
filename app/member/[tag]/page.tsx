@@ -86,7 +86,7 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
       .map((s) => ({ t: new Date(s.capturedAt).getTime(), v: s[key] as number }));
 
   return (
-    <AppShell email={user?.email} title={history.name} back="/">
+    <AppShell email={user?.email} title={history.name} back="/miembros">
       {/* Hero: identidad + rankings + actividad */}
       <div className="mb-5 overflow-hidden rounded-2xl border border-line bg-surface">
         {/* Liga | TH */}

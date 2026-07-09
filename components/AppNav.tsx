@@ -4,7 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const ITEMS = [
-  { href: "/", label: "Miembros", icon: "👥", match: (p: string) => p === "/" || p.startsWith("/member") },
+  { href: "/", label: "Clan", icon: "🏠", match: (p: string) => p === "/" },
+  {
+    href: "/miembros",
+    label: "Miembros",
+    icon: "👥",
+    match: (p: string) => p.startsWith("/miembros") || p.startsWith("/member") || p.startsWith("/bajas"),
+  },
   { href: "/actividad", label: "Actividad", icon: "🔥", match: (p: string) => p.startsWith("/actividad") },
   {
     href: "/guerras",
@@ -27,7 +33,7 @@ export function AppNav({ variant }: { variant: "top" | "bottom" }) {
     return (
       <nav
         aria-label="Secciones"
-        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-line bg-surface sm:hidden"
+        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-line bg-surface sm:hidden"
       >
         {ITEMS.map((it) => {
           const active = it.match(pathname);
