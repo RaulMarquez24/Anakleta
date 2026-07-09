@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AppNav } from "@/components/AppNav";
 import { BackButton } from "@/components/BackButton";
+import { HeaderSearch } from "@/components/HeaderSearch";
 import { WarAlertBubble } from "@/components/WarAlertBubble";
 import { getWarAlert } from "@/lib/war-history";
 
@@ -41,14 +42,8 @@ export async function AppShell({
             )}
           </div>
 
-          {/* Lupa: inspeccionar cualquier clan/jugador por tag (siempre visible) */}
-          <Link
-            href="/inspeccionar"
-            aria-label="Inspeccionar clan o jugador"
-            className="absolute right-3 flex-none rounded-full p-1.5 transition hover:bg-white/15"
-          >
-            <span aria-hidden className="text-2xl leading-none">🔍</span>
-          </Link>
+          {/* Lupa: inspeccionar por tag (se oculta si ya estás en /inspeccionar) */}
+          <HeaderSearch />
 
           {/* Nav + email a la derecha (solo escritorio; no descentra en móvil) */}
           <div className="absolute right-14 hidden items-center gap-3 sm:flex">
