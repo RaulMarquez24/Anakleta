@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { createServerClient } from "@/lib/supabase/server";
+import { getCurrentWar } from "@/lib/war";
 
 export interface WarSummary {
   id: number;
@@ -211,32 +212,20 @@ export interface WarAlert {
   label: string; // "CWL · Ronda 6" o "la guerra"
 }
 
-// Aviso global de ataques pendientes: lee de BD la guerra en curso (state=inWar)
-// y cuántos alineados no han atacado. Barato (sin API); refleja la última captura.
-export const getWarAlert = unstable_cache(getWarAlertImpl, ["war-alert"], { revalidate: 300 });
+// Aviso global de ataques pendientes. A diferencia del histórico, esto es dato
+// SENSIBLE AL TIEMPO ("¿quién queda por atacar AHORA?"), así que NO lee de la
+// captura de 6h: deriva de la guerra en vivo (getCurrentWar, cacheada 120s). No
+// cacheamos aquí a propósito: el dato caro (API) ya está cacheado dentro, y así
+// el corte de "<12h" y el "quedan Xh" se recalculan frescos en cada entrada.
+export async function getWarAlert(): Promise<WarAlert | null> {
+  const war = await getCurrentWar().catch(() => null);
+  if (!war || war.state !== "inWar") return null;
 
-async function getWarAlertImpl(): Promise<WarAlert | null> {
-  const supabase = createServerClient();
-  const { data: war } = await supabase
-    .from("wars")
-    .select("id, is_cwl, round, end_time")
-    .eq("state", "inWar")
-    .order("start_time", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!war) return null;
-
-  const { count } = await supabase
-    .from("war_members")
-    .select("tag", { count: "exact", head: true })
-    .eq("war_id", war.id as number)
-    .eq("attacks_used", 0);
-
-  const pendingCount = count ?? 0;
+  const pendingCount = war.pending.length;
   if (pendingCount === 0) return null;
 
   // Solo avisar si quedan menos de 12h (y la guerra no ha terminado aún).
-  const endsAt = (war.end_time as string | null) ?? null;
+  const endsAt = war.endTime;
   if (!endsAt) return null;
   const msLeft = new Date(endsAt).getTime() - Date.now();
   if (msLeft <= 0 || msLeft > 12 * 3_600_000) return null;
@@ -244,7 +233,7 @@ async function getWarAlertImpl(): Promise<WarAlert | null> {
   return {
     pendingCount,
     endsAt,
-    label: war.is_cwl ? `CWL · Ronda ${war.round ?? "?"}` : "la guerra",
+    label: war.isCwl ? `CWL · Ronda ${war.round ?? "?"}` : "la guerra",
   };
 }
 
