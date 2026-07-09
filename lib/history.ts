@@ -12,6 +12,7 @@ export interface MemberHistory {
   isActive: boolean;
   firstSeenAt: string | null;
   lastSeenAt: string | null;
+  note: string | null; // comentario manual
   // Valores más recientes (última captura):
   current: {
     leagueTierName: string | null;
@@ -42,7 +43,7 @@ async function getMemberHistoryImpl(tag: string): Promise<MemberHistory | null> 
 
   const { data: member } = await supabase
     .from("members")
-    .select("tag, name, role, town_hall, is_active, first_seen_at, last_seen_at")
+    .select("*") // "*" para no romper si aún no está migrada la columna note
     .eq("tag", tag)
     .maybeSingle();
 
@@ -67,6 +68,7 @@ async function getMemberHistoryImpl(tag: string): Promise<MemberHistory | null> 
     isActive: Boolean(member.is_active),
     firstSeenAt: (member.first_seen_at as string | null) ?? null,
     lastSeenAt: (member.last_seen_at as string | null) ?? null,
+    note: (member.note as string | null) ?? null,
     current: {
       leagueTierName: (last?.league_tier_name as string | null) ?? null,
       leagueTierIcon: (last?.league_tier_icon as string | null) ?? null,

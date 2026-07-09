@@ -3,8 +3,17 @@
 import { useState } from "react";
 import { setMemberNote } from "@/app/miembros/actions";
 
-// Comentario manual opcional para un ex-miembro (p. ej. "expulsado por inactivo").
-export function DepartureNote({ tag, initialNote }: { tag: string; initialNote: string | null }) {
+// Comentario manual opcional para cualquier miembro (activo o ex): motivo de
+// expulsión, recordatorio, etc.
+export function MemberNote({
+  tag,
+  initialNote,
+  placeholder = "Ej.: buen atacante / avisar de guerra / a prueba…",
+}: {
+  tag: string;
+  initialNote: string | null;
+  placeholder?: string;
+}) {
   const [note, setNote] = useState(initialNote ?? "");
   const [draft, setDraft] = useState(initialNote ?? "");
   const [editing, setEditing] = useState(false);
@@ -28,7 +37,7 @@ export function DepartureNote({ tag, initialNote }: { tag: string; initialNote: 
           onChange={(e) => setDraft(e.target.value)}
           rows={2}
           maxLength={300}
-          placeholder="Ej.: expulsado por inactivo / se fue solo / tóxico…"
+          placeholder={placeholder}
           className="w-full rounded-lg border border-line bg-surface-2 px-2.5 py-1.5 text-sm text-ink outline-none focus:border-gold"
         />
         <div className="mt-1.5 flex items-center gap-2">

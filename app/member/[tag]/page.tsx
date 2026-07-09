@@ -8,6 +8,7 @@ import { AppShell } from "@/components/AppShell";
 import { LineChart, type ChartPoint } from "@/components/LineChart";
 import { ThImage } from "@/components/ThImage";
 import { CopyTag } from "@/components/CopyTag";
+import { MemberNote } from "@/components/MemberNote";
 import { seasonLabel } from "@/components/WarBits";
 
 export const dynamic = "force-dynamic";
@@ -246,6 +247,12 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
             )}
           </>
         )}
+      </div>
+
+      {/* Nota manual del jugador */}
+      <div className="mb-5 rounded-2xl border border-line bg-surface p-4">
+        <p className="text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">Nota</p>
+        <MemberNote tag={history.tag} initialNote={history.note} />
       </div>
 
       {/* Historial de liga (ranked semanal, bajo demanda) */}

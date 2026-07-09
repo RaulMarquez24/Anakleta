@@ -5,7 +5,7 @@ import { getMyPlayerTag } from "@/lib/profile";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { AppShell } from "@/components/AppShell";
 import { MembersTable } from "@/components/MembersTable";
-import { DepartureNote } from "@/components/DepartureNote";
+import { MemberNote } from "@/components/MemberNote";
 
 export const dynamic = "force-dynamic";
 
@@ -86,7 +86,7 @@ export default async function MiembrosPage({
                         Alta {fmtDate(d.firstSeenAt)}
                         {stay != null && <> · estuvo {stay} día{stay === 1 ? "" : "s"}</>}
                       </p>
-                      <DepartureNote tag={d.tag} initialNote={d.note} />
+                      <MemberNote tag={d.tag} initialNote={d.note} placeholder="Ej.: expulsado por inactivo / se fue solo / tóxico…" />
                     </div>
                     <span className="mt-0.5 whitespace-nowrap rounded-full bg-banner/12 px-2.5 py-1 text-xs font-extrabold text-banner">
                       Se fue {fmtDate(d.lastSeenAt)}
