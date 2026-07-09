@@ -77,6 +77,13 @@ export default async function PerfilPage() {
       )}
 
       <PerfilForm email={user?.email ?? null} linkedTag={linkedTag} linkedName={linkedName} />
+
+      {/* Cerrar sesión */}
+      <form action="/auth/signout" method="post" className="mt-5">
+        <button className="w-full rounded-full border border-banner/40 px-4 py-2.5 text-sm font-extrabold text-banner transition hover:bg-banner/10">
+          Cerrar sesión
+        </button>
+      </form>
     </AppShell>
   );
 }

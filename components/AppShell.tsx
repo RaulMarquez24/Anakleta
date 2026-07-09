@@ -60,14 +60,6 @@ export async function AppShell({
                 {email}
               </span>
             )}
-            <form action="/auth/signout" method="post">
-              <button
-                className="rounded-full border border-white/30 px-3 py-1.5 text-sm font-bold text-white transition hover:bg-white/10"
-                aria-label="Cerrar sesión"
-              >
-                Salir
-              </button>
-            </form>
           </div>
         </div>
       </header>
