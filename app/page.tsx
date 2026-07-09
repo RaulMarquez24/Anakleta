@@ -37,6 +37,15 @@ function href(tag: string) {
   return `/member/${encodeURIComponent(tag)}`;
 }
 
+// Inicio del periodo en ms (UTC) para recortar las series a la ventana elegida.
+function periodStartMs(period: ActivityPeriod): number {
+  const now = new Date();
+  if (period === "todo") return 0;
+  if (period === "mes") return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+  const dow = (now.getUTCDay() + 6) % 7; // 0 = lunes
+  return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - dow);
+}
+
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="rounded-2xl border border-line bg-surface p-4">
@@ -90,8 +99,9 @@ export default async function ClanHomePage({
   const inWar = war && (war.state === "inWar" || war.state === "preparation");
   const left = timeLeft(war?.endTime ?? null);
 
-  const trophySeries = trends.map((p) => ({ t: p.t, v: p.trophies }));
-  const starSeries = trends.map((p) => ({ t: p.t, v: p.warStars }));
+  // Recorta la evolución a la ventana del periodo elegido (el selector hace zoom).
+  const startMs = periodStartMs(period);
+  const trophySeries = trends.filter((p) => p.t >= startMs).map((p) => ({ t: p.t, v: p.trophies }));
 
   return (
     <AppShell email={user?.email} title="Clan">
@@ -209,20 +219,16 @@ export default async function ClanHomePage({
         <Stat label="Estrellas de guerra" value={`⭐ ${report.clanWarStars}`} sub={`${report.warsInPeriod} guerras`} />
       </div>
 
-      {/* Evolución del clan */}
-      <div className="mb-4 space-y-4">
-        <div className="rounded-2xl border border-line bg-surface p-4">
-          <h3 className="mb-2 flex items-center gap-2 font-extrabold text-gold-deep">
-            <span aria-hidden>🏆</span> Copas del clan
-          </h3>
-          <LineChart series={[{ label: "Copas", color: "var(--gold-deep)", points: trophySeries }]} />
-        </div>
-        <div className="rounded-2xl border border-line bg-surface p-4">
-          <h3 className="mb-2 flex items-center gap-2 font-extrabold text-ink">
-            <span aria-hidden>⭐</span> Estrellas de guerra (acumuladas)
-          </h3>
-          <LineChart series={[{ label: "Estrellas", color: "var(--grass)", points: starSeries }]} />
-        </div>
+      {/* Evolución del clan (nivel de copas en la ventana del periodo) */}
+      <div className="mb-4 rounded-2xl border border-line bg-surface p-4">
+        <h3 className="mb-2 flex items-center gap-2 font-extrabold text-gold-deep">
+          <span aria-hidden>🏆</span> Copas del clan
+        </h3>
+        <LineChart series={[{ label: "Copas", color: "var(--gold-deep)", points: trophySeries }]} />
+        <p className="mt-2 text-[11px] text-ink-soft">
+          Suma de copas de todos los miembros en cada captura. Cae cada lunes por el reinicio semanal de
+          ranked.
+        </p>
       </div>
 
       {/* Destacados del periodo + ranking */}
