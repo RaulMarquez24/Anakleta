@@ -75,24 +75,32 @@ function TierBadge({ m }: { m: MemberOverviewRow }) {
 }
 
 // Foto del ayuntamiento (imágenes locales en /public/th/{n}.webp, TH 1–18).
-function ThBadge({ th, size = 34 }: { th: number | null; size?: number }) {
+// Avatar a la izquierda de la tarjeta, con su número debajo. Si falta la imagen
+// (p. ej. un TH futuro sin webp), se oculta y queda el 🏰 + el número.
+function ThAvatar({ th }: { th: number | null }) {
   return (
-    <span className="inline-flex items-center gap-1.5">
-      {th != null && (
+    <div className="flex flex-none flex-col items-center gap-1">
+      {th != null ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={`/th/${th}.webp`}
           alt=""
-          width={size}
-          height={size}
-          style={{ height: size, width: size, objectFit: "contain" }}
+          width={48}
+          height={48}
+          style={{ height: 48, width: 48, objectFit: "contain" }}
           loading="lazy"
+          onError={(e) => {
+            e.currentTarget.style.display = "none";
+            const sib = e.currentTarget.nextElementSibling as HTMLElement | null;
+            if (sib) sib.style.display = "block";
+          }}
         />
-      )}
-      <span className="rounded-full bg-sky px-2 py-0.5 text-[11px] font-extrabold text-white">
+      ) : null}
+      {th != null && <span className="hidden text-3xl leading-none">🏰</span>}
+      <span className="rounded-full bg-sky px-2 py-0.5 text-[10px] font-extrabold text-white">
         TH{th ?? "—"}
       </span>
-    </span>
+    </div>
   );
 }
 
@@ -188,26 +196,30 @@ export function MembersTable({ members }: { members: MemberOverviewRow[] }) {
             <Link
               key={m.tag}
               href={href(m.tag)}
-              className={`block rounded-2xl border border-line bg-surface p-3.5 shadow-sm ${attention ? "border-l-4 border-l-banner" : "border-l-4 border-l-gold"}`}
+              className={`flex items-start gap-3 rounded-2xl border border-line bg-surface p-3.5 shadow-sm ${attention ? "border-l-4 border-l-banner" : "border-l-4 border-l-gold"}`}
             >
-              <div className="mb-2 flex items-center gap-2">
-                <span className="text-base font-extrabold text-ink">{m.name}</span>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide ${rb.cls}`}>{rb.label}</span>
-                {m.isNew && <NewBadge />}
-                <span className="ml-auto"><ThBadge th={m.townHall} /></span>
+              {/* Avatar del ayuntamiento a la izquierda */}
+              <ThAvatar th={m.townHall} />
+
+              <div className="min-w-0 flex-1">
+                <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="text-base font-extrabold text-ink">{m.name}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide ${rb.cls}`}>{rb.label}</span>
+                  {m.isNew && <NewBadge />}
+                </div>
+                <div className="mb-2 flex items-center gap-2 text-sm">
+                  <TierBadge m={m} />
+                  <span className="text-ink-soft">· Nv {m.expLevel ?? "—"}</span>
+                  <span className="ml-auto"><WarPref pref={m.warPreference} /></span>
+                </div>
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  <span className="rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink">🏆 {m.trophies ?? "—"}</span>
+                  <span className="rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink">🎁 {m.donations ?? "—"}{m.donationsDelta != null && m.donationsDelta > 0 && <span className="ml-1 text-grass">+{m.donationsDelta}</span>} · 📥 {m.donationsReceived ?? "—"}</span>
+                  <span className={`rounded-lg px-2 py-1 text-xs font-bold ${m.donationsNegative ? "bg-banner/12 text-banner" : "bg-grass/15 text-grass"}`}>Ratio {m.ratio == null ? "—" : m.ratio.toFixed(1)}</span>
+                  {m.warStars != null && <span className="rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink">⭐ {m.warStars}</span>}
+                </div>
+                <Activity m={m} />
               </div>
-              <div className="mb-2 flex items-center gap-2 text-sm">
-                <TierBadge m={m} />
-                <span className="text-ink-soft">· Nv {m.expLevel ?? "—"}</span>
-                <span className="ml-auto"><WarPref pref={m.warPreference} /></span>
-              </div>
-              <div className="mb-2 flex flex-wrap gap-1.5">
-                <span className="rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink">🏆 {m.trophies ?? "—"}</span>
-                <span className="rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink">🎁 {m.donations ?? "—"}{m.donationsDelta != null && m.donationsDelta > 0 && <span className="ml-1 text-grass">+{m.donationsDelta}</span>} · 📥 {m.donationsReceived ?? "—"}</span>
-                <span className={`rounded-lg px-2 py-1 text-xs font-bold ${m.donationsNegative ? "bg-banner/12 text-banner" : "bg-grass/15 text-grass"}`}>Ratio {m.ratio == null ? "—" : m.ratio.toFixed(1)}</span>
-                {m.warStars != null && <span className="rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink">⭐ {m.warStars}</span>}
-              </div>
-              <Activity m={m} />
             </Link>
           );
         })}
