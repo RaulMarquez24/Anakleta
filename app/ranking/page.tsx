@@ -87,7 +87,7 @@ export default async function RankingPage({
   const total = ranked.length;
 
   return (
-    <AppShell email={user?.email} title="🏆 Ranking del clan" back="/estadisticas">
+    <AppShell email={user?.email} title="🏆 Ranking del clan" back="/">
       {/* Selector de métrica */}
       <div className="mb-4 grid grid-cols-4 gap-2">
         {METRICS.map((m) => (

@@ -68,6 +68,46 @@ export interface DashboardData {
   members: MemberOverviewRow[];
 }
 
+// Evolución del clan en el tiempo: por cada captura (clan-wide, mismo
+// captured_at) suma copas y estrellas de guerra y cuenta miembros. Sirve para
+// las gráficas de evolución del clan en el Home.
+export interface ClanTrendPoint {
+  t: number; // ms
+  members: number;
+  trophies: number; // suma de copas del clan
+  warStars: number; // suma de estrellas de guerra (monótono)
+}
+
+export const getClanTrends = unstable_cache(getClanTrendsImpl, ["clan-trends"], {
+  revalidate: 300,
+});
+
+async function getClanTrendsImpl(): Promise<ClanTrendPoint[]> {
+  const supabase = createServerClient();
+  const { data } = await supabase
+    .from("member_snapshots")
+    .select("captured_at, trophies, war_stars")
+    .order("captured_at", { ascending: true })
+    .limit(50000);
+
+  const byTs = new Map<string, { trophies: number; stars: number; n: number }>();
+  for (const r of data ?? []) {
+    const ts = r.captured_at as string;
+    const g = byTs.get(ts) ?? { trophies: 0, stars: 0, n: 0 };
+    g.trophies += (r.trophies as number | null) ?? 0;
+    g.stars += (r.war_stars as number | null) ?? 0;
+    g.n += 1;
+    byTs.set(ts, g);
+  }
+
+  return [...byTs.entries()].map(([ts, g]) => ({
+    t: new Date(ts).getTime(),
+    members: g.n,
+    trophies: g.trophies,
+    warStars: g.stars,
+  }));
+}
+
 // Devuelve una vista de cada miembro activo con su última captura y el delta
 // respecto a la anterior. Las capturas son clan-wide (mismo captured_at para
 // todos), así que basta con localizar los dos timestamps más recientes.

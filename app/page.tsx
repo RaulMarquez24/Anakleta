@@ -1,12 +1,19 @@
 import Link from "next/link";
 import Image from "next/image";
-import { getMembersOverview } from "@/lib/dashboard";
-import { getActivityReport } from "@/lib/history";
+import { getMembersOverview, getClanTrends } from "@/lib/dashboard";
+import { getActivityReport, type ActivityPeriod } from "@/lib/history";
 import { getCurrentWar } from "@/lib/war";
 import { createAuthServerClient } from "@/lib/supabase/auth-server";
 import { AppShell } from "@/components/AppShell";
+import { LineChart } from "@/components/LineChart";
 
 export const dynamic = "force-dynamic";
+
+const PERIODS: { key: ActivityPeriod; label: string }[] = [
+  { key: "semana", label: "Semana" },
+  { key: "mes", label: "Mes" },
+  { key: "todo", label: "Todo" },
+];
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
@@ -26,35 +33,65 @@ function timeLeft(iso: string | null): string | null {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-export default async function ClanHomePage() {
+function href(tag: string) {
+  return `/member/${encodeURIComponent(tag)}`;
+}
+
+function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="rounded-2xl border border-line bg-surface p-4">
+      <p className="text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">{label}</p>
+      <p className="mt-1 text-2xl font-extrabold text-ink">{value}</p>
+      {sub && <p className="text-xs text-ink-soft">{sub}</p>}
+    </div>
+  );
+}
+
+export default async function ClanHomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ p?: string }>;
+}) {
+  const sp = await searchParams;
+  const period: ActivityPeriod = sp.p === "mes" || sp.p === "todo" ? sp.p : "semana";
+
   const supabase = await createAuthServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [data, report, war] = await Promise.all([
+  const [data, week, report, war, trends] = await Promise.all([
     getMembersOverview(),
-    getActivityReport("semana"),
+    getActivityReport("semana"), // gestión = estado actionable de la semana
+    getActivityReport(period), // resumen/tops = periodo elegido
     getCurrentWar().catch(() => null),
+    getClanTrends(),
   ]);
 
-  const members = report.members;
+  // Gestión: siempre de la semana (a quién hay que atender ahora).
   const cats = {
-    expulsar: members.filter((m) => m.category === "expulsion").length,
-    revisar: members.filter((m) => m.category === "revisar").length,
-    destacables: members.filter((m) => m.category === "destacado").length,
+    expulsar: week.members.filter((m) => m.category === "expulsion").length,
+    revisar: week.members.filter((m) => m.category === "revisar").length,
+    destacables: week.members.filter((m) => m.category === "destacado").length,
   };
-  const topDon = [...members]
+
+  // Resumen/tops del periodo elegido.
+  const activos = report.members.length;
+  const media = activos > 0 ? Math.round(report.clanDonations / activos) : 0;
+  const topDon = [...report.members]
     .filter((m) => (m.donations ?? 0) > 0)
     .sort((a, b) => (b.donations ?? 0) - (a.donations ?? 0))
     .slice(0, 3);
-  const topWar = [...members]
+  const topWar = [...report.members]
     .filter((m) => m.warStars > 0)
     .sort((a, b) => b.warStars - a.warStars)
     .slice(0, 3);
 
   const inWar = war && (war.state === "inWar" || war.state === "preparation");
   const left = timeLeft(war?.endTime ?? null);
+
+  const trophySeries = trends.map((p) => ({ t: p.t, v: p.trophies }));
+  const starSeries = trends.map((p) => ({ t: p.t, v: p.warStars }));
 
   return (
     <AppShell email={user?.email} title="Clan">
@@ -108,9 +145,7 @@ export default async function ClanHomePage() {
               )}
             </p>
             {war!.state === "inWar" && war!.pending.length > 0 && (
-              <p className="mt-1 text-xs font-bold text-banner">
-                {war!.pending.length} sin atacar
-              </p>
+              <p className="mt-1 text-xs font-bold text-banner">{war!.pending.length} sin atacar</p>
             )}
           </>
         ) : (
@@ -121,10 +156,10 @@ export default async function ClanHomePage() {
         )}
       </Link>
 
-      {/* Gestión rápida */}
+      {/* Gestión rápida (siempre de la semana) */}
       <Link
         href="/actividad"
-        className="mb-4 block rounded-2xl border border-line bg-surface p-4 hover:bg-surface-2/60"
+        className="mb-6 block rounded-2xl border border-line bg-surface p-4 hover:bg-surface-2/60"
       >
         <div className="mb-2 flex items-center justify-between">
           <p className="font-extrabold text-ink">Gestión de esta semana</p>
@@ -146,10 +181,54 @@ export default async function ClanHomePage() {
         </div>
       </Link>
 
-      {/* Destacados */}
+      {/* --- Análisis del clan (antes "Stats") --- */}
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="font-extrabold text-ink">Análisis del clan</h2>
+        <div className="flex gap-1.5">
+          {PERIODS.map((p) => (
+            <Link
+              key={p.key}
+              href={`/?p=${p.key}`}
+              className={`rounded-full px-3 py-1 text-xs font-extrabold transition ${
+                period === p.key ? "bg-gold text-banner-dark" : "bg-surface-2 text-ink-soft hover:bg-line"
+              }`}
+            >
+              {p.label}
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* Totales del periodo */}
+      <div className="mb-4 grid grid-cols-2 gap-3">
+        <Stat
+          label="Donaciones"
+          value={report.clanDonations.toLocaleString("es-ES")}
+          sub={`media ${media}/miembro`}
+        />
+        <Stat label="Estrellas de guerra" value={`⭐ ${report.clanWarStars}`} sub={`${report.warsInPeriod} guerras`} />
+      </div>
+
+      {/* Evolución del clan */}
+      <div className="mb-4 space-y-4">
+        <div className="rounded-2xl border border-line bg-surface p-4">
+          <h3 className="mb-2 flex items-center gap-2 font-extrabold text-gold-deep">
+            <span aria-hidden>🏆</span> Copas del clan
+          </h3>
+          <LineChart series={[{ label: "Copas", color: "var(--gold-deep)", points: trophySeries }]} />
+        </div>
+        <div className="rounded-2xl border border-line bg-surface p-4">
+          <h3 className="mb-2 flex items-center gap-2 font-extrabold text-ink">
+            <span aria-hidden>⭐</span> Estrellas de guerra (acumuladas)
+          </h3>
+          <LineChart series={[{ label: "Estrellas", color: "var(--grass)", points: starSeries }]} />
+        </div>
+      </div>
+
+      {/* Destacados del periodo + ranking */}
       <div className="rounded-2xl border border-line bg-surface p-4">
         <div className="mb-3 flex items-center justify-between">
-          <p className="font-extrabold text-ink">Destacados de la semana</p>
+          <p className="font-extrabold text-ink">Destacados ({report.periodLabel})</p>
           <Link href="/ranking" className="text-xs font-bold text-ink-soft hover:underline">
             Ranking completo ›
           </Link>
@@ -166,10 +245,7 @@ export default async function ClanHomePage() {
                 {topDon.map((m, i) => (
                   <li key={m.tag} className="flex items-center gap-2 text-sm">
                     <span className="w-4 flex-none font-extrabold text-gold-deep">{i + 1}</span>
-                    <Link
-                      href={`/member/${encodeURIComponent(m.tag)}`}
-                      className="min-w-0 flex-1 truncate font-bold text-ink hover:underline"
-                    >
+                    <Link href={href(m.tag)} className="min-w-0 flex-1 truncate font-bold text-ink hover:underline">
                       {m.name}
                     </Link>
                     <span className="font-extrabold tabular-nums text-ink">
@@ -191,10 +267,7 @@ export default async function ClanHomePage() {
                 {topWar.map((m, i) => (
                   <li key={m.tag} className="flex items-center gap-2 text-sm">
                     <span className="w-4 flex-none font-extrabold text-gold-deep">{i + 1}</span>
-                    <Link
-                      href={`/member/${encodeURIComponent(m.tag)}`}
-                      className="min-w-0 flex-1 truncate font-bold text-ink hover:underline"
-                    >
+                    <Link href={href(m.tag)} className="min-w-0 flex-1 truncate font-bold text-ink hover:underline">
                       {m.name}
                     </Link>
                     <span className="font-extrabold tabular-nums text-ink">⭐ {m.warStars}</span>
