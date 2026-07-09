@@ -113,7 +113,21 @@ function href(tag: string) {
   return `/member/${encodeURIComponent(tag)}`;
 }
 
-export function MembersTable({ members }: { members: MemberOverviewRow[] }) {
+function YouBadge() {
+  return (
+    <span className="rounded-full bg-sky/20 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-sky">
+      Tú
+    </span>
+  );
+}
+
+export function MembersTable({
+  members,
+  myTag,
+}: {
+  members: MemberOverviewRow[];
+  myTag?: string | null;
+}) {
   const [key, setKey] = useState<SortKey>("rank");
   const [dir, setDir] = useState<"asc" | "desc">("desc");
 
@@ -182,6 +196,7 @@ export function MembersTable({ members }: { members: MemberOverviewRow[] }) {
             >
               <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="text-base font-extrabold text-ink">{m.name}</span>
+                {myTag === m.tag && <YouBadge />}
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide ${rb.cls}`}>{rb.label}</span>
                 {m.isNew && <NewBadge />}
                 <span className="ml-auto"><WarPref pref={m.warPreference} /></span>
@@ -231,6 +246,7 @@ export function MembersTable({ members }: { members: MemberOverviewRow[] }) {
                   <td className="px-3 py-2"><TierBadge m={m} /></td>
                   <td className="px-3 py-2">
                     <Link href={href(m.tag)} className="font-bold text-ink hover:text-gold-deep hover:underline">{m.name}</Link>
+                    {myTag === m.tag && <span className="ml-2"><YouBadge /></span>}
                     <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${rb.cls}`}>{rb.label}</span>
                     {m.isNew && <span className="ml-1"><NewBadge /></span>}
                   </td>

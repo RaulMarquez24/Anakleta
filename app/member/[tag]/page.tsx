@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getMemberHistory, getActivityReport, type ActivityRow } from "@/lib/history";
 import { getMemberWarLog } from "@/lib/war-history";
+import { getMyPlayerTag } from "@/lib/profile";
 import { createAuthServerClient } from "@/lib/supabase/auth-server";
 import { AppShell } from "@/components/AppShell";
 import { LineChart, type ChartPoint } from "@/components/LineChart";
@@ -67,12 +68,14 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
 
   const { tag } = await params;
   const decoded = decodeURIComponent(tag);
-  const [history, report, warLog] = await Promise.all([
+  const [history, report, warLog, myTag] = await Promise.all([
     getMemberHistory(decoded),
     getActivityReport("todo").catch(() => null),
     getMemberWarLog(decoded),
+    getMyPlayerTag(),
   ]);
   if (!history) notFound();
+  const isMe = myTag != null && myTag === decoded;
 
   const row = report?.members.find((m) => m.tag === decoded) ?? null;
   const total = report?.members.length ?? 0;
@@ -130,6 +133,11 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
             {history.role ? (ROLE_LABEL[history.role] ?? history.role) : "—"}
           </span>
           <CopyTag tag={history.tag} />
+          {isMe && (
+            <span className="rounded-full bg-sky/20 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-sky">
+              Tú
+            </span>
+          )}
           {isNew && (
             <span className="rounded-full bg-grass/20 px-2 py-0.5 text-[10px] font-extrabold uppercase text-grass">
               Nuevo

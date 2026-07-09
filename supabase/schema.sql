@@ -4,6 +4,14 @@
 -- Es lo deseado: el servidor accede con la SECRET KEY (bypasea RLS) y el cliente
 -- solo hace login. No hace falta escribir políticas RLS finas para un panel privado.
 
+-- Vínculo usuario (auth) ↔ jugador de CoC (verificado con verifytoken).
+create table if not exists profiles (
+  user_id     uuid primary key,
+  player_tag  text,
+  verified_at timestamptz,
+  updated_at  timestamptz default now()
+);
+
 -- Metadata del clan (normalmente una sola fila).
 create table if not exists clans (
   tag           text primary key,

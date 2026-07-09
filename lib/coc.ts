@@ -29,15 +29,21 @@ export function encodeTag(tag: string): string {
  * Llama a un endpoint de la API de CoC y devuelve el JSON parseado.
  * `path` es relativo a la base URL, empezando por `/` (p.ej. `/clans/%23...`).
  */
-export async function cocFetch<T = unknown>(path: string): Promise<T> {
+export async function cocFetch<T = unknown>(
+  path: string,
+  opts?: { method?: "GET" | "POST"; body?: unknown },
+): Promise<T> {
   if (!BASE_URL) throw new CocApiError("Falta COC_API_BASE_URL", 500);
   if (!TOKEN) throw new CocApiError("Falta COC_API_TOKEN", 500);
 
   const res = await fetch(`${BASE_URL}${path}`, {
+    method: opts?.method ?? "GET",
     headers: {
       Authorization: `Bearer ${TOKEN}`,
       Accept: "application/json",
+      ...(opts?.body != null ? { "Content-Type": "application/json" } : {}),
     },
+    body: opts?.body != null ? JSON.stringify(opts.body) : undefined,
     // Los datos cambian con el tiempo; no cachear la petición a la API.
     cache: "no-store",
   });
@@ -68,4 +74,18 @@ export function getClan<T = unknown>(clanTag = process.env.COC_CLAN_TAG ?? ""): 
 /** Perfil de un jugador individual. */
 export function getPlayer<T = unknown>(playerTag: string): Promise<T> {
   return cocFetch<T>(`/players/${encodeTag(playerTag)}`);
+}
+
+/**
+ * Verifica el token de un solo uso que el jugador saca de los ajustes del juego.
+ * Devuelve status "ok" si el token es válido para ese tag (prueba de propiedad).
+ */
+export function verifyPlayerToken(
+  playerTag: string,
+  token: string,
+): Promise<{ tag: string; token: string; status: "ok" | "invalid" }> {
+  return cocFetch(`/players/${encodeTag(playerTag)}/verifytoken`, {
+    method: "POST",
+    body: { token },
+  });
 }

@@ -18,6 +18,7 @@ const ITEMS = [
     icon: "⚔️",
     match: (p: string) => p.startsWith("/guerra") || p.startsWith("/liga") || p.startsWith("/war"),
   },
+  { href: "/perfil", label: "Perfil", icon: "🙍", match: (p: string) => p.startsWith("/perfil") },
 ];
 
 export function AppNav({ variant }: { variant: "top" | "bottom" }) {
@@ -27,7 +28,7 @@ export function AppNav({ variant }: { variant: "top" | "bottom" }) {
     return (
       <nav
         aria-label="Secciones"
-        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-line bg-surface sm:hidden"
+        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-line bg-surface sm:hidden"
       >
         {ITEMS.map((it) => {
           const active = it.match(pathname);

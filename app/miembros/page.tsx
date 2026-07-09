@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getMembersOverview } from "@/lib/dashboard";
 import { getDepartures } from "@/lib/history";
+import { getMyPlayerTag } from "@/lib/profile";
 import { createAuthServerClient } from "@/lib/supabase/auth-server";
 import { AppShell } from "@/components/AppShell";
 import { MembersTable } from "@/components/MembersTable";
@@ -39,9 +40,10 @@ export default async function MiembrosPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [data, departures] = await Promise.all([
+  const [data, departures, myTag] = await Promise.all([
     getMembersOverview(),
     tab === "ex" ? getDepartures() : Promise.resolve([]),
+    getMyPlayerTag(),
   ]);
 
   const tabCls = (active: boolean) =>
@@ -62,7 +64,7 @@ export default async function MiembrosPage({
       </div>
 
       {tab === "activos" ? (
-        <MembersTable members={data.members} />
+        <MembersTable members={data.members} myTag={myTag} />
       ) : departures.length === 0 ? (
         <div className="rounded-2xl border border-line bg-surface p-10 text-center">
           <p className="text-4xl">👋</p>
