@@ -99,7 +99,7 @@ function WarPref({ pref }: { pref: string | null }) {
   if (pref === "in")
     return <span className="rounded-md bg-grass/15 px-1.5 py-0.5 text-[11px] font-bold text-grass" title="Entra a guerra">⚔️ Sí</span>;
   if (pref === "out")
-    return <span className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[11px] font-bold text-ink-soft" title="No entra a guerra">💤 No</span>;
+    return <span className="rounded-md bg-banner/15 px-1.5 py-0.5 text-[11px] font-bold text-banner" title="No entra a guerra">🚫 No</span>;
   return <span className="text-ink-soft">—</span>;
 }
 
