@@ -93,86 +93,111 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
 
   return (
     <AppShell email={user?.email} title={history.name} back="/">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+      {/* Hero: identidad + rankings + actividad */}
+      <div className="mb-5 overflow-hidden rounded-2xl border border-line bg-surface">
+        <div className="flex items-center gap-3 p-4">
+          {history.current.leagueTierIcon && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={history.current.leagueTierIcon} alt="" width={40} height={40} className="h-10 w-10 flex-none" />
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="text-lg font-extrabold text-ink">
+              {history.current.leagueTierName?.replace(" League", "") ?? "Sin rango"}
+            </p>
+            <p className="text-xs font-semibold text-ink-soft">
+              {history.role ? (ROLE_LABEL[history.role] ?? history.role) : "—"} · TH {history.townHall ?? "—"} · Nv{" "}
+              {history.current.expLevel ?? "—"}
+            </p>
+            {row?.leagueVsTh && (
+              <p className="text-[11px] font-bold text-ink-soft">{LEAGUE_VS[row.leagueVsTh]}</p>
+            )}
+          </div>
+          <div className="flex flex-none flex-col items-end gap-1">
+            {row && (
+              <span className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${CAT_LABEL[row.category].cls}`}>
+                {CAT_LABEL[row.category].label}
+              </span>
+            )}
+            {isNew && (
+              <span className="rounded-full bg-grass/20 px-2 py-0.5 text-[10px] font-extrabold uppercase text-grass">
+                Nuevo
+              </span>
+            )}
+            {!history.isActive && (
+              <span className="rounded-full bg-banner/15 px-2 py-0.5 text-[10px] font-extrabold uppercase text-banner">
+                Fuera
+              </span>
+            )}
+          </div>
+        </div>
+
+        {ranks && (
+          <div className="border-t border-line px-4 py-3">
+            <p className="mb-1.5 text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">
+              Ranking en el clan · de {total}
+            </p>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div>
+                <p className="text-[11px] text-ink-soft">🎁 Dona</p>
+                <p className="text-xl font-extrabold text-ink">#{ranks.don}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-ink-soft">⭐ Guerra</p>
+                <p className="text-xl font-extrabold text-ink">#{ranks.stars}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-ink-soft">🏅 Particip.</p>
+                <p className="text-xl font-extrabold text-ink">#{ranks.part}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {row && (
-          <span className={`rounded-full px-2.5 py-1 text-xs font-extrabold ${CAT_LABEL[row.category].cls}`}>
-            {CAT_LABEL[row.category].label}
-          </span>
-        )}
-        {isNew && (
-          <span className="rounded-full bg-grass/20 px-2.5 py-1 text-xs font-extrabold uppercase text-grass">
-            Nuevo
-          </span>
-        )}
-        {!history.isActive && (
-          <span className="rounded-full bg-banner/15 px-2.5 py-1 text-xs font-extrabold uppercase text-banner">
-            Fuera del clan
-          </span>
+          <div className="border-t border-line px-4 py-3">
+            <p
+              className={`mb-2 flex items-center gap-1.5 text-sm font-bold ${
+                row.staleDays != null && row.staleDays < 1 ? "text-grass" : "text-ink-soft"
+              }`}
+            >
+              <span
+                aria-hidden
+                className={`h-2.5 w-2.5 rounded-full ${row.staleDays != null && row.staleDays < 1 ? "bg-grass-bright ring-4 ring-grass/20" : "bg-ink-soft/40"}`}
+              />
+              {row.staleDays == null
+                ? "Sin datos de actividad"
+                : row.staleDays < 1
+                  ? "Activo hoy"
+                  : `Última actividad hace ${Math.round(row.staleDays)} día${Math.round(row.staleDays) === 1 ? "" : "s"}${row.capped ? "+" : ""}`}
+            </p>
+            {row.flags.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {row.flags.map((f) => (
+                  <span key={f} className="rounded-lg bg-banner/12 px-2 py-1 text-[11px] font-bold text-banner">
+                    {f}
+                  </span>
+                ))}
+              </div>
+            )}
+            {row.recent.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {row.recent.map((s) => (
+                  <span
+                    key={s.key}
+                    title={fmtDate(s.at)}
+                    className="inline-flex items-center gap-1 rounded-lg bg-surface-2 px-2 py-1 text-[11px] font-bold text-ink-soft"
+                  >
+                    {s.icon} {s.label} · {agoShort(s.at)}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
 
-      <p className="mb-3 text-sm font-semibold text-ink-soft">
-        {history.role ? (ROLE_LABEL[history.role] ?? history.role) : "—"} · TH {history.townHall ?? "—"} · Nv{" "}
-        {history.current.expLevel ?? "—"}
-        {row?.leagueVsTh && <> · {LEAGUE_VS[row.leagueVsTh]}</>}
-      </p>
-
-      {/* Ranking en el clan */}
-      {ranks && (
-        <div className="mb-4 flex flex-wrap gap-2 text-xs font-bold">
-          <span className="rounded-lg bg-surface-2 px-2.5 py-1 text-ink">🎁 #{ranks.don} donaciones</span>
-          <span className="rounded-lg bg-surface-2 px-2.5 py-1 text-ink">⭐ #{ranks.stars} guerra</span>
-          <span className="rounded-lg bg-surface-2 px-2.5 py-1 text-ink">🏅 #{ranks.part} participación</span>
-          <span className="self-center text-ink-soft">de {total}</span>
-        </div>
-      )}
-
-      {/* Actividad + faltillas */}
-      {row && (
-        <div className="mb-5 rounded-2xl border border-line bg-surface p-4">
-          <p className="mb-1 text-sm font-bold text-ink">
-            {row.staleDays == null
-              ? "Sin datos de actividad"
-              : row.staleDays < 1
-                ? "Activo hoy"
-                : `Última actividad hace ${Math.round(row.staleDays)} día${Math.round(row.staleDays) === 1 ? "" : "s"}${row.capped ? "+" : ""}`}
-          </p>
-          {row.flags.length > 0 && (
-            <div className="mb-2 flex flex-wrap gap-1.5">
-              {row.flags.map((f) => (
-                <span key={f} className="rounded-lg bg-banner/12 px-2 py-1 text-[11px] font-bold text-banner">
-                  {f}
-                </span>
-              ))}
-            </div>
-          )}
-          {row.recent.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {row.recent.map((s) => (
-                <span
-                  key={s.key}
-                  title={fmtDate(s.at)}
-                  className="inline-flex items-center gap-1 rounded-lg bg-surface-2 px-2 py-1 text-[11px] font-bold text-ink-soft"
-                >
-                  {s.icon} {s.label} · {agoShort(s.at)}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Estadísticas actuales */}
       <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <Stat label="Rango">
-          <span className="inline-flex items-center gap-1.5">
-            {history.current.leagueTierIcon && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={history.current.leagueTierIcon} alt="" width={22} height={22} className="h-[22px] w-[22px]" />
-            )}
-            {history.current.leagueTierName?.replace(" League", "") ?? "Sin rango"}
-          </span>
-        </Stat>
         <Stat label="Copas (ranked)">{history.current.trophies ?? "—"}</Stat>
         <Stat label="Estrellas de guerra (total)">⭐ {history.current.warStars ?? "—"}</Stat>
         <Stat label="Ataques / Defensas ganados">
