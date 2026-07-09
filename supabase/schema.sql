@@ -11,6 +11,14 @@ create table if not exists clans (
   level         int,
   updated_at    timestamptz default now()
 );
+-- Info extra del clan (de /clans/{tag}): para el Home del Clan.
+alter table clans add column if not exists description       text;
+alter table clans add column if not exists badge_url         text;
+alter table clans add column if not exists war_league        text;
+alter table clans add column if not exists clan_points       int;
+alter table clans add column if not exists required_trophies int;
+alter table clans add column if not exists war_wins          int;
+alter table clans add column if not exists war_win_streak    int;
 
 -- Miembros conocidos (estado "actual"). Upsert en cada snapshot.
 -- CoC NO da fecha de entrada: se infiere por la primera vez que aparece el tag.

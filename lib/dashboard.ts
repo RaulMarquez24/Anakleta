@@ -61,6 +61,13 @@ export interface MemberOverviewRow {
 export interface DashboardData {
   clanName: string | null;
   clanLevel: number | null;
+  clanDescription: string | null;
+  clanBadgeUrl: string | null;
+  clanWarLeague: string | null;
+  clanPoints: number | null;
+  clanRequiredTrophies: number | null;
+  clanWarWins: number | null;
+  clanWarWinStreak: number | null;
   latestCapture: string | null;
   previousCapture: string | null;
   members: MemberOverviewRow[];
@@ -215,15 +222,20 @@ async function getMembersOverviewImpl(): Promise<DashboardData> {
       (b.trophies ?? -1) - (a.trophies ?? -1),
   );
 
-  const { data: clan } = await supabase
-    .from("clans")
-    .select("name, level")
-    .limit(1)
-    .maybeSingle();
+  // select("*") a propósito: así el Home no se rompe si aún no se ha corrido la
+  // migración que añade las columnas nuevas (las lee como undefined -> null).
+  const { data: clan } = await supabase.from("clans").select("*").limit(1).maybeSingle();
 
   return {
     clanName: (clan?.name as string | null) ?? null,
     clanLevel: (clan?.level as number | null) ?? null,
+    clanDescription: (clan?.description as string | null) ?? null,
+    clanBadgeUrl: (clan?.badge_url as string | null) ?? null,
+    clanWarLeague: (clan?.war_league as string | null) ?? null,
+    clanPoints: (clan?.clan_points as number | null) ?? null,
+    clanRequiredTrophies: (clan?.required_trophies as number | null) ?? null,
+    clanWarWins: (clan?.war_wins as number | null) ?? null,
+    clanWarWinStreak: (clan?.war_win_streak as number | null) ?? null,
     latestCapture: latest ?? null,
     previousCapture: previous ?? null,
     members: rows,

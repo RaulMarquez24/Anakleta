@@ -106,23 +106,63 @@ export default async function ClanHomePage({
   return (
     <AppShell email={user?.email} title="Clan">
       {/* Identidad del clan */}
-      <div className="mb-4 flex items-center gap-3 rounded-2xl border border-line bg-surface p-4">
-        <Image
-          src="/logo.jpg"
-          alt=""
-          aria-hidden
-          width={56}
-          height={56}
-          className="h-14 w-14 flex-none rounded-2xl shadow-[0_0_0_2px_var(--gold)]"
-        />
-        <div className="min-w-0">
-          <p className="truncate text-xl font-extrabold text-ink">{data.clanName ?? "Añakleta"}</p>
-          <p className="text-xs font-semibold text-ink-soft">
-            {data.members.length} miembros
-            {data.clanLevel != null && <> · nivel {data.clanLevel}</>}
-          </p>
-          <p className="text-[11px] text-ink-soft">Última captura: {fmtDate(data.latestCapture)}</p>
+      <div className="mb-4 rounded-2xl border border-line bg-surface p-4">
+        <div className="flex items-center gap-3">
+          {data.clanBadgeUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={data.clanBadgeUrl}
+              alt=""
+              width={56}
+              height={56}
+              className="h-14 w-14 flex-none"
+              style={{ objectFit: "contain" }}
+            />
+          ) : (
+            <Image
+              src="/logo.jpg"
+              alt=""
+              aria-hidden
+              width={56}
+              height={56}
+              className="h-14 w-14 flex-none rounded-2xl shadow-[0_0_0_2px_var(--gold)]"
+            />
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xl font-extrabold text-ink">{data.clanName ?? "Añakleta"}</p>
+            <p className="text-xs font-semibold text-ink-soft">
+              {data.members.length} miembros
+              {data.clanLevel != null && <> · nivel {data.clanLevel}</>}
+            </p>
+            {data.clanWarLeague && (
+              <span className="mt-1 inline-block rounded-full bg-gold/20 px-2 py-0.5 text-[11px] font-extrabold text-gold-deep">
+                ⚔️ {data.clanWarLeague}
+              </span>
+            )}
+          </div>
         </div>
+
+        {data.clanDescription && (
+          <p className="mt-3 whitespace-pre-line text-sm text-ink-soft">{data.clanDescription}</p>
+        )}
+
+        {/* Datos rápidos del clan */}
+        <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-bold">
+          {data.clanPoints != null && (
+            <span className="rounded-lg bg-surface-2 px-2 py-1 text-ink">🏆 {data.clanPoints.toLocaleString("es-ES")} pts</span>
+          )}
+          {data.clanWarWins != null && (
+            <span className="rounded-lg bg-surface-2 px-2 py-1 text-ink">⚔️ {data.clanWarWins} guerras ganadas</span>
+          )}
+          {data.clanWarWinStreak != null && data.clanWarWinStreak > 0 && (
+            <span className="rounded-lg bg-surface-2 px-2 py-1 text-ink">🔥 racha {data.clanWarWinStreak}</span>
+          )}
+          {data.clanRequiredTrophies != null && (
+            <span className="rounded-lg bg-surface-2 px-2 py-1 text-ink-soft">copas mín. {data.clanRequiredTrophies}</span>
+          )}
+        </div>
+
+        <p className="mt-3 text-[11px] text-ink-soft">Última captura: {fmtDate(data.latestCapture)}</p>
       </div>
 
       {/* Estado de guerra / CWL */}

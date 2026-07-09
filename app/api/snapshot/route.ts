@@ -72,6 +72,24 @@ export async function POST(req: NextRequest) {
     );
     if (clanErr) throw clanErr;
 
+    // Info extra del clan (descripción, liga de guerra, escudo, puntos, racha).
+    // Best-effort: si aún no se ha corrido la migración que añade estas columnas,
+    // el error se ignora y la captura sigue adelante (el núcleo ya está guardado).
+    const { error: clanExtraErr } = await supabase
+      .from("clans")
+      .update({
+        description: clan.description ?? null,
+        badge_url: clan.badgeUrls?.medium ?? clan.badgeUrls?.small ?? null,
+        war_league: clan.warLeague?.name ?? null,
+        clan_points: clan.clanPoints ?? null,
+        required_trophies: clan.requiredTrophies ?? null,
+        war_wins: clan.warWins ?? null,
+        war_win_streak: clan.warWinStreak ?? null,
+      })
+      .eq("tag", clan.tag);
+    // clanExtraErr se ignora a propósito (columnas quizá no migradas todavía).
+    void clanExtraErr;
+
     // Upsert de miembros (preserva first_seen_at; refresca last_seen_at/is_active).
     const memberRows = clan.memberList.map((m) => ({
       tag: m.tag,

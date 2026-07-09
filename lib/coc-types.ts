@@ -34,6 +34,15 @@ export interface CocClan {
   clanLevel: number;
   members: number;
   memberList: CocClanMember[];
+  description?: string;
+  badgeUrls?: { small?: string; medium?: string; large?: string };
+  warLeague?: { id: number; name: string };
+  clanPoints?: number;
+  requiredTrophies?: number;
+  warWins?: number;
+  warTies?: number;
+  warLosses?: number;
+  warWinStreak?: number;
 }
 
 // Datos extra del endpoint /players/{tag} (enriquecimiento).
