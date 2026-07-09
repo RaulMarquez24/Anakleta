@@ -110,7 +110,18 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
             <p className="text-sm font-extrabold text-gold-deep">🏆 {history.current.trophies ?? "—"}</p>
           </div>
           <div className="flex flex-col items-center gap-1 p-4 text-center">
-            <span className="text-4xl leading-none">🏰</span>
+            {history.townHall != null ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={`/th/${history.townHall}.webp`}
+                alt={`Ayuntamiento ${history.townHall}`}
+                width={56}
+                height={56}
+                style={{ height: 56, width: 56, objectFit: "contain" }}
+              />
+            ) : (
+              <span className="text-4xl leading-none">🏰</span>
+            )}
             <p className="text-xl font-extrabold text-ink">TH {history.townHall ?? "—"}</p>
             <p className="text-xs font-semibold text-ink-soft">Nivel {history.current.expLevel ?? "—"}</p>
           </div>
