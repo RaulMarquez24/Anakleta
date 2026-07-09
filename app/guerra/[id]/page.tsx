@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getWarDetail } from "@/lib/war-history";
 import { createAuthServerClient } from "@/lib/supabase/auth-server";
@@ -27,10 +26,7 @@ export default async function GuerraDetailPage({
   const back = war.isCwl && war.season ? `/liga/${encodeURIComponent(war.season)}` : "/guerras";
 
   return (
-    <AppShell email={user?.email} title={war.isCwl ? `Ronda ${war.round}` : "Guerra"}>
-      <Link href={back} className="mb-3 inline-block text-sm font-bold text-sky hover:underline">
-        ← Volver
-      </Link>
+    <AppShell email={user?.email} title={war.isCwl ? `Ronda ${war.round}` : "Guerra"} back={back}>
 
       <div className="mb-4">
         <div className="mb-1 flex items-center gap-2">

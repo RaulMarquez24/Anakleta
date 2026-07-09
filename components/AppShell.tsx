@@ -1,4 +1,6 @@
 import Image from "next/image";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { AppNav } from "@/components/AppNav";
 import { WarAlertBubble } from "@/components/WarAlertBubble";
 import { getWarAlert } from "@/lib/war-history";
@@ -8,10 +10,12 @@ import { getWarAlert } from "@/lib/war-history";
 export async function AppShell({
   email,
   title,
+  back,
   children,
 }: {
   email?: string | null;
   title: string;
+  back?: string;
   children: React.ReactNode;
 }) {
   const alert = await getWarAlert().catch(() => null);
@@ -20,14 +24,24 @@ export async function AppShell({
     <div className="min-h-full pb-20 sm:pb-6">
       <header className="bg-banner">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
-          <Image
-            src="/logo.jpg"
-            alt=""
-            aria-hidden
-            width={44}
-            height={44}
-            className="h-11 w-11 flex-none rounded-xl shadow-[0_0_0_2px_rgba(255,255,255,.35)]"
-          />
+          {back ? (
+            <Link
+              href={back}
+              aria-label="Volver"
+              className="-ml-1 flex-none rounded-full p-1.5 text-white transition hover:bg-white/15"
+            >
+              <ArrowLeft className="h-6 w-6" />
+            </Link>
+          ) : (
+            <Image
+              src="/logo.jpg"
+              alt=""
+              aria-hidden
+              width={44}
+              height={44}
+              className="h-11 w-11 flex-none rounded-xl shadow-[0_0_0_2px_rgba(255,255,255,.35)]"
+            />
+          )}
           <div className="min-w-0">
             <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#f6d9b0]">
               Añakleta

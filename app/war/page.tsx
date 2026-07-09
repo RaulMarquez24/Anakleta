@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { getCurrentWar, type WarView } from "@/lib/war";
 import { createAuthServerClient } from "@/lib/supabase/auth-server";
 import { AppShell } from "@/components/AppShell";
@@ -23,21 +22,16 @@ export default async function WarPage() {
   const showDetail = war.state !== "notInWar" && war.members.length > 0;
 
   return (
-    <AppShell email={user?.email} title="Guerra">
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <Link href="/guerras" className="text-sm font-bold text-sky hover:underline">
-          ← Guerras
-        </Link>
-        <div className="flex items-center gap-2">
-          {war.isCwl && (
-            <span className="rounded-full bg-gold/25 px-3 py-1 text-xs font-extrabold text-gold-deep">
-              CWL{war.round ? ` · Ronda ${war.round}` : ""}
-            </span>
-          )}
-          <span className="rounded-full bg-surface-2 px-3 py-1 text-xs font-extrabold text-ink-soft">
-            {STATE_LABEL[war.state]}
+    <AppShell email={user?.email} title="Guerra" back="/guerras">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {war.isCwl && (
+          <span className="rounded-full bg-gold/25 px-3 py-1 text-xs font-extrabold text-gold-deep">
+            CWL{war.round ? ` · Ronda ${war.round}` : ""}
           </span>
-        </div>
+        )}
+        <span className="rounded-full bg-surface-2 px-3 py-1 text-xs font-extrabold text-ink-soft">
+          {STATE_LABEL[war.state]}
+        </span>
       </div>
 
       {war.isPrivate && (

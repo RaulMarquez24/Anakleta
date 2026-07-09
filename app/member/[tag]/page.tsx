@@ -47,7 +47,7 @@ function Stat({ label, children }: { label: string; children: React.ReactNode })
   return (
     <div className="rounded-xl border border-line bg-surface p-3">
       <p className="text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">{label}</p>
-      <p className="mt-1 font-bold text-ink">{children}</p>
+      <p className="mt-1 text-base font-extrabold text-ink">{children}</p>
     </div>
   );
 }
@@ -92,28 +92,23 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
       .map((s) => ({ t: new Date(s.capturedAt).getTime(), v: s[key] as number }));
 
   return (
-    <AppShell email={user?.email} title={history.name}>
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <Link href="/" className="text-sm font-bold text-sky hover:underline">
-          ← Miembros
-        </Link>
-        <div className="flex items-center gap-2">
-          {isNew && (
-            <span className="rounded-full bg-grass/20 px-2 py-0.5 text-[10px] font-extrabold uppercase text-grass">
-              Nuevo
-            </span>
-          )}
-          {row && (
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-extrabold ${CAT_LABEL[row.category].cls}`}>
-              {CAT_LABEL[row.category].label}
-            </span>
-          )}
-          {!history.isActive && (
-            <span className="rounded-full bg-banner/15 px-2 py-0.5 text-[10px] font-extrabold uppercase text-banner">
-              Fuera del clan
-            </span>
-          )}
-        </div>
+    <AppShell email={user?.email} title={history.name} back="/">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {row && (
+          <span className={`rounded-full px-2.5 py-1 text-xs font-extrabold ${CAT_LABEL[row.category].cls}`}>
+            {CAT_LABEL[row.category].label}
+          </span>
+        )}
+        {isNew && (
+          <span className="rounded-full bg-grass/20 px-2.5 py-1 text-xs font-extrabold uppercase text-grass">
+            Nuevo
+          </span>
+        )}
+        {!history.isActive && (
+          <span className="rounded-full bg-banner/15 px-2.5 py-1 text-xs font-extrabold uppercase text-banner">
+            Fuera del clan
+          </span>
+        )}
       </div>
 
       <p className="mb-3 text-sm font-semibold text-ink-soft">
@@ -152,13 +147,17 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
             </div>
           )}
           {row.recent.length > 0 && (
-            <ul className="text-xs text-ink-soft">
+            <div className="flex flex-wrap gap-1.5">
               {row.recent.map((s) => (
-                <li key={s.key}>
-                  {s.icon} {s.label} — {agoShort(s.at)} ({fmtDate(s.at)})
-                </li>
+                <span
+                  key={s.key}
+                  title={fmtDate(s.at)}
+                  className="inline-flex items-center gap-1 rounded-lg bg-surface-2 px-2 py-1 text-[11px] font-bold text-ink-soft"
+                >
+                  {s.icon} {s.label} · {agoShort(s.at)}
+                </span>
               ))}
-            </ul>
+            </div>
           )}
         </div>
       )}

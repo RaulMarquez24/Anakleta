@@ -25,16 +25,11 @@ export default async function LigaPage({
   const days = Array.from({ length: summary.expectedRounds }, (_, i) => i + 1);
 
   return (
-    <AppShell email={user?.email} title={`🏆 ${seasonLabel(decoded)}`}>
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <Link href="/guerras" className="text-sm font-bold text-sky hover:underline">
-          ← Guerras
-        </Link>
-        <p className="text-sm text-ink-soft">
-          <span className="text-grass">{summary.wins}V</span> · <span className="text-banner">{summary.losses}D</span>
-          {summary.ties > 0 && <> · {summary.ties}E</>} · {summary.totalRounds}/{summary.expectedRounds}
-        </p>
-      </div>
+    <AppShell email={user?.email} title={`🏆 ${seasonLabel(decoded)}`} back="/guerras">
+      <p className="mb-4 text-sm font-semibold text-ink-soft">
+        <span className="text-grass">{summary.wins}V</span> · <span className="text-banner">{summary.losses}D</span>
+        {summary.ties > 0 && <> · {summary.ties}E</>} · {summary.totalRounds}/{summary.expectedRounds} rondas
+      </p>
 
       {/* Los 7 días (rondas). Las que faltan salen bloqueadas. */}
       <div className="mb-6 overflow-hidden rounded-2xl border border-line bg-surface">

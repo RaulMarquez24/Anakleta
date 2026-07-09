@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { getDepartures } from "@/lib/history";
 import { createAuthServerClient } from "@/lib/supabase/auth-server";
 import { AppShell } from "@/components/AppShell";
@@ -32,13 +31,7 @@ export default async function BajasPage() {
   const departures = await getDepartures();
 
   return (
-    <AppShell email={user?.email} title="Bajas">
-      <div className="mb-4 flex items-baseline justify-end gap-2">
-        <Link href="/" className="text-sm font-bold text-sky hover:underline">
-          ← Miembros
-        </Link>
-      </div>
-
+    <AppShell email={user?.email} title="Bajas" back="/">
       {departures.length === 0 ? (
         <div className="rounded-2xl border border-line bg-surface p-10 text-center">
           <p className="text-4xl">👋</p>

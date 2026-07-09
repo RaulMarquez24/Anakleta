@@ -40,7 +40,7 @@ export function LineChart({
     vMax += 1;
   }
 
-  const pad = { l: 48, r: 14, t: 12, b: 24 };
+  const pad = { l: 62, r: 14, t: 14, b: 26 };
   const iw = width - pad.l - pad.r;
   const ih = height - pad.t - pad.b;
   const sx = (t: number) => pad.l + (tMax === tMin ? 0 : ((t - tMin) / (tMax - tMin)) * iw);
@@ -66,7 +66,14 @@ export function LineChart({
             stroke="var(--line)"
             strokeWidth={1}
           />
-          <text x={pad.l - 8} y={sy(v) + 4} textAnchor="end" fontSize={11} fill="var(--ink-soft)">
+          <text
+            x={pad.l - 8}
+            y={sy(v) + 5}
+            textAnchor="end"
+            fontSize={16}
+            fontWeight={700}
+            fill="var(--ink-soft)"
+          >
             {Math.round(v)}
           </text>
         </g>
@@ -78,8 +85,18 @@ export function LineChart({
         const last = pts[pts.length - 1];
         return (
           <g key={s.label}>
-            <polyline points={d} fill="none" stroke={s.color} strokeWidth={2} />
-            <circle cx={sx(last.t)} cy={sy(last.v)} r={3} fill={s.color} />
+            <polyline points={d} fill="none" stroke={s.color} strokeWidth={2.5} />
+            <circle cx={sx(last.t)} cy={sy(last.v)} r={4.5} fill={s.color} />
+            <text
+              x={Math.min(sx(last.t), width - pad.r - 4)}
+              y={sy(last.v) - 9}
+              textAnchor="end"
+              fontSize={16}
+              fontWeight={800}
+              fill={s.color}
+            >
+              {Math.round(last.v)}
+            </text>
           </g>
         );
       })}
