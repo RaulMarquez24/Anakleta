@@ -98,6 +98,8 @@ export interface ActivityRow {
   townHall: number | null;
   leagueTierName: string | null;
   leagueTierIcon: string | null;
+  // Liga comparada con los del mismo TH en el clan.
+  leagueVsTh: "muy_alta" | "alta" | "normal" | "baja" | "muy_baja" | null;
   donationsTrend: "up" | "down" | "flat" | null; // vs periodo anterior
   lastActivityAt: string | null; // última señal de actividad detectada
   staleDays: number | null; // días desde la última actividad (null si no hay histórico)
@@ -227,7 +229,7 @@ export async function getActivityReport(
   const { data: snaps } = await supabase
     .from("member_snapshots")
     .select(
-      `member_tag, captured_at, war_preference, town_hall, league_tier_name, league_tier_icon, ${SIGNALS.join(", ")}`,
+      `member_tag, captured_at, war_preference, town_hall, league_tier_id, league_tier_name, league_tier_icon, ${SIGNALS.join(", ")}`,
     )
     .gte("captured_at", since)
     .order("captured_at", { ascending: true })
@@ -236,6 +238,7 @@ export async function getActivityReport(
   const byTag = new Map<string, SignalRow[]>();
   const lastWarPref = new Map<string, string | null>();
   const lastTH = new Map<string, number | null>();
+  const lastTierId = new Map<string, number | null>();
   const lastTier = new Map<string, { name: string | null; icon: string | null }>();
   for (const s of (snaps ?? []) as unknown as Record<string, unknown>[]) {
     const tag = s.member_tag as string;
@@ -245,10 +248,32 @@ export async function getActivityReport(
     byTag.get(tag)!.push(row);
     lastWarPref.set(tag, (s.war_preference as string | null) ?? null);
     lastTH.set(tag, (s.town_hall as number | null) ?? null);
+    lastTierId.set(tag, (s.league_tier_id as number | null) ?? null);
     lastTier.set(tag, {
       name: (s.league_tier_name as string | null) ?? null,
       icon: (s.league_tier_icon as string | null) ?? null,
     });
+  }
+
+  // Baseline liga-vs-TH: rango de cada tier (ordenado) y mediana por TH del clan.
+  const rankOfTier = new Map<number, number>();
+  [...new Set([...lastTierId.values()].filter((v): v is number => v != null))]
+    .sort((a, b) => a - b)
+    .forEach((id, i) => rankOfTier.set(id, i));
+  const ranksByTH = new Map<number, number[]>();
+  for (const m of active) {
+    const th = lastTH.get(m.tag as string);
+    const tid = lastTierId.get(m.tag as string);
+    if (th != null && tid != null && rankOfTier.has(tid)) {
+      if (!ranksByTH.has(th)) ranksByTH.set(th, []);
+      ranksByTH.get(th)!.push(rankOfTier.get(tid)!);
+    }
+  }
+  const medianRankByTH = new Map<number, number>();
+  for (const [th, ranks] of ranksByTH) {
+    const s = [...ranks].sort((a, b) => a - b);
+    const n = s.length;
+    medianRankByTH.set(th, n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2);
   }
 
   // Donaciones del periodo ANTERIOR (para la tendencia). Semana→semana previa,
@@ -383,6 +408,16 @@ export async function getActivityReport(
       donationsTrend = Math.abs(diff) < 50 ? "flat" : diff > 0 ? "up" : "down";
     }
 
+    // Liga vs. compañeros del mismo TH (requiere ≥3 del mismo TH para comparar).
+    let leagueVsTh: ActivityRow["leagueVsTh"] = null;
+    const th = lastTH.get(tag);
+    const tid = lastTierId.get(tag);
+    if (th != null && tid != null && rankOfTier.has(tid) && (ranksByTH.get(th)?.length ?? 0) >= 3) {
+      const dev = rankOfTier.get(tid)! - (medianRankByTH.get(th) ?? 0);
+      leagueVsTh =
+        dev >= 5 ? "muy_alta" : dev >= 2 ? "alta" : dev <= -5 ? "muy_baja" : dev <= -2 ? "baja" : "normal";
+    }
+
     const w = warStat.get(tag) ?? { played: 0, attacks: 0, missed: 0, missedRounds: [], stars: 0 };
 
     const fs = m.first_seen_at ? new Date(m.first_seen_at as string).getTime() : null;
@@ -438,6 +473,7 @@ export async function getActivityReport(
       townHall: lastTH.get(tag) ?? null,
       leagueTierName: lastTier.get(tag)?.name ?? null,
       leagueTierIcon: lastTier.get(tag)?.icon ?? null,
+      leagueVsTh,
       donationsTrend,
       lastActivityAt,
       staleDays,

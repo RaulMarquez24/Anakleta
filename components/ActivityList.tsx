@@ -37,6 +37,14 @@ function shortTier(name: string | null): string {
   return name ? name.replace(" League", "") : "Sin rango";
 }
 
+const LEAGUE_VS: Record<string, { label: string; cls: string }> = {
+  muy_alta: { label: "▲▲ liga alta p/ TH", cls: "bg-grass/15 text-grass" },
+  alta: { label: "▲ liga alta p/ TH", cls: "bg-grass/15 text-grass" },
+  normal: { label: "liga OK p/ TH", cls: "bg-surface-2 text-ink-soft" },
+  baja: { label: "▼ liga baja p/ TH", cls: "bg-gold/20 text-gold-deep" },
+  muy_baja: { label: "▼▼ liga baja p/ TH", cls: "bg-banner/12 text-banner" },
+};
+
 function ago(days: number | null, capped: boolean): string {
   if (days == null) return "sin datos";
   if (days < 1) return "activo hoy";
@@ -202,7 +210,11 @@ export function ActivityList({
                   {shortTier(m.leagueTierName)}
                 </span>
                 <span className="rounded bg-sky/15 px-1.5 py-0.5 font-bold text-sky">TH{m.townHall ?? "—"}</span>
-                <span className="text-ink-soft">{m.role ? (ROLE_LABEL[m.role] ?? m.role) : "—"}</span>
+                {m.leagueVsTh && (
+                  <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${LEAGUE_VS[m.leagueVsTh].cls}`}>
+                    {LEAGUE_VS[m.leagueVsTh].label}
+                  </span>
+                )}
                 <span className={`ml-auto font-bold ${stale ? "text-banner" : "text-ink-soft"}`}>
                   {ago(m.staleDays, m.capped)}
                 </span>
