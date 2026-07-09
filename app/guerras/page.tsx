@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getNormalWars, getCwlSeasons } from "@/lib/war-history";
 import { getCurrentWar } from "@/lib/war";
+import { getClanName } from "@/lib/dashboard";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { AppShell } from "@/components/AppShell";
 import { ResultBadge, scoreText, seasonLabel, fmtDate } from "@/components/WarBits";
@@ -24,10 +25,11 @@ export default async function GuerrasPage({
   const sp = await searchParams;
   const user = await getCurrentUser();
 
-  const [current, wars, seasons] = await Promise.all([
+  const [current, wars, seasons, clanName] = await Promise.all([
     getCurrentWar().catch(() => null),
     getNormalWars(),
     getCwlSeasons(),
+    getClanName(),
   ]);
 
   const live = current && current.state !== "notInWar" && current.members.length > 0 ? current : null;
@@ -64,7 +66,9 @@ export default async function GuerrasPage({
           </div>
           <div className="flex items-center justify-between gap-3 px-4 pb-3.5 pt-1.5">
             <div className="min-w-0">
-              <p className="truncate text-lg font-extrabold text-ink">vs {live.opponentName ?? "—"}</p>
+              <p className="truncate text-lg font-extrabold text-ink">
+                {clanName ? `${clanName} vs ${live.opponentName ?? "—"}` : `vs ${live.opponentName ?? "—"}`}
+              </p>
               <p className="text-sm font-bold text-ink-soft">
                 ⭐ <span className="text-gold-deep">{live.clanStars ?? 0}</span> — {live.opponentStars ?? 0}
               </p>

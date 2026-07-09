@@ -1,5 +1,6 @@
 import { getCurrentWar, type WarView } from "@/lib/war";
-import { createAuthServerClient } from "@/lib/supabase/auth-server";
+import { getClanName } from "@/lib/dashboard";
+import { getCurrentUser } from "@/lib/supabase/current-user";
 import { AppShell } from "@/components/AppShell";
 import { WarDetail } from "@/components/WarDetail";
 
@@ -13,12 +14,11 @@ const STATE_LABEL: Record<WarView["state"], string> = {
 };
 
 export default async function WarPage() {
-  const supabase = await createAuthServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const war = await getCurrentWar();
+  const [user, war, clanName] = await Promise.all([
+    getCurrentUser(),
+    getCurrentWar(),
+    getClanName(),
+  ]);
   const showDetail = war.state !== "notInWar" && war.members.length > 0;
 
   return (
@@ -65,6 +65,7 @@ export default async function WarPage() {
             attacksPerMember: war.attacksPerMember,
           }}
           members={war.members}
+          clanName={clanName}
         />
       )}
     </AppShell>

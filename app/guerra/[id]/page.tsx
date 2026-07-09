@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getWarDetail } from "@/lib/war-history";
+import { getClanName } from "@/lib/dashboard";
 import { createAuthServerClient } from "@/lib/supabase/auth-server";
 import { AppShell } from "@/components/AppShell";
 import { WarDetail } from "@/components/WarDetail";
@@ -18,7 +19,7 @@ export default async function GuerraDetailPage({
   } = await supabase.auth.getUser();
 
   const { id } = await params;
-  const detail = await getWarDetail(Number(id));
+  const [detail, clanName] = await Promise.all([getWarDetail(Number(id)), getClanName()]);
   if (!detail) notFound();
   const { war, members } = detail;
 
@@ -30,7 +31,9 @@ export default async function GuerraDetailPage({
 
       <div className="mb-4">
         <div className="mb-1 flex items-center gap-2">
-          <h1 className="ribbon-title text-xl text-ink [text-shadow:none]">vs {war.opponentName ?? "—"}</h1>
+          <h1 className="ribbon-title text-xl text-ink [text-shadow:none]">
+            {clanName ? `${clanName} vs ${war.opponentName ?? "—"}` : `vs ${war.opponentName ?? "—"}`}
+          </h1>
           <ResultBadge war={war} />
         </div>
         <p className="text-sm text-ink-soft">
@@ -65,6 +68,7 @@ export default async function GuerraDetailPage({
           destruction: m.destruction,
           attacks: m.attacks,
         }))}
+        clanName={clanName}
       />
 
       {members.length === 0 && (

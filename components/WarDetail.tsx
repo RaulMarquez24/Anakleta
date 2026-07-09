@@ -40,7 +40,15 @@ function timeLeft(iso: string | null): string | null {
   return `${h}h ${m}m`;
 }
 
-export function WarDetail({ war, members }: { war: UnifiedWar; members: UnifiedWarMember[] }) {
+export function WarDetail({
+  war,
+  members,
+  clanName,
+}: {
+  war: UnifiedWar;
+  members: UnifiedWarMember[];
+  clanName?: string | null;
+}) {
   const inWar = war.state === "inWar";
   const prep = war.state === "preparation";
   const pending = members.filter((m) => m.attacksPending > 0);
@@ -74,8 +82,8 @@ export function WarDetail({ war, members }: { war: UnifiedWar; members: UnifiedW
       <div className="overflow-hidden rounded-2xl border border-line bg-surface">
         <div className="grid grid-cols-[1fr_auto_1fr] items-center">
           <div className="p-4 text-center">
-            <p className="mb-1 text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">
-              Nosotros
+            <p className="mb-1 truncate text-[10px] font-extrabold uppercase tracking-wide text-gold-deep">
+              {clanName ?? "Nosotros"}
             </p>
             <p className="text-3xl font-extrabold leading-none text-gold-deep">⭐ {cs}</p>
             <p className="mt-1 text-xs font-semibold text-ink-soft">{cd.toFixed(1)}%</p>

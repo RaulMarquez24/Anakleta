@@ -83,6 +83,17 @@ export interface ClanTrendPoint {
   warStars: number; // suma de estrellas de guerra (monótono)
 }
 
+// Nombre del clan (para "Añakleta vs X" en guerra). Cacheado; cambia rara vez.
+export const getClanName = unstable_cache(
+  async (): Promise<string | null> => {
+    const supabase = createServerClient();
+    const { data } = await supabase.from("clans").select("name").limit(1).maybeSingle();
+    return (data?.name as string | null) ?? null;
+  },
+  ["clan-name"],
+  { revalidate: 3600 },
+);
+
 export const getClanTrends = unstable_cache(getClanTrendsImpl, ["clan-trends"], {
   revalidate: 300,
 });
