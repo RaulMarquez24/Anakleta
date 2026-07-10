@@ -127,6 +127,69 @@ async function getSeasonWarsImpl(season: string): Promise<WarSummary[]> {
   return (data ?? []).map((w) => toSummary(w as Record<string, unknown>));
 }
 
+// Cuadro completo de una temporada de CWL: estrellas por ronda + totales, para
+// el resumen que se publica en Discord.
+export interface SeasonScoreRow {
+  tag: string;
+  name: string;
+  byRound: Record<number, number>; // estrellas por ronda (solo rondas alineado)
+  totalStars: number;
+  totalDestruction: number;
+}
+export interface SeasonScoreboard {
+  season: string;
+  rounds: number[]; // [1..maxRound]
+  rows: SeasonScoreRow[]; // ordenado por estrellas desc, luego % desc
+}
+
+export const getSeasonScoreboard = unstable_cache(getSeasonScoreboardImpl, ["season-scoreboard"], {
+  revalidate: 300,
+});
+
+async function getSeasonScoreboardImpl(season: string): Promise<SeasonScoreboard> {
+  const supabase = createServerClient();
+  const { data: wars } = await supabase
+    .from("wars")
+    .select("id, round")
+    .eq("is_cwl", true)
+    .eq("season", season);
+
+  const roundByWar = new Map<number, number>();
+  let maxRound = 0;
+  for (const w of wars ?? []) {
+    const r = (w.round as number | null) ?? 0;
+    roundByWar.set(w.id as number, r);
+    if (r > maxRound) maxRound = r;
+  }
+  const warIds = [...roundByWar.keys()];
+  if (warIds.length === 0) return { season, rounds: [], rows: [] };
+
+  const { data: wm } = await supabase
+    .from("war_members")
+    .select("war_id, tag, name, stars, destruction")
+    .in("war_id", warIds)
+    .limit(50000);
+
+  const byTag = new Map<string, SeasonScoreRow>();
+  for (const m of wm ?? []) {
+    const round = roundByWar.get(m.war_id as number) ?? 0;
+    const tag = m.tag as string;
+    if (!byTag.has(tag))
+      byTag.set(tag, { tag, name: m.name as string, byRound: {}, totalStars: 0, totalDestruction: 0 });
+    const row = byTag.get(tag)!;
+    if (m.name) row.name = m.name as string;
+    const stars = (m.stars as number | null) ?? 0;
+    row.byRound[round] = stars;
+    row.totalStars += stars;
+    row.totalDestruction += Number(m.destruction ?? 0);
+  }
+
+  const rows = [...byTag.values()].sort(
+    (a, b) => b.totalStars - a.totalStars || b.totalDestruction - a.totalDestruction,
+  );
+  return { season, rounds: Array.from({ length: maxRound }, (_, i) => i + 1), rows };
+}
+
 export interface SeasonMemberStat {
   tag: string;
   name: string;

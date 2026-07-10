@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { getSeasonWars, getSeasonSummary, type WarSummary } from "@/lib/war-history";
+import { getGuildChannels, getDefaultChannelId } from "@/lib/discord";
 import { createAuthServerClient } from "@/lib/supabase/auth-server";
 import { AppShell } from "@/components/AppShell";
 import { ResultBadge, scoreText, seasonLabel, fmtDate } from "@/components/WarBits";
+import { SendSeasonSummary } from "@/components/SendSeasonSummary";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +20,12 @@ export default async function LigaPage({
 
   const { season } = await params;
   const decoded = decodeURIComponent(season);
-  const [wars, summary] = await Promise.all([getSeasonWars(decoded), getSeasonSummary(decoded)]);
+  const [wars, summary, channels, defaultChannel] = await Promise.all([
+    getSeasonWars(decoded),
+    getSeasonSummary(decoded),
+    getGuildChannels().catch(() => []),
+    getDefaultChannelId().catch(() => null),
+  ]);
 
   const byRound = new Map<number, WarSummary>();
   for (const w of wars) if (w.round != null) byRound.set(w.round, w);
@@ -30,6 +37,10 @@ export default async function LigaPage({
         <span className="text-grass">{summary.wins}V</span> · <span className="text-banner">{summary.losses}D</span>
         {summary.ties > 0 && <> · {summary.ties}E</>} · {summary.totalRounds}/{summary.expectedRounds} rondas
       </p>
+
+      <div className="mb-6">
+        <SendSeasonSummary season={decoded} channels={channels} defaultChannelId={defaultChannel} />
+      </div>
 
       {/* Los 7 días (rondas). Las que faltan salen bloqueadas. */}
       <div className="mb-6 overflow-hidden rounded-2xl border border-line bg-surface">
