@@ -113,6 +113,23 @@ function href(tag: string) {
   return `/member/${encodeURIComponent(tag)}`;
 }
 
+function DiscordChip({ id, username }: { id: string | null; username: string | null }) {
+  if (id)
+    return (
+      <span
+        className="rounded-lg bg-[#5865F2]/15 px-2 py-1 text-xs font-bold text-[#5865F2]"
+        title={username ? `Discord: @${username}` : "Discord vinculado"}
+      >
+        🎮 {username ?? "Discord"}
+      </span>
+    );
+  return (
+    <span className="rounded-lg bg-banner/12 px-2 py-1 text-xs font-bold text-banner" title="Sin Discord vinculado">
+      🎮 Sin Discord
+    </span>
+  );
+}
+
 function YouBadge() {
   return (
     <span className="rounded-full bg-sky/20 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-sky">
@@ -232,6 +249,7 @@ export function MembersTable({
                 <span className="rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink">🎁 {m.donations ?? "—"}{m.donationsDelta != null && m.donationsDelta > 0 && <span className="ml-1 text-grass">+{m.donationsDelta}</span>} · 📥 {m.donationsReceived ?? "—"}</span>
                 <span className={`rounded-lg px-2 py-1 text-xs font-bold ${m.donationsNegative ? "bg-banner/12 text-banner" : "bg-grass/15 text-grass"}`}>Ratio {m.ratio == null ? "—" : m.ratio.toFixed(1)}</span>
                 {m.warStars != null && <span className="rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink">⭐ {m.warStars}</span>}
+                <DiscordChip id={m.discordId} username={m.discordUsername} />
               </div>
               <Activity m={m} />
             </Link>
@@ -269,6 +287,13 @@ export function MembersTable({
                     {altOf(m).mainTag && <span className="ml-2"><AltBadge of={altOf(m).mainName} /></span>}
                     <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${rb.cls}`}>{rb.label}</span>
                     {m.isNew && <span className="ml-1"><NewBadge /></span>}
+                    {m.discordId ? (
+                      <span className="ml-2 text-xs" title={`Discord: @${m.discordUsername ?? ""}`}>🎮</span>
+                    ) : (
+                      <span className="ml-2 text-[10px] font-bold text-banner" title="Sin Discord vinculado">
+                        sin Discord
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex items-center justify-center gap-1.5">

@@ -58,6 +58,8 @@ export interface MemberOverviewRow {
   isNew: boolean; // entró de verdad hace poco (no en el arranque del tracking)
   mainTag: string | null; // si es cuenta secundaria: tag de su cuenta principal
   mainName: string | null; // nombre de la principal (para el badge)
+  discordId: string | null; // cuenta de Discord vinculada
+  discordUsername: string | null;
 }
 
 export interface DashboardData {
@@ -231,6 +233,8 @@ async function getMembersOverviewImpl(): Promise<DashboardData> {
       })(),
       mainTag: (m.main_tag as string | null) ?? null,
       mainName: m.main_tag ? (nameByTag.get(m.main_tag as string) ?? null) : null,
+      discordId: (m.discord_id as string | null) ?? null,
+      discordUsername: (m.discord_username as string | null) ?? null,
     };
   });
 
