@@ -90,17 +90,17 @@ function buildLines(sb: SeasonScoreboard, title: string): string[] {
   let n = 0;
   const rowLine = (row: (typeof ranked)[number]): string => {
     n++;
-    const idx = paint(DIM, `${n}.`.padStart(3));
+    const idx = `${n}.`.padStart(3); // color por defecto (legible sobre el fondo oscuro)
     const name = (nameByTag.get(row.tag) ?? "jugador").padEnd(nameW);
     const cells = rr.map((r) => cellField(row.byRound[r])).join(" ");
     const stars = paint(GOLD, String(row.totalStars).padStart(3));
     const pct = paint(CYAN, `${String(Math.round(row.totalDestruction)).padStart(3)}%`);
-    // idx(3) · name(nameW) · |cells · | · ⭐ stars(3) pct(4)
-    return `${idx} ${name} ${bar}${cells} ${bar} ${paint(YELLOW, "⭐")} ${stars} ${pct}`;
+    // idx(3) · name(nameW) · |cells · | · Est(3) pct(4)
+    return `${idx} ${name} ${bar}${cells} ${bar} ${stars} ${pct}`;
   };
 
   // Cabecera alineada con las filas (mismos anchos de columna).
-  const headTxt = `  # ${"Jugador".padEnd(nameW)} |${roundsHdr} | ⭐ Est    %`;
+  const headTxt = `  # ${"Jugador".padEnd(nameW)} |${roundsHdr} | Est    %`;
   const rule = paint(DIM, "─".repeat(headTxt.length));
   const legend =
     `${paint(GREEN, "0-3")} = estrellas    ${paint(RED, MISS)} = no atacó    ` +
@@ -122,7 +122,7 @@ function buildLines(sb: SeasonScoreboard, title: string): string[] {
   }
   lines.push(rule);
   lines.push(
-    paint(GOLD, `⭐ ${totalStars} estrellas del clan`) +
+    paint(GOLD, `${totalStars} estrellas del clan`) +
       paint(DIM, "  ·  ") +
       `${ranked.length} en alineación`,
   );
