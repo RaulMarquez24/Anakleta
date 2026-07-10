@@ -48,6 +48,7 @@ export interface CwlEntry extends CwlSignupRow {
   memberTag: string | null; // tag del miembro resuelto (por member_tag o por discord)
   linked: boolean; // hay un miembro conocido (activo o no) asociado
   inClan: boolean; // ese miembro está activo en el clan ahora
+  leftAt: string | null; // fecha de salida del clan (last_seen_at) si ya no está
 }
 
 export interface CwlPartition {
@@ -130,7 +131,7 @@ export async function getSignups(season: string): Promise<CwlEntry[]> {
   const svc = createServerClient();
   const [{ data: signups }, { data: members }] = await Promise.all([
     svc.from("cwl_signups").select("*").eq("season", season).order("created_at", { ascending: true }),
-    svc.from("members").select("tag, name, town_hall, is_active, discord_id"),
+    svc.from("members").select("tag, name, town_hall, is_active, discord_id, last_seen_at"),
   ]);
   const byTag = new Map((members ?? []).map((m) => [m.tag as string, m]));
   const byDiscord = new Map(
@@ -139,13 +140,15 @@ export async function getSignups(season: string): Promise<CwlEntry[]> {
 
   return ((signups ?? []) as CwlSignupRow[]).map((s) => {
     const m = (s.member_tag && byTag.get(s.member_tag)) || (s.discord_id && byDiscord.get(s.discord_id)) || null;
+    const inClan = m ? Boolean(m.is_active) : false;
     return {
       ...s,
       name: (m?.name as string) || s.username || "jugador",
       townHall: (m?.town_hall as number | null) ?? null,
       memberTag: (m?.tag as string | null) ?? s.member_tag ?? null,
       linked: Boolean(m),
-      inClan: m ? Boolean(m.is_active) : false,
+      inClan,
+      leftAt: m && !inClan ? ((m.last_seen_at as string | null) ?? null) : null,
     };
   });
 }

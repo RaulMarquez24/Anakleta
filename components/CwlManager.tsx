@@ -19,6 +19,7 @@ export interface CwlEntryView {
   discordId: string | null;
   source: string;
   addedBy: string | null;
+  leftAt: string | null; // fecha de salida del clan (si ya no está)
 }
 export interface ClanMemberOpt {
   tag: string;
@@ -44,9 +45,18 @@ export interface CwlManagerProps {
   endsAt: string | null;
   inside: CwlEntryView[];
   queue: CwlEntryView[];
-  hiddenNames: string[];
+  left: CwlEntryView[]; // apuntados que ya no están en el clan (con fecha de salida)
   clanMembers: ClanMemberOpt[];
   discordMembers: DiscordMemberOpt[];
+}
+
+function fmtLeft(iso: string | null): string | null {
+  if (!iso) return null;
+  try {
+    return new Intl.DateTimeFormat("es", { day: "numeric", month: "short", year: "numeric" }).format(new Date(iso));
+  } catch {
+    return null;
+  }
 }
 
 function toLocalInput(iso: string | null): string {
@@ -216,16 +226,21 @@ export function CwlManager(props: CwlManagerProps) {
         </Section>
       )}
 
-      {/* Ocultos (ex-clan) */}
-      {props.hiddenNames.length > 0 && (
-        <details className="rounded-2xl border border-dashed border-line bg-surface/60 p-3 text-sm">
-          <summary className="cursor-pointer font-bold text-ink-soft">
-            {props.hiddenNames.length} apuntado(s) fuera del clan (ocultos)
-          </summary>
-          <p className="mt-2 text-xs text-ink-soft">
-            Siguen apuntados pero no cuentan ni se muestran mientras no estén en el clan: {props.hiddenNames.join(", ")}.
-          </p>
-        </details>
+      {/* Fuera del clan: apuntados que ya no están (con su fecha de salida).
+          Se ven, pero no cuentan para el corte. */}
+      {props.left.length > 0 && (
+        <Section title={`👋 Fuera del clan (${props.left.length})`} hint="Estaban apuntados; ya no están en el clan. No cuentan para las plazas.">
+          {props.left.map((e, i) => (
+            <EntryRow
+              key={e.id}
+              i={i + 1}
+              e={e}
+              editing={editing}
+              pending={pending}
+              onRemove={() => run(() => removeSignup(season, e.id))}
+            />
+          ))}
+        </Section>
       )}
 
       {total === 0 && !editing && (
@@ -252,17 +267,26 @@ function EntryRow({
   pending: boolean;
   onRemove: () => void;
 }) {
+  const leftOn = fmtLeft(e.leftAt);
   return (
     <div className="flex items-center gap-2.5 px-3.5 py-2.5">
-      <span className={`w-6 flex-none text-right text-sm font-extrabold tabular-nums ${queued ? "text-ink-soft" : "text-gold-deep"}`}>
+      <span className={`w-6 flex-none text-right text-sm font-extrabold tabular-nums ${queued ? "text-ink-soft" : leftOn ? "text-ink-soft" : "text-gold-deep"}`}>
         {i}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate font-bold text-ink">{e.name}</p>
+        <p className={`truncate font-bold ${leftOn ? "text-ink-soft line-through decoration-ink-soft/40" : "text-ink"}`}>
+          {e.name}
+        </p>
         <p className="text-[11px] text-ink-soft">
-          {e.townHall ? `TH${e.townHall}` : "sin TH"}
-          {!e.discordId && " · 🎮 sin Discord"}
-          {e.source === "app" && " · añadido a mano"}
+          {leftOn ? (
+            <span className="text-banner">Salió del clan el {leftOn}</span>
+          ) : (
+            <>
+              {e.townHall ? `TH${e.townHall}` : "sin TH"}
+              {!e.discordId && " · 🎮 sin Discord"}
+              {e.source === "app" && " · añadido a mano"}
+            </>
+          )}
         </p>
       </div>
       {editing && (
