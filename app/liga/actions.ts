@@ -15,17 +15,17 @@ function label(season: string): string {
   return `${MONTHS[Number(m[2]) - 1] ?? m[2]} ${m[1]}`;
 }
 
-// En una tabla monospace no todos los caracteres ocupan lo mismo: los emojis y
-// los caracteres asiáticos (CJK) miden ~2 columnas, mientras que las tildes
-// combinadas (p. ej. "e" + acento) miden 0. .length no lo refleja, así que hay
-// que alinear por ancho VISUAL, no por número de caracteres. Segmentamos por
-// grapheme para tratar cada emoji (incl. secuencias ZWJ) como una sola celda.
+// Los emojis y los caracteres asiáticos (CJK) NO ocupan un ancho fijo en la
+// tabla monospace de Discord, así que descuadran las columnas. Como el nombre
+// va a la izquierda y no hay forma exacta de medirlos, los eliminamos: dejamos
+// solo caracteres de ancho 1 (letras latinas, números y puntuación). Así
+// alinear por número de caracteres vuelve a ser exacto.
 const graphemeSeg = new Intl.Segmenter("es", { granularity: "grapheme" });
 
-function graphemeWidth(g: string): number {
-  if (/\p{Extended_Pictographic}/u.test(g) || /[\u{1F1E6}-\u{1F1FF}]/u.test(g)) return 2; // emoji/banderas
+function isWide(g: string): boolean {
+  if (/\p{Extended_Pictographic}/u.test(g) || /[\u{1F1E6}-\u{1F1FF}]/u.test(g)) return true; // emoji/banderas
   const cp = g.codePointAt(0) ?? 0;
-  const wide =
+  return (
     (cp >= 0x1100 && cp <= 0x115f) || // jamo hangul
     (cp >= 0x2e80 && cp <= 0xa4cf) || // CJK y radicales
     (cp >= 0xac00 && cp <= 0xd7a3) || // sílabas hangul
@@ -33,40 +33,33 @@ function graphemeWidth(g: string): number {
     (cp >= 0xfe30 && cp <= 0xfe4f) ||
     (cp >= 0xff00 && cp <= 0xff60) || // fullwidth
     (cp >= 0xffe0 && cp <= 0xffe6) ||
-    (cp >= 0x3000 && cp <= 0x303f); // signos CJK
-  return wide ? 2 : 1;
+    (cp >= 0x3000 && cp <= 0x303f) // signos CJK
+  );
 }
 
-function displayWidth(s: string): number {
-  let w = 0;
-  for (const { segment } of graphemeSeg.segment(s)) w += graphemeWidth(segment);
-  return w;
-}
-
-// Rellena/recorta por ancho visual hasta ocupar `width` columnas.
-function padVisual(s: string, width: number): string {
+// Normaliza tildes (NFC: "e"+acento -> "é", 1 solo carácter) y quita todo lo que
+// no mida 1 columna: emojis, banderas, CJK/fullwidth y marcas sueltas.
+function cleanName(s: string): string {
   let out = "";
-  let w = 0;
-  for (const { segment } of graphemeSeg.segment(s)) {
-    const gw = graphemeWidth(segment);
-    if (w + gw > width) break;
+  for (const { segment } of graphemeSeg.segment(s.normalize("NFC"))) {
+    if (isWide(segment) || /^\p{M}/u.test(segment)) continue;
     out += segment;
-    w += gw;
   }
-  return out + " ".repeat(Math.max(0, width - w));
+  return out.replace(/\s+/g, " ").trim();
 }
 
 // Construye el cuadro monospace (alineado) para el code block de Discord.
 function buildTable(sb: SeasonScoreboard): string[] {
   const rr = sb.rounds;
-  const names = sb.rows.map((r) => r.name.trim() || "jugador");
-  const nameW = Math.min(16, Math.max(8, ...names.map((n) => displayWidth(n))));
+  const names = sb.rows.map((r) => cleanName(r.name) || "jugador");
+  const nameW = Math.min(16, Math.max(8, ...names.map((n) => n.length)));
   const cellsH = rr.map((r) => `R${r}`.padStart(2)).join(" ");
   const head = `${"#".padStart(2)} ${"Jugador".padEnd(nameW)} ${cellsH} ${"Est".padStart(3)} ${"%".padStart(4)}`;
   const lines = [head, "─".repeat(head.length)];
   sb.rows.forEach((row, i) => {
     const idx = `${i + 1}`.padStart(2);
-    const name = padVisual(names[i], nameW);
+    const nm = names[i];
+    const name = (nm.length > nameW ? nm.slice(0, nameW) : nm).padEnd(nameW);
     const cells = rr
       .map((r) => (row.byRound[r] != null ? String(row.byRound[r]) : "·").padStart(2))
       .join(" ");
