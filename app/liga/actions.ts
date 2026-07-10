@@ -15,17 +15,22 @@ function label(season: string): string {
   return `${MONTHS[Number(m[2]) - 1] ?? m[2]} ${m[1]}`;
 }
 
-// Construye las líneas del cuadro (monospace) para el code block de Discord.
-function buildLines(sb: SeasonScoreboard): string[] {
+// Construye el cuadro monospace (alineado) para el code block de Discord.
+function buildTable(sb: SeasonScoreboard): string[] {
   const rr = sb.rounds;
-  const nameW = Math.min(20, Math.max(10, ...sb.rows.map((r) => r.name.length)));
-  const lines: string[] = [];
-  lines.push(`(${rr.map((r) => `R${r}`).join(" | ")} | ⭐ | %)`);
+  const nameW = Math.min(16, Math.max(8, ...sb.rows.map((r) => r.name.length)));
+  const cellsH = rr.map((r) => `R${r}`.padStart(2)).join(" ");
+  const head = `${"#".padStart(2)} ${"Jugador".padEnd(nameW)} ${cellsH} ${"Est".padStart(3)} ${"%".padStart(4)}`;
+  const lines = [head, "─".repeat(head.length)];
   sb.rows.forEach((row, i) => {
-    const cells = rr.map((r) => (row.byRound[r] != null ? String(row.byRound[r]) : " ")).join(" | ");
-    const idx = `${i + 1}`.padStart(2, " ");
-    const name = (row.name.length > nameW ? row.name.slice(0, nameW) : row.name).padEnd(nameW, " ");
-    lines.push(`${idx}. ${name} | ${cells} | ⭐${row.totalStars} ${Math.round(row.totalDestruction)}%`);
+    const idx = `${i + 1}`.padStart(2);
+    const name = (row.name.length > nameW ? row.name.slice(0, nameW) : row.name).padEnd(nameW);
+    const cells = rr
+      .map((r) => (row.byRound[r] != null ? String(row.byRound[r]) : "·").padStart(2))
+      .join(" ");
+    const tot = String(row.totalStars).padStart(3);
+    const pct = String(Math.round(row.totalDestruction)).padStart(4);
+    lines.push(`${idx} ${name} ${cells} ${tot} ${pct}`);
   });
   return lines;
 }
@@ -42,8 +47,10 @@ export async function sendSeasonSummary(
   const sb = await getSeasonScoreboard(season);
   if (sb.rows.length === 0) return { ok: false, error: "No hay datos guardados de esa temporada." };
 
-  const title = `Participantes CWL ${label(season)}`;
-  const lines = buildLines(sb);
+  const title = `**🏆 Participación CWL · ${label(season)}**`;
+  const totalStars = sb.rows.reduce((n, r) => n + r.totalStars, 0);
+  const footer = `⭐ **${totalStars}** estrellas del clan · **${sb.rows.length}** participantes`;
+  const lines = buildTable(sb);
 
   // Trocear en code blocks bajo el límite de Discord (~2000 chars).
   const chunks: string[] = [];
@@ -61,7 +68,9 @@ export async function sendSeasonSummary(
   if (buf.length) chunks.push(buf.join("\n"));
 
   for (let i = 0; i < chunks.length; i++) {
-    const content = (i === 0 ? `**🏆 ${title}**\n` : "") + "```\n" + chunks[i] + "\n```";
+    const first = i === 0 ? `${title}\n` : "";
+    const last = i === chunks.length - 1 ? `\n${footer}` : "";
+    const content = `${first}\`\`\`\n${chunks[i]}\n\`\`\`${last}`;
     const ok = await sendClanMessage(content, {}, channelId);
     if (!ok) return { ok: false, error: "No se pudo enviar a Discord (revisa el bot/canal)." };
   }
