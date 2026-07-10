@@ -66,6 +66,7 @@ export default async function WarPage() {
           }}
           members={war.members}
           clanName={clanName}
+          notify={war.state === "inWar"}
           inspect={
             war.opponentTag
               ? {

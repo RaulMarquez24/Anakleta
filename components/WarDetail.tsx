@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { fmtDate } from "@/components/WarBits";
+import { NotifyDiscordButton } from "@/components/NotifyDiscordButton";
 
 export interface UnifiedWarMember {
   tag: string;
@@ -46,11 +47,13 @@ export function WarDetail({
   members,
   clanName,
   inspect,
+  notify = false,
 }: {
   war: UnifiedWar;
   members: UnifiedWarMember[];
   clanName?: string | null;
   inspect?: { href: string; badgeUrl: string | null; name: string | null };
+  notify?: boolean; // muestra el botón "Avisar en Discord" (solo guerra en vivo)
 }) {
   const inWar = war.state === "inWar";
   const prep = war.state === "preparation";
@@ -143,6 +146,7 @@ export function WarDetail({
                 </li>
               ))}
             </ul>
+            {notify && inWar && <NotifyDiscordButton />}
           </div>
         ))}
 
