@@ -48,25 +48,54 @@ function cleanName(s: string): string {
   return out.replace(/\s+/g, " ").trim();
 }
 
-// Construye el cuadro monospace (alineado) para el code block de Discord.
-function buildTable(sb: SeasonScoreboard): string[] {
+// Estado de cada ronda para un miembro (celda de la tabla).
+const BENCH = "·"; // no estaba alineado ese día (no jugaba)
+const MISS = "✗"; // alineado pero NO atacó (falta)
+
+// Construye el contenido (líneas de texto) del resumen. Va todo dentro de un
+// code block ```md```, que Discord colorea (cabeceras, numeración, citas), así
+// no se ve monótono. El título y el resumen de estrellas van DENTRO del bloque.
+function buildLines(sb: SeasonScoreboard, title: string): string[] {
   const rr = sb.rounds;
-  const names = sb.rows.map((r) => cleanName(r.name) || "jugador");
-  const nameW = Math.min(16, Math.max(8, ...names.map((n) => n.length)));
-  const cellsH = rr.map((r) => `R${r}`.padStart(2)).join(" ");
-  const head = `${"#".padStart(2)} ${"Jugador".padEnd(nameW)} ${cellsH} ${"Est".padStart(3)} ${"%".padStart(4)}`;
-  const lines = [head, "─".repeat(head.length)];
-  sb.rows.forEach((row, i) => {
-    const idx = `${i + 1}`.padStart(2);
-    const nm = names[i];
-    const name = (nm.length > nameW ? nm.slice(0, nameW) : nm).padEnd(nameW);
-    const cells = rr
-      .map((r) => (row.byRound[r] != null ? String(row.byRound[r]) : "·").padStart(2))
-      .join(" ");
-    const tot = String(row.totalStars).padStart(3);
-    const pct = String(Math.round(row.totalDestruction)).padStart(4);
-    lines.push(`${idx} ${name} ${cells} ${tot} ${pct}`);
-  });
+  const ranked = sb.rows; // ya viene ordenado por estrellas desc, luego % desc
+  const played = ranked.filter((r) => r.attacksTotal > 0);
+  const idle = ranked.filter((r) => r.attacksTotal === 0); // no atacaron ni una vez
+
+  const nameByTag = new Map(ranked.map((r) => [r.tag, cleanName(r.name) || "jugador"]));
+  const nameW = Math.min(16, Math.max(8, ...[...nameByTag.values()].map((n) => n.length)));
+
+  const cell = (row: (typeof ranked)[number], r: number): string => {
+    const c = row.byRound[r];
+    if (!c) return BENCH; // sin fila esa ronda = no jugaba
+    if (!c.attacked) return MISS; // alineado y no atacó
+    return String(c.stars); // atacó (0-3 estrellas)
+  };
+
+  let n = 0;
+  const rowLine = (row: (typeof ranked)[number]): string => {
+    n++;
+    const idx = `${n}.`.padStart(3);
+    const name = (nameByTag.get(row.tag) ?? "jugador").padEnd(nameW);
+    const cells = rr.map((r) => cell(row, r)).join(" ");
+    const stars = String(row.totalStars).padStart(2);
+    const pct = String(Math.round(row.totalDestruction)).padStart(3);
+    return `${idx} ${name} | ${cells} | ⭐ ${stars} · ${pct}%`;
+  };
+
+  const totalStars = ranked.reduce((acc, r) => acc + r.totalStars, 0);
+  const lines: string[] = [];
+  lines.push(`## 🏆 ${title}`);
+  lines.push(`> Ronda 1-${rr.length}   ·   [0-3]=estrellas   ·   ${MISS}=no atacó   ·   ${BENCH}=no jugaba`);
+  lines.push("");
+  lines.push(`# Participantes (${played.length})`);
+  for (const row of played) lines.push(rowLine(row));
+  if (idle.length) {
+    lines.push("");
+    lines.push(`# Sin atacar (${idle.length})`);
+    for (const row of idle) lines.push(rowLine(row));
+  }
+  lines.push("");
+  lines.push(`# ⭐ ${totalStars} estrellas del clan · ${ranked.length} en alineación`);
   return lines;
 }
 
@@ -98,17 +127,14 @@ export async function sendSeasonSummary(
     /* si falla, sin sufijo */
   }
 
-  const title = `**🏆 Participación CWL · ${label(season)}${suffix}**`;
-  const totalStars = sb.rows.reduce((n, r) => n + r.totalStars, 0);
-  const footer = `⭐ **${totalStars}** estrellas del clan · **${sb.rows.length}** participantes`;
-  const lines = buildTable(sb);
+  const lines = buildLines(sb, `Participación CWL · ${label(season)}${suffix}`);
 
-  // Trocear en code blocks bajo el límite de Discord (~2000 chars).
+  // Trocear en code blocks ```md``` bajo el límite de Discord (~2000 chars).
   const chunks: string[] = [];
   let buf: string[] = [];
   let len = 0;
   for (const l of lines) {
-    if (len + l.length + 1 > 1700 && buf.length) {
+    if (len + l.length + 1 > 1850 && buf.length) {
       chunks.push(buf.join("\n"));
       buf = [];
       len = 0;
@@ -118,10 +144,8 @@ export async function sendSeasonSummary(
   }
   if (buf.length) chunks.push(buf.join("\n"));
 
-  for (let i = 0; i < chunks.length; i++) {
-    const first = i === 0 ? `${title}\n` : "";
-    const last = i === chunks.length - 1 ? `\n${footer}` : "";
-    const content = `${first}\`\`\`\n${chunks[i]}\n\`\`\`${last}`;
+  for (const chunk of chunks) {
+    const content = `\`\`\`md\n${chunk}\n\`\`\``;
     const ok = await sendClanMessage(content, {}, channelId);
     if (!ok) return { ok: false, error: "No se pudo enviar a Discord (revisa el bot/canal)." };
   }

@@ -129,12 +129,19 @@ async function getSeasonWarsImpl(season: string): Promise<WarSummary[]> {
 
 // Cuadro completo de una temporada de CWL: estrellas por ronda + totales, para
 // el resumen que se publica en Discord.
+export interface SeasonRoundCell {
+  stars: number;
+  attacked: boolean; // true si usó su ataque esa ronda (aunque fueran 0 estrellas)
+}
 export interface SeasonScoreRow {
   tag: string;
   name: string;
-  byRound: Record<number, number>; // estrellas por ronda (solo rondas alineado)
+  // Solo hay clave para las rondas en las que estuvo ALINEADO. Sin clave = no
+  // jugaba ese día; clave con attacked=false = alineado pero no atacó (falta).
+  byRound: Record<number, SeasonRoundCell>;
   totalStars: number;
   totalDestruction: number;
+  attacksTotal: number; // ataques usados en toda la temporada
 }
 export interface SeasonScoreboard {
   season: string;
@@ -166,7 +173,7 @@ async function getSeasonScoreboardImpl(season: string): Promise<SeasonScoreboard
 
   const { data: wm } = await supabase
     .from("war_members")
-    .select("war_id, tag, name, stars, destruction")
+    .select("war_id, tag, name, stars, destruction, attacks_used")
     .in("war_id", warIds)
     .limit(50000);
 
@@ -175,13 +182,22 @@ async function getSeasonScoreboardImpl(season: string): Promise<SeasonScoreboard
     const round = roundByWar.get(m.war_id as number) ?? 0;
     const tag = m.tag as string;
     if (!byTag.has(tag))
-      byTag.set(tag, { tag, name: m.name as string, byRound: {}, totalStars: 0, totalDestruction: 0 });
+      byTag.set(tag, {
+        tag,
+        name: m.name as string,
+        byRound: {},
+        totalStars: 0,
+        totalDestruction: 0,
+        attacksTotal: 0,
+      });
     const row = byTag.get(tag)!;
     if (m.name) row.name = m.name as string;
     const stars = (m.stars as number | null) ?? 0;
-    row.byRound[round] = stars;
+    const used = (m.attacks_used as number | null) ?? 0;
+    row.byRound[round] = { stars, attacked: used > 0 };
     row.totalStars += stars;
     row.totalDestruction += Number(m.destruction ?? 0);
+    row.attacksTotal += used;
   }
 
   const rows = [...byTag.values()].sort(
