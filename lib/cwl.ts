@@ -49,13 +49,16 @@ export interface CwlEntry extends CwlSignupRow {
   linked: boolean; // hay un miembro conocido (activo o no) asociado
   inClan: boolean; // ese miembro está activo en el clan ahora
   leftAt: string | null; // fecha de salida del clan (last_seen_at) si ya no está
+  isSecondary: boolean; // es una cuenta secundaria (member.main_tag != null)
 }
 
 export interface CwlPartition {
   cutoff: number;
-  inside: CwlEntry[];
-  queue: CwlEntry[];
-  hidden: CwlEntry[]; // ex-miembros: siguen apuntados pero ocultos
+  inside: CwlEntry[]; // principales con plaza
+  queue: CwlEntry[]; // principales sin plaza (si hay más que el corte)
+  secondaries: CwlEntry[]; // cuentas secundarias (apartado propio, menor prioridad)
+  secondaryCutoff: number; // cuántas secundarias entran (plazas que sobran de los principales)
+  hidden: CwlEntry[]; // ex-miembros: siguen apuntados pero ocultos (solo presente)
 }
 
 const MONTHS = [
@@ -131,7 +134,7 @@ export async function getSignups(season: string): Promise<CwlEntry[]> {
   const svc = createServerClient();
   const [{ data: signups }, { data: members }] = await Promise.all([
     svc.from("cwl_signups").select("*").eq("season", season).order("created_at", { ascending: true }),
-    svc.from("members").select("tag, name, town_hall, is_active, discord_id, last_seen_at"),
+    svc.from("members").select("tag, name, town_hall, is_active, discord_id, last_seen_at, main_tag"),
   ]);
   const byTag = new Map((members ?? []).map((m) => [m.tag as string, m]));
   const byDiscord = new Map(
@@ -149,6 +152,7 @@ export async function getSignups(season: string): Promise<CwlEntry[]> {
       linked: Boolean(m),
       inClan,
       leftAt: m && !inClan ? ((m.last_seen_at as string | null) ?? null) : null,
+      isSecondary: Boolean(m?.main_tag),
     };
   });
 }
@@ -166,8 +170,16 @@ export function partition(list: CwlList, entries: CwlEntry[]): CwlPartition {
   const present = isOpenForSelf(list);
   const hidden = present ? entries.filter((e) => e.linked && !e.inClan) : [];
   const visible = present ? entries.filter((e) => !(e.linked && !e.inClan)) : entries;
+
+  // Prioridad: los PRINCIPALES (del resto de gente) van primero; las secundarias
+  // solo entran con las plazas que sobren. Cada grupo mantiene su orden de inscripción.
+  const primaries = visible.filter((e) => !e.isSecondary);
+  const secondaries = visible.filter((e) => e.isSecondary);
   const cutoff = activeCutoff(list, visible.length);
-  return { cutoff, inside: visible.slice(0, cutoff), queue: visible.slice(cutoff), hidden };
+  const inside = primaries.slice(0, cutoff);
+  const queue = primaries.slice(cutoff);
+  const secondaryCutoff = Math.max(0, cutoff - inside.length);
+  return { cutoff, inside, queue, secondaries, secondaryCutoff, hidden };
 }
 
 // --- Render del mensaje fijo (debe coincidir con bot/cwl.js) ---
@@ -189,15 +201,23 @@ function entryLine(i: number, e: CwlEntry): string {
 
 export function renderListText(list: CwlList, part: CwlPartition): string {
   const state = list.state === "open" ? "🟢 Abierta" : "🔒 Cerrada";
+  const occupied = part.inside.length + Math.min(part.secondaries.length, part.secondaryCutoff);
   const lines: string[] = [];
   lines.push(`📋 **Inscritos CWL · ${seasonLabel(list.season)}**`);
-  lines.push(`${state} · ${part.inside.length}/${part.cutoff} plazas`);
+  lines.push(`${state} · ${occupied}/${part.cutoff} plazas`);
   const close = fmtDate(list.starts_at);
   if (list.state === "open" && close) lines.push(`⏳ Cierre de inscripción: ${close}`);
   lines.push("");
   lines.push(`**✅ Dentro (${part.inside.length})**`);
   if (part.inside.length) part.inside.forEach((e, i) => lines.push(entryLine(i + 1, e)));
   else lines.push("_nadie todavía — escribe «me apunto»_");
+  if (part.secondaries.length) {
+    lines.push("");
+    lines.push(`**➕ Secundarias (${part.secondaries.length})** _(entran si sobran plazas)_`);
+    part.secondaries.forEach((e, i) =>
+      lines.push(entryLine(i + 1, e) + (i < part.secondaryCutoff ? "" : "  ⏳ cola")),
+    );
+  }
   if (part.queue.length) {
     lines.push("");
     lines.push(`**⏳ En cola (${part.queue.length})** _(entran si se libera plaza)_`);

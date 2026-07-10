@@ -73,9 +73,16 @@ async function listReply() {
   return cwl.renderListText(list, part);
 }
 
-// Devuelve un aviso de cola si el usuario quedó fuera del corte, o null si dentro.
+// Aviso según dónde quedó el usuario (principal dentro/cola o secundaria).
 async function queueNote(list, discordId) {
   const part = cwl.partition(list, await cwl.getSignups(db, list.season));
+  if (part.inside.some((e) => e.discord_id === discordId)) return null; // principal con plaza
+  const s = part.secondaries.findIndex((e) => e.discord_id === discordId);
+  if (s >= 0) {
+    return s < part.secondaryCutoff
+      ? "➕ Apuntado como **secundaria** (con plaza; los principales tienen prioridad)."
+      : "➕ Apuntado como **secundaria**, en cola (entra si sobran plazas).";
+  }
   const q = part.queue.findIndex((e) => e.discord_id === discordId);
   if (q >= 0) return `⏳ Estás en **cola** (puesto ${q + 1}); entrarás si se libera una plaza.`;
   return null;

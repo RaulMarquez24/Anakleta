@@ -43,8 +43,10 @@ export interface CwlManagerProps {
   closeDate: string | null; // starts_at ISO
   opensAt: string | null;
   endsAt: string | null;
-  inside: CwlEntryView[];
-  queue: CwlEntryView[];
+  inside: CwlEntryView[]; // principales con plaza
+  queue: CwlEntryView[]; // principales en cola (si sobran del corte)
+  secondaries: CwlEntryView[]; // cuentas secundarias (apartado propio)
+  secondaryCutoff: number; // cuántas secundarias tienen plaza
   left: CwlEntryView[]; // apuntados que ya no están en el clan (con fecha de salida)
   clanMembers: ClanMemberOpt[];
   discordMembers: DiscordMemberOpt[];
@@ -89,7 +91,9 @@ export function CwlManager(props: CwlManagerProps) {
   }
 
   const isOpen = props.state === "open";
-  const total = props.inside.length + props.queue.length;
+  const secIn = Math.min(props.secondaries.length, props.secondaryCutoff);
+  const occupied = props.inside.length + secIn;
+  const total = props.inside.length + props.queue.length + props.secondaries.length;
 
   return (
     <div className="space-y-3">
@@ -101,7 +105,8 @@ export function CwlManager(props: CwlManagerProps) {
         <div className="min-w-0 flex-1">
           <p className="font-extrabold text-ink">Inscripción</p>
           <p className="text-xs text-ink-soft">
-            {props.inside.length}/{props.cutoff} dentro
+            {occupied}/{props.cutoff} plazas
+            {props.secondaries.length > 0 && ` · ${props.secondaries.length} secundaria(s)`}
             {props.queue.length > 0 && ` · ${props.queue.length} en cola`}
           </p>
         </div>
@@ -209,7 +214,28 @@ export function CwlManager(props: CwlManagerProps) {
         )}
       </Section>
 
-      {/* Cola */}
+      {/* Secundarias (apartado propio): entran solo si sobran plazas tras los
+          principales del resto de gente. */}
+      {props.secondaries.length > 0 && (
+        <Section
+          title={`➕ Secundarias (${props.secondaries.length})`}
+          hint="Menor prioridad: entran con las plazas que sobren de los principales."
+        >
+          {props.secondaries.map((e, i) => (
+            <EntryRow
+              key={e.id}
+              i={i + 1}
+              e={e}
+              queued={i >= props.secondaryCutoff}
+              editing={editing}
+              pending={pending}
+              onRemove={() => run(() => removeSignup(season, e.id))}
+            />
+          ))}
+        </Section>
+      )}
+
+      {/* Cola (principales de más, si hubiera) */}
       {props.queue.length > 0 && (
         <Section title={`⏳ En cola (${props.queue.length})`} hint="Entran si se libera una plaza.">
           {props.queue.map((e, i) => (

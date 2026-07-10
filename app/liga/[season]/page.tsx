@@ -59,12 +59,16 @@ export default async function LigaPage({
   // Partición de la inscripción (si existe la lista de esta liga).
   let inside: CwlEntryView[] = [];
   let queue: CwlEntryView[] = [];
+  let secondaries: CwlEntryView[] = [];
+  let secondaryCutoff = 0;
   let left: CwlEntryView[] = [];
   let cutoff: number | null = null;
   if (list) {
     const part = partition(list, await getSignups(decoded));
     inside = part.inside.map(toView);
     queue = part.queue.map(toView);
+    secondaries = part.secondaries.map(toView);
+    secondaryCutoff = part.secondaryCutoff;
     left = part.hidden.map(toView);
     cutoff = part.cutoff;
   }
@@ -187,6 +191,8 @@ export default async function LigaPage({
         endsAt={list?.ends_at ?? null}
         inside={inside}
         queue={queue}
+        secondaries={secondaries}
+        secondaryCutoff={secondaryCutoff}
         left={left}
         clanMembers={clanMembers}
         discordMembers={discordMembers}

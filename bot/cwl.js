@@ -106,7 +106,7 @@ export function isOpenForSelf(list) {
 export async function getSignups(db, season) {
   const [{ data: signups }, { data: members }] = await Promise.all([
     db.from("cwl_signups").select("*").eq("season", season).order("created_at", { ascending: true }),
-    db.from("members").select("tag, name, town_hall, is_active, discord_id"),
+    db.from("members").select("tag, name, town_hall, is_active, discord_id, main_tag"),
   ]);
   const byTag = new Map((members ?? []).map((m) => [m.tag, m]));
   const byDiscord = new Map((members ?? []).filter((m) => m.discord_id).map((m) => [m.discord_id, m]));
@@ -119,6 +119,7 @@ export async function getSignups(db, season) {
       townHall: m?.town_hall ?? null,
       linked: Boolean(m),
       inClan: m ? Boolean(m.is_active) : false,
+      isSecondary: Boolean(m?.main_tag),
     };
   });
 }
@@ -134,8 +135,15 @@ export function partition(list, entries) {
   const present = isOpenForSelf(list);
   const hidden = present ? entries.filter((e) => e.linked && !e.inClan) : [];
   const visible = present ? entries.filter((e) => !(e.linked && !e.inClan)) : entries;
+
+  // Principales primero (prioridad del resto de gente); secundarias con lo que sobre.
+  const primaries = visible.filter((e) => !e.isSecondary);
+  const secondaries = visible.filter((e) => e.isSecondary);
   const cutoff = activeCutoff(list, visible.length);
-  return { cutoff, inside: visible.slice(0, cutoff), queue: visible.slice(cutoff), hidden };
+  const inside = primaries.slice(0, cutoff);
+  const queue = primaries.slice(cutoff);
+  const secondaryCutoff = Math.max(0, cutoff - inside.length);
+  return { cutoff, inside, queue, secondaries, secondaryCutoff, hidden };
 }
 
 // --- Render (debe coincidir con lib/cwl.ts) ---
@@ -157,15 +165,23 @@ function entryLine(i, e) {
 
 export function renderListText(list, part) {
   const state = list.state === "open" ? "🟢 Abierta" : "🔒 Cerrada";
+  const occupied = part.inside.length + Math.min(part.secondaries.length, part.secondaryCutoff);
   const lines = [];
   lines.push(`📋 **Inscritos CWL · ${seasonLabel(list.season)}**`);
-  lines.push(`${state} · ${part.inside.length}/${part.cutoff} plazas`);
+  lines.push(`${state} · ${occupied}/${part.cutoff} plazas`);
   const close = fmtDate(list.starts_at);
   if (list.state === "open" && close) lines.push(`⏳ Cierre de inscripción: ${close}`);
   lines.push("");
   lines.push(`**✅ Dentro (${part.inside.length})**`);
   if (part.inside.length) part.inside.forEach((e, i) => lines.push(entryLine(i + 1, e)));
   else lines.push("_nadie todavía — escribe «me apunto»_");
+  if (part.secondaries.length) {
+    lines.push("");
+    lines.push(`**➕ Secundarias (${part.secondaries.length})** _(entran si sobran plazas)_`);
+    part.secondaries.forEach((e, i) =>
+      lines.push(entryLine(i + 1, e) + (i < part.secondaryCutoff ? "" : "  ⏳ cola")),
+    );
+  }
   if (part.queue.length) {
     lines.push("");
     lines.push(`**⏳ En cola (${part.queue.length})** _(entran si se libera plaza)_`);
