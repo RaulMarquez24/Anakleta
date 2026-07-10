@@ -1,4 +1,4 @@
-"use server";
+﻿"use server";
 
 import { getSeasonScoreboard, getCwlSeasons, type SeasonScoreboard } from "@/lib/war-history";
 import { sendClanMessage, discordConfigured } from "@/lib/discord";
@@ -15,16 +15,30 @@ function label(season: string): string {
   return `${MONTHS[Number(m[2]) - 1] ?? m[2]} ${m[1]}`;
 }
 
+// Los emojis descuadran la tabla: en monospace miden ~2 columnas (y los
+// compuestos con ZWJ aún más), pero .length no lo refleja. Los quitamos para
+// alinear por texto plano; su ancho real además varía según la plataforma.
+function cleanName(s: string): string {
+  return s
+    .replace(/\p{Extended_Pictographic}/gu, "") // emojis
+    .replace(/[\u{1F1E6}-\u{1F1FF}]/gu, "") // banderas (indicadores regionales)
+    .replace(/[︀-️‍⃣]/gu, "") // selectores de variacion, ZWJ, keycap
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // Construye el cuadro monospace (alineado) para el code block de Discord.
 function buildTable(sb: SeasonScoreboard): string[] {
   const rr = sb.rounds;
-  const nameW = Math.min(16, Math.max(8, ...sb.rows.map((r) => r.name.length)));
+  const names = sb.rows.map((r) => cleanName(r.name) || "jugador");
+  const nameW = Math.min(16, Math.max(8, ...names.map((n) => n.length)));
   const cellsH = rr.map((r) => `R${r}`.padStart(2)).join(" ");
   const head = `${"#".padStart(2)} ${"Jugador".padEnd(nameW)} ${cellsH} ${"Est".padStart(3)} ${"%".padStart(4)}`;
   const lines = [head, "─".repeat(head.length)];
   sb.rows.forEach((row, i) => {
     const idx = `${i + 1}`.padStart(2);
-    const name = (row.name.length > nameW ? row.name.slice(0, nameW) : row.name).padEnd(nameW);
+    const nm = names[i];
+    const name = (nm.length > nameW ? nm.slice(0, nameW) : nm).padEnd(nameW);
     const cells = rr
       .map((r) => (row.byRound[r] != null ? String(row.byRound[r]) : "·").padStart(2))
       .join(" ");
