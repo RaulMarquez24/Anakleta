@@ -48,27 +48,61 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Modo: "light" = solo la lista del clan (1 llamada, sin enriquecer ni guerra),
+  // para refrescar miembros/bajas/donaciones al momento. "full" = todo.
+  const mode = new URL(req.url).searchParams.get("mode") === "light" ? "light" : "full";
+
   try {
-    const clan = await getClan<CocClan>();
     const supabase = createServerClient();
+
+    // Cooldown de 5 min SOLO en la captura completa lanzada por un usuario (el
+    // cron nunca se bloquea). Evita spam de las ~38 llamadas de enriquecimiento.
+    if (mode === "full" && !isCron) {
+      const { data: last } = await supabase
+        .from("member_snapshots")
+        .select("captured_at")
+        .order("captured_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const lastAt = last?.captured_at as string | undefined;
+      if (lastAt) {
+        const ageMs = Date.now() - new Date(lastAt).getTime();
+        const COOLDOWN = 5 * 60_000;
+        if (ageMs < COOLDOWN) {
+          const wait = Math.ceil((COOLDOWN - ageMs) / 60_000);
+          return NextResponse.json(
+            {
+              cooldown: true,
+              message: `Ya hubo una captura completa hace poco. Espera ~${wait} min (o usa el refresco rápido).`,
+              last_captured_at: lastAt,
+            },
+            { status: 429 },
+          );
+        }
+      }
+    }
+
+    const clan = await getClan<CocClan>();
     const capturedAt = new Date().toISOString();
 
-    // Enriquecimiento: datos por jugador (/players). Resiliente: si uno falla,
-    // sus campos quedan a null y NO se cae la captura entera.
+    // Enriquecimiento (datos por jugador, /players): SOLO en modo completo.
+    // Resiliente: si uno falla, sus campos quedan a null.
     let enrichedOk = 0;
-    const players = await mapPool(clan.memberList, 6, async (m) => {
-      try {
-        const p = await getPlayer<CocPlayer>(m.tag);
-        enrichedOk++;
-        return p;
-      } catch {
-        return null;
-      }
-    });
     const playerByTag = new Map<string, CocPlayer>();
-    players.forEach((p, i) => {
-      if (p) playerByTag.set(clan.memberList[i].tag, p);
-    });
+    if (mode === "full") {
+      const players = await mapPool(clan.memberList, 6, async (m) => {
+        try {
+          const p = await getPlayer<CocPlayer>(m.tag);
+          enrichedOk++;
+          return p;
+        } catch {
+          return null;
+        }
+      });
+      players.forEach((p, i) => {
+        if (p) playerByTag.set(clan.memberList[i].tag, p);
+      });
+    }
 
     // Metadata del clan.
     const { error: clanErr } = await supabase.from("clans").upsert(
@@ -157,17 +191,20 @@ export async function POST(req: NextRequest) {
       .insert(snapshotRows);
     if (snapErr) throw snapErr;
 
-    // Grabación de la guerra actual / CWL (para el histórico de participación).
-    // Resiliente: si falla (p.ej. war log privado), no tumba la captura.
-    let war: WarCaptureResult | { error: string };
-    try {
-      war = await captureWar(supabase, capturedAt);
-    } catch (e) {
-      war = { error: String(e) };
+    // Grabación de la guerra actual / CWL: SOLO en modo completo (el refresco
+    // rápido no toca la guerra). Resiliente: si falla, no tumba la captura.
+    let war: WarCaptureResult | { error: string } | null = null;
+    if (mode === "full") {
+      try {
+        war = await captureWar(supabase, capturedAt);
+      } catch (e) {
+        war = { error: String(e) };
+      }
     }
 
     return NextResponse.json({
       ok: true,
+      mode,
       captured_at: capturedAt,
       clan: clan.name,
       members_captured: clan.memberList.length,
