@@ -234,13 +234,15 @@ export async function removeRole(db, discordId) {
 // --- Altas / bajas / consulta (temporada activa) ---
 
 export async function isSignedUp(db, season, discordId) {
+  // limit(1) en vez de maybeSingle(): un mismo Discord puede tener varias filas
+  // (principal + secundarias) y maybeSingle() falla si hay más de una.
   const { data } = await db
     .from("cwl_signups")
     .select("id")
     .eq("season", season)
     .eq("discord_id", discordId)
-    .maybeSingle();
-  return Boolean(data);
+    .limit(1);
+  return Boolean(data && data.length);
 }
 
 export async function addSignup(db, season, { discordId, username, memberTag = null }) {
