@@ -18,7 +18,7 @@ import { classifyIntent } from "./match.js";
 
 // Súbelo cuando cambies algo. En `fly logs` verás esta línea al arrancar: si NO
 // cambia tras un deploy, es que el deploy no ha subido el código nuevo.
-const BOT_VERSION = "v3 slash+already-signed";
+const BOT_VERSION = "v4 unsignup-not-signed";
 
 const {
   DISCORD_BOT_TOKEN,
@@ -220,6 +220,10 @@ client.on(Events.MessageCreate, async (msg) => {
     }
 
     if (intent === "unsignup") {
+      if (!(await isSignedUp(id))) {
+        await msg.reply("ℹ️ No estabas apuntado a la CWL. Si quieres entrar, escribe «me apunto».");
+        return;
+      }
       await signOut(id);
       await msg.react("👋").catch(() => {});
       return;
