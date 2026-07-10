@@ -149,4 +149,65 @@ export async function sendClanMessage(
   }
 }
 
+// Publica un mensaje "plano" (sin etiquetar a nadie) y devuelve su id, o null.
+// Se usa para el mensaje fijo de la lista de CWL, que luego se edita.
+export async function postChannelMessage(
+  channelId: string,
+  content: string,
+): Promise<string | null> {
+  if (!TOKEN || !channelId) return null;
+  try {
+    const res = await fetch(`${API}/channels/${channelId}/messages`, {
+      method: "POST",
+      headers: { Authorization: `Bot ${TOKEN}`, "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({ content, allowed_mentions: { parse: [] } }),
+    });
+    if (!res.ok) return null;
+    const msg = (await res.json()) as { id?: string };
+    return msg.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// Edita un mensaje existente. Devuelve false si ya no existe (p. ej. lo borraron).
+export async function editChannelMessage(
+  channelId: string,
+  messageId: string,
+  content: string,
+): Promise<boolean> {
+  if (!TOKEN || !channelId || !messageId) return false;
+  try {
+    const res = await fetch(`${API}/channels/${channelId}/messages/${messageId}`, {
+      method: "PATCH",
+      headers: { Authorization: `Bot ${TOKEN}`, "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({ content, allowed_mentions: { parse: [] } }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// Asigna / retira un rol del servidor a un usuario (necesita permiso Manage Roles
+// y que el rol del bot esté por encima del rol en la jerarquía).
+async function roleOp(method: "PUT" | "DELETE", userId: string, roleId: string): Promise<boolean> {
+  if (!TOKEN || !GUILD || !userId || !roleId) return false;
+  try {
+    const res = await fetch(`${API}/guilds/${GUILD}/members/${userId}/roles/${roleId}`, {
+      method,
+      headers: { Authorization: `Bot ${TOKEN}` },
+      cache: "no-store",
+    });
+    return res.ok; // 204 al éxito
+  } catch {
+    return false;
+  }
+}
+
+export const addGuildRole = (userId: string, roleId: string) => roleOp("PUT", userId, roleId);
+export const removeGuildRole = (userId: string, roleId: string) => roleOp("DELETE", userId, roleId);
+
 export const discordConfigured = Boolean(TOKEN && GUILD);

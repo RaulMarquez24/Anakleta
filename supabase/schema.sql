@@ -152,12 +152,40 @@ create table if not exists settings (
   value text
 );
 
--- Inscripciones a la CWL (las escribe el bot de Discord; las lee la app).
-create table if not exists cwl_signups (
-  discord_id text primary key,
-  username   text,
-  created_at timestamptz default now()
+-- Inscripciones a la CWL, atadas a cada temporada (ver supabase/cwl.sql para el
+-- detalle y la config sembrada en settings). Las escriben el bot y la app.
+create table if not exists cwl_lists (
+  season         text primary key,
+  state          text not null default 'open',
+  size           int,
+  opens_at       timestamptz,
+  starts_at      timestamptz,
+  ends_at        timestamptz,
+  channel_id     text,
+  message_id     text,
+  announced_open boolean not null default false,
+  announced_mid  boolean not null default false,
+  announced_last boolean not null default false,
+  roles_cleared  boolean not null default false,
+  created_at     timestamptz not null default now(),
+  created_by     text
 );
+create table if not exists cwl_signups (
+  id          bigint generated always as identity primary key,
+  season      text not null references cwl_lists(season) on delete cascade,
+  discord_id  text,
+  username    text,
+  member_tag  text,
+  source      text not null default 'discord',
+  added_by    text,
+  created_at  timestamptz not null default now()
+);
+create unique index if not exists cwl_signups_season_discord_idx
+  on cwl_signups (season, discord_id) where discord_id is not null;
+create unique index if not exists cwl_signups_season_member_idx
+  on cwl_signups (season, member_tag) where member_tag is not null;
+create index if not exists cwl_signups_season_order_idx
+  on cwl_signups (season, created_at);
 
 -- Privilegios: con "expose new tables" desactivado, las tablas nuevas no reciben
 -- GRANTs automáticos. Concedemos acceso SOLO a service_role (el rol del servidor,

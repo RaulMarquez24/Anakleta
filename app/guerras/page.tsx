@@ -110,13 +110,26 @@ export default async function GuerrasPage({
       </div>
 
       {tab === "ligas" ? (
-        seasons.length === 0 ? (
-          <Empty>
-            Aún no hay ligas registradas. Se guardan solas durante la semana de CWL.
-          </Empty>
-        ) : (
-          <div className="space-y-2">
-            {seasons.map((s) => (
+        <div className="space-y-2">
+          {/* Inscripciones de la CWL (lista activa + gestión) */}
+          <Link
+            href="/liga/inscripciones"
+            className="flex items-center gap-3 rounded-2xl border-2 border-gold/40 bg-gold/10 p-3.5 transition hover:bg-gold/15"
+          >
+            <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-gold/25 text-lg">
+              📋
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-extrabold text-ink">Inscripciones CWL</p>
+              <p className="text-xs text-ink-soft">Quién está apuntado a la liga · apuntar/quitar</p>
+            </div>
+            <span aria-hidden className="text-ink-soft">›</span>
+          </Link>
+
+          {seasons.length === 0 ? (
+            <Empty>Aún no hay ligas registradas. Se guardan solas durante la semana de CWL.</Empty>
+          ) : (
+            seasons.map((s) => (
               <Link
                 key={s.season}
                 href={`/liga/${encodeURIComponent(s.season)}`}
@@ -137,9 +150,9 @@ export default async function GuerrasPage({
                 </span>
                 <span aria-hidden className="text-ink-soft">›</span>
               </Link>
-            ))}
-          </div>
-        )
+            ))
+          )}
+        </div>
       ) : wars.length === 0 ? (
         <Empty>
           Aún no hay guerras normales registradas. Se guardan solas cuando el clan entra en guerra

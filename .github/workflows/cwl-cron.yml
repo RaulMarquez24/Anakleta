@@ -1,0 +1,22 @@
+name: CWL (inscripciones y avisos)
+
+# Una vez al día hace POST a /api/cwl-cron. El endpoint reconcilia el estado:
+# crea la lista ~1 semana antes, avisa (apertura / media semana / último día)
+# etiquetando al clan, cierra la inscripción individual al arrancar la liga y
+# retira el rol CWL al terminar. Es idempotente (dedupe por flags en cwl_lists).
+on:
+  schedule:
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+jobs:
+  cwl:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST /api/cwl-cron
+        run: |
+          curl --fail-with-body -sS -X POST \
+            "https://anakleta.vercel.app/api/cwl-cron" \
+            -H "Authorization: Bearer $CRON_SECRET"
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
