@@ -183,6 +183,7 @@ export default async function LigaPage({
         season={decoded}
         exists={Boolean(list)}
         ended={ended}
+        canDelete={!started}
         state={list?.state ?? null}
         size={list?.size ?? null}
         cutoff={cutoff}

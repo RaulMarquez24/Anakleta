@@ -5,10 +5,12 @@ import { createServerClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import {
   getCwlConfig,
+  getList,
   refreshLiveList,
   assignCwlRole,
   removeCwlRole,
 } from "@/lib/cwl";
+import { deleteChannelMessage } from "@/lib/discord";
 
 type Result = { ok: boolean; error?: string };
 
@@ -136,6 +138,22 @@ export async function addSignupDiscord(
   if (error) return { ok: false, error: error.message };
   await assignCwlRole(discordId);
   await refreshLiveList(season);
+  bump(season);
+  return { ok: true };
+}
+
+// Elimina la inscripción/liga entera (cwl_lists + sus inscritos en cascada) y
+// borra el mensaje fijo de Discord. Solo para ligas sin empezar (lo controla la UI).
+export async function deleteList(season: string): Promise<Result> {
+  const email = await gate();
+  if (!email) return { ok: false, error: "No autorizado." };
+  const svc = createServerClient();
+  const list = await getList(season);
+  if (list?.channel_id && list?.message_id) {
+    await deleteChannelMessage(list.channel_id, list.message_id).catch(() => {});
+  }
+  const { error } = await svc.from("cwl_lists").delete().eq("season", season);
+  if (error) return { ok: false, error: error.message };
   bump(season);
   return { ok: true };
 }

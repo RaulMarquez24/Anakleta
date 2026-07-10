@@ -191,6 +191,21 @@ export async function editChannelMessage(
   }
 }
 
+// Borra un mensaje (p. ej. el mensaje fijo de la lista al eliminar la liga).
+export async function deleteChannelMessage(channelId: string, messageId: string): Promise<boolean> {
+  if (!TOKEN || !channelId || !messageId) return false;
+  try {
+    const res = await fetch(`${API}/channels/${channelId}/messages/${messageId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bot ${TOKEN}` },
+      cache: "no-store",
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 // Asigna / retira un rol del servidor a un usuario (necesita permiso Manage Roles
 // y que el rol del bot esté por encima del rol en la jerarquía).
 async function roleOp(method: "PUT" | "DELETE", userId: string, roleId: string): Promise<boolean> {

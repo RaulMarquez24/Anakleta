@@ -10,6 +10,7 @@ import {
   addSignupMember,
   addSignupDiscord,
   removeSignup,
+  deleteList,
 } from "@/app/liga/inscripciones/actions";
 
 export interface CwlEntryView {
@@ -37,6 +38,7 @@ export interface CwlManagerProps {
   season: string; // temporada de esta liga (la página)
   exists: boolean; // ¿hay ya inscripción (cwl_lists) para esta liga?
   ended: boolean; // ¿la liga ya terminó? (no se puede reabrir la inscripción)
+  canDelete: boolean; // ¿se puede eliminar? (liga sin empezar, sin rondas)
   state: "open" | "closed" | null;
   size: number | null;
   cutoff: number | null;
@@ -84,6 +86,16 @@ export function CwlManager(props: CwlManagerProps) {
   }
 
   const season = props.season;
+
+  function del() {
+    if (!confirm("¿Eliminar la inscripción de esta liga? Se borrará la lista y sus apuntados. No se puede deshacer.")) return;
+    setErr(null);
+    start(async () => {
+      const r = await deleteList(season);
+      if (!r.ok) setErr(r.error ?? "No se pudo eliminar.");
+      else router.push("/guerras?tab=ligas");
+    });
+  }
 
   // ---- Sin inscripción todavía para esta liga ----
   if (!props.exists || props.state === null) {
@@ -193,6 +205,22 @@ export function CwlManager(props: CwlManagerProps) {
               onSave={(d) => run(() => setDates(season, d))}
             />
           </details>
+
+          {/* Eliminar la liga (solo si no ha empezado: sin rondas jugadas) */}
+          {props.canDelete && (
+            <div className="border-t border-gold/30 pt-3">
+              <button
+                onClick={del}
+                disabled={pending}
+                className="rounded-full border border-banner/40 bg-banner/10 px-3.5 py-1.5 text-sm font-extrabold text-banner transition hover:bg-banner/20 disabled:opacity-50"
+              >
+                🗑️ Eliminar esta liga
+              </button>
+              <p className="mt-1 text-[11px] text-ink-soft">
+                Borra la inscripción y sus apuntados. Solo disponible antes de que empiece la liga.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
