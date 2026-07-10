@@ -56,6 +56,8 @@ export interface MemberOverviewRow {
   capitalContributions: number | null;
   firstSeenAt: string | null; // alta (primera vez que apareció el tag)
   isNew: boolean; // entró de verdad hace poco (no en el arranque del tracking)
+  mainTag: string | null; // si es cuenta secundaria: tag de su cuenta principal
+  mainName: string | null; // nombre de la principal (para el badge)
 }
 
 export interface DashboardData {
@@ -166,11 +168,15 @@ async function getMembersOverviewImpl(): Promise<DashboardData> {
     else if (s.captured_at === previous) prevByTag.set(s.member_tag, s);
   }
 
-  // Miembros activos (siguen en el clan).
+  // Miembros activos (siguen en el clan). select("*") por resiliencia (main_tag
+  // puede no estar migrada aún).
   const { data: members } = await supabase
     .from("members")
-    .select("tag, name, role, town_hall, is_active, first_seen_at")
+    .select("*")
     .eq("is_active", true);
+  const nameByTag = new Map<string, string>(
+    (members ?? []).map((m) => [m.tag as string, m.name as string]),
+  );
 
   // Línea base del tracking: el alta más antigua. Todo lo que entró en el
   // arranque comparte esa fecha, así que solo es "nuevo" quien entró bastante
@@ -223,6 +229,8 @@ async function getMembersOverviewImpl(): Promise<DashboardData> {
         const fs = m.first_seen_at ? new Date(m.first_seen_at as string).getTime() : null;
         return fs != null && now - fs < NEW_MS && fs - baseline > MARGIN_MS;
       })(),
+      mainTag: (m.main_tag as string | null) ?? null,
+      mainName: m.main_tag ? (nameByTag.get(m.main_tag as string) ?? null) : null,
     };
   });
 

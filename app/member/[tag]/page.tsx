@@ -3,12 +3,14 @@ import { notFound } from "next/navigation";
 import { getMemberHistory, getActivityReport, type ActivityRow } from "@/lib/history";
 import { getMemberWarLog } from "@/lib/war-history";
 import { getMyPlayerTag } from "@/lib/profile";
+import { getAccountLinks, accountGroup } from "@/lib/accounts";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { AppShell } from "@/components/AppShell";
 import { LineChart, type ChartPoint } from "@/components/LineChart";
 import { ThImage } from "@/components/ThImage";
 import { CopyTag } from "@/components/CopyTag";
 import { MemberNote } from "@/components/MemberNote";
+import { AccountLinker } from "@/components/AccountLinker";
 import { seasonLabel } from "@/components/WarBits";
 
 export const dynamic = "force-dynamic";
@@ -66,13 +68,16 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
 
   const { tag } = await params;
   const decoded = decodeURIComponent(tag);
-  const [history, report, warLog, myTag] = await Promise.all([
+  const [history, report, warLog, myTag, accountLinks] = await Promise.all([
     getMemberHistory(decoded),
     getActivityReport("todo").catch(() => null),
     getMemberWarLog(decoded),
     getMyPlayerTag(),
+    getAccountLinks(),
   ]);
   if (!history) notFound();
+  const { members: accGroup } = accountGroup(accountLinks, decoded);
+  const accCandidates = accountLinks.filter((l) => l.tag !== decoded);
   const isMe = myTag != null && myTag === decoded;
 
   const row = report?.members.find((m) => m.tag === decoded) ?? null;
@@ -257,6 +262,19 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
           initialNote={history.note}
           initialBy={history.noteBy}
           initialAt={history.noteAt}
+        />
+      </div>
+
+      {/* Cuentas de la persona (principal / secundarias) */}
+      <div className="mb-5 rounded-2xl border border-line bg-surface p-4">
+        <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">
+          Cuentas del jugador
+        </p>
+        <AccountLinker
+          tag={history.tag}
+          mainTag={history.mainTag}
+          group={accGroup}
+          candidates={accCandidates}
         />
       </div>
 

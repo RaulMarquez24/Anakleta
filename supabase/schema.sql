@@ -52,6 +52,8 @@ create table if not exists members (
 alter table members add column if not exists note    text;
 alter table members add column if not exists note_by text;
 alter table members add column if not exists note_at timestamptz;
+-- Cuenta principal (para vincular cuentas secundarias/alts a la misma persona).
+alter table members add column if not exists main_tag text;
 
 -- Serie temporal: una fila por miembro y captura. El corazón de la app.
 create table if not exists member_snapshots (

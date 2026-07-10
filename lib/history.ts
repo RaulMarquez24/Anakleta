@@ -15,6 +15,7 @@ export interface MemberHistory {
   note: string | null; // comentario manual
   noteBy: string | null;
   noteAt: string | null;
+  mainTag: string | null; // si es secundaria: tag de su cuenta principal
   // Valores más recientes (última captura):
   current: {
     leagueTierName: string | null;
@@ -73,6 +74,7 @@ async function getMemberHistoryImpl(tag: string): Promise<MemberHistory | null> 
     note: (member.note as string | null) ?? null,
     noteBy: (member.note_by as string | null) ?? null,
     noteAt: (member.note_at as string | null) ?? null,
+    mainTag: (member.main_tag as string | null) ?? null,
     current: {
       leagueTierName: (last?.league_tier_name as string | null) ?? null,
       leagueTierIcon: (last?.league_tier_icon as string | null) ?? null,

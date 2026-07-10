@@ -33,3 +33,40 @@ export async function setMemberNote(tag: string, note: string): Promise<NoteResu
 
   return { ok: true, by, at };
 }
+
+// Marca `secondaryTag` como cuenta secundaria de `primaryTag` (misma persona).
+// Aplana el grupo: si el elegido ya es secundario, usa su raíz; y las secundarias
+// que colgaban de secondaryTag se re-cuelgan de la raíz.
+export async function linkAccounts(
+  secondaryTag: string,
+  primaryTag: string,
+): Promise<{ ok: boolean }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false };
+  if (!secondaryTag || !primaryTag || secondaryTag === primaryTag) return { ok: false };
+
+  const svc = createServerClient();
+  const { data: prim } = await svc
+    .from("members")
+    .select("main_tag")
+    .eq("tag", primaryTag)
+    .maybeSingle();
+  let root = ((prim?.main_tag as string | null) ?? null) || primaryTag;
+  if (root === secondaryTag) root = primaryTag; // evita ciclo directo
+
+  const { error } = await svc.from("members").update({ main_tag: root }).eq("tag", secondaryTag);
+  if (error) return { ok: false };
+  // Re-colgar las que apuntaban a la secundaria bajo la nueva raíz, y asegurar
+  // que la raíz no queda como secundaria de nadie.
+  await svc.from("members").update({ main_tag: root }).eq("main_tag", secondaryTag);
+  await svc.from("members").update({ main_tag: null }).eq("tag", root);
+  return { ok: true };
+}
+
+export async function unlinkAccount(tag: string): Promise<{ ok: boolean }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false };
+  const svc = createServerClient();
+  const { error } = await svc.from("members").update({ main_tag: null }).eq("tag", tag);
+  return { ok: !error };
+}

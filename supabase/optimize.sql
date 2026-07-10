@@ -31,6 +31,8 @@ alter table clans add column if not exists war_win_streak    int;
 alter table members add column if not exists note    text;
 alter table members add column if not exists note_by text;
 alter table members add column if not exists note_at timestamptz;
+-- Cuenta principal (para vincular secundarias/alts a la misma persona).
+alter table members add column if not exists main_tag text;
 
 -- 5) Mensajes cortos guardados (reclutamiento/anuncios para copiar al juego).
 create table if not exists messages (
