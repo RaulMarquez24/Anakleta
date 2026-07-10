@@ -135,10 +135,17 @@ function AltBadge({ of }: { of: string | null }) {
 export function MembersTable({
   members,
   myTag,
+  accountLinks,
 }: {
   members: MemberOverviewRow[];
   myTag?: string | null;
+  accountLinks?: Record<string, { mainTag: string | null; mainName: string | null }>;
 }) {
+  // Vínculo de cuenta por tag: usa el mapa fresco si se pasa; si no, la fila.
+  const altOf = (m: MemberOverviewRow) => {
+    const l = accountLinks?.[m.tag];
+    return l ? l : { mainTag: m.mainTag, mainName: m.mainName };
+  };
   const [key, setKey] = useState<SortKey>("rank");
   const [dir, setDir] = useState<"asc" | "desc">("desc");
 
@@ -208,7 +215,7 @@ export function MembersTable({
               <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="text-base font-extrabold text-ink">{m.name}</span>
                 {myTag === m.tag && <YouBadge />}
-                {m.mainTag && <AltBadge of={m.mainName} />}
+                {altOf(m).mainTag && <AltBadge of={altOf(m).mainName} />}
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide ${rb.cls}`}>{rb.label}</span>
                 {m.isNew && <NewBadge />}
                 <span className="ml-auto"><WarPref pref={m.warPreference} /></span>
@@ -259,7 +266,7 @@ export function MembersTable({
                   <td className="px-3 py-2">
                     <Link href={href(m.tag)} className="font-bold text-ink hover:text-gold-deep hover:underline">{m.name}</Link>
                     {myTag === m.tag && <span className="ml-2"><YouBadge /></span>}
-                    {m.mainTag && <span className="ml-2"><AltBadge of={m.mainName} /></span>}
+                    {altOf(m).mainTag && <span className="ml-2"><AltBadge of={altOf(m).mainName} /></span>}
                     <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${rb.cls}`}>{rb.label}</span>
                     {m.isNew && <span className="ml-1"><NewBadge /></span>}
                   </td>

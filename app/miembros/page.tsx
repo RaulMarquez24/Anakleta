@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getMembersOverview } from "@/lib/dashboard";
 import { getDepartures } from "@/lib/history";
 import { getMyPlayerTag } from "@/lib/profile";
+import { getAccountLinks } from "@/lib/accounts";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { AppShell } from "@/components/AppShell";
 import { MembersTable } from "@/components/MembersTable";
@@ -38,11 +39,22 @@ export default async function MiembrosPage({
 
   const user = await getCurrentUser();
 
-  const [data, departures, myTag] = await Promise.all([
+  const [data, departures, myTag, links] = await Promise.all([
     getMembersOverview(),
     tab === "ex" ? getDepartures() : Promise.resolve([]),
     getMyPlayerTag(),
+    getAccountLinks(), // en fresco (sin caché): vínculos de cuentas al momento
   ]);
+
+  // Mapa fresco tag -> {principal, nombre principal} para el badge "2ª de X".
+  const linkNameByTag = new Map(links.map((l) => [l.tag, l.name]));
+  const accountLinks: Record<string, { mainTag: string | null; mainName: string | null }> = {};
+  for (const l of links) {
+    accountLinks[l.tag] = {
+      mainTag: l.mainTag,
+      mainName: l.mainTag ? (linkNameByTag.get(l.mainTag) ?? null) : null,
+    };
+  }
 
   const tabCls = (active: boolean) =>
     `flex-1 rounded-full px-4 py-1.5 text-center text-sm font-extrabold transition ${
@@ -62,7 +74,7 @@ export default async function MiembrosPage({
       </div>
 
       {tab === "activos" ? (
-        <MembersTable members={data.members} myTag={myTag} />
+        <MembersTable members={data.members} myTag={myTag} accountLinks={accountLinks} />
       ) : departures.length === 0 ? (
         <div className="rounded-2xl border border-line bg-surface p-10 text-center">
           <p className="text-4xl">👋</p>
