@@ -33,6 +33,11 @@ alter table members add column if not exists note_by text;
 alter table members add column if not exists note_at timestamptz;
 -- Cuenta principal (para vincular secundarias/alts a la misma persona).
 alter table members add column if not exists main_tag text;
+-- Vínculo con Discord (para etiquetar en avisos): id + handle + quién/cuándo.
+alter table members add column if not exists discord_id       text;
+alter table members add column if not exists discord_username text;
+alter table members add column if not exists discord_by       text;
+alter table members add column if not exists discord_at       timestamptz;
 
 -- 5) Mensajes cortos guardados (reclutamiento/anuncios para copiar al juego).
 create table if not exists messages (

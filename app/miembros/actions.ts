@@ -70,3 +70,27 @@ export async function unlinkAccount(tag: string): Promise<{ ok: boolean }> {
   const { error } = await svc.from("members").update({ main_tag: null }).eq("tag", tag);
   return { ok: !error };
 }
+
+// Vincula (o desvincula) la cuenta de Discord de un miembro, para poder
+// etiquetarlo en los avisos. discordId vacío = desvincular.
+export async function setMemberDiscord(
+  tag: string,
+  discordId: string,
+  discordUsername: string,
+): Promise<{ ok: boolean }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false };
+
+  const svc = createServerClient();
+  const id = discordId.trim() || null;
+  const { error } = await svc
+    .from("members")
+    .update({
+      discord_id: id,
+      discord_username: id ? discordUsername.trim() || null : null,
+      discord_by: id ? (user.email ?? null) : null,
+      discord_at: id ? new Date().toISOString() : null,
+    })
+    .eq("tag", tag);
+  return { ok: !error };
+}

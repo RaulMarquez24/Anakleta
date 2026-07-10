@@ -4,6 +4,7 @@ import { getMemberHistory, getActivityReport, type ActivityRow } from "@/lib/his
 import { getMemberWarLog } from "@/lib/war-history";
 import { getMyPlayerTag } from "@/lib/profile";
 import { getAccountLinks, accountGroup } from "@/lib/accounts";
+import { getGuildMembers } from "@/lib/discord";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { AppShell } from "@/components/AppShell";
 import { LineChart, type ChartPoint } from "@/components/LineChart";
@@ -11,6 +12,7 @@ import { ThImage } from "@/components/ThImage";
 import { CopyTag } from "@/components/CopyTag";
 import { MemberNote } from "@/components/MemberNote";
 import { AccountLinker } from "@/components/AccountLinker";
+import { DiscordLink } from "@/components/DiscordLink";
 import { seasonLabel } from "@/components/WarBits";
 
 export const dynamic = "force-dynamic";
@@ -68,12 +70,13 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
 
   const { tag } = await params;
   const decoded = decodeURIComponent(tag);
-  const [history, report, warLog, myTag, accountLinks] = await Promise.all([
+  const [history, report, warLog, myTag, accountLinks, discordMembers] = await Promise.all([
     getMemberHistory(decoded),
     getActivityReport("todo").catch(() => null),
     getMemberWarLog(decoded),
     getMyPlayerTag(),
     getAccountLinks(),
+    getGuildMembers().catch(() => []),
   ]);
   if (!history) notFound();
   const { members: accGroup } = accountGroup(accountLinks, decoded);
@@ -262,6 +265,17 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
           initialNote={history.note}
           initialBy={history.noteBy}
           initialAt={history.noteAt}
+        />
+      </div>
+
+      {/* Cuenta de Discord (para etiquetarlo en los avisos) */}
+      <div className="mb-5 rounded-2xl border border-line bg-surface p-4">
+        <p className="text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">Discord</p>
+        <DiscordLink
+          tag={history.tag}
+          initialId={history.discordId}
+          initialUsername={history.discordUsername}
+          members={discordMembers}
         />
       </div>
 
