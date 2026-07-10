@@ -45,9 +45,40 @@ export const getGuildMembers = unstable_cache(fetchGuildMembers, ["discord-guild
   revalidate: 600,
 });
 
-// Publica un mensaje en el canal de avisos. `mentionIds` = ids a los que pinguear
-// de verdad (allowed_mentions). Devuelve true si se envió.
-export async function sendClanMessage(content: string, mentionIds: string[] = []): Promise<boolean> {
+export interface DiscordRole {
+  id: string;
+  name: string;
+}
+
+async function fetchGuildRoles(): Promise<DiscordRole[]> {
+  if (!TOKEN || !GUILD) return [];
+  try {
+    const res = await fetch(`${API}/guilds/${GUILD}/roles`, {
+      headers: { Authorization: `Bot ${TOKEN}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const raw = (await res.json()) as { id: string; name: string; managed?: boolean; position: number }[];
+    return raw
+      .filter((r) => r.id !== GUILD && !r.managed && r.name !== "@everyone") // fuera @everyone y roles de bots
+      .sort((a, b) => b.position - a.position)
+      .map((r) => ({ id: r.id, name: r.name }));
+  } catch {
+    return [];
+  }
+}
+
+// Roles del servidor (para etiquetar por rol).
+export const getGuildRoles = unstable_cache(fetchGuildRoles, ["discord-guild-roles"], {
+  revalidate: 600,
+});
+
+// Publica un mensaje en el canal, etiquetando de verdad (allowed_mentions) a los
+// usuarios/roles indicados (o @everyone/@here). Devuelve true si se envió.
+export async function sendClanMessage(
+  content: string,
+  opts: { users?: string[]; roles?: string[]; everyone?: boolean } = {},
+): Promise<boolean> {
   if (!TOKEN || !CHANNEL) return false;
   try {
     const res = await fetch(`${API}/channels/${CHANNEL}/messages`, {
@@ -59,7 +90,11 @@ export async function sendClanMessage(content: string, mentionIds: string[] = []
       cache: "no-store",
       body: JSON.stringify({
         content,
-        allowed_mentions: { parse: [], users: mentionIds.slice(0, 100) },
+        allowed_mentions: {
+          parse: opts.everyone ? ["everyone"] : [],
+          users: (opts.users ?? []).slice(0, 100),
+          roles: (opts.roles ?? []).slice(0, 100),
+        },
       }),
     });
     return res.ok;

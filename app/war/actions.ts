@@ -67,7 +67,7 @@ export async function notifyPendingAttacks(): Promise<NotifyResult> {
     `${lines.join("\n")}\n` +
     `¡A por ellos! 💪`;
 
-  const sent = await sendClanMessage(content, mentionIds);
+  const sent = await sendClanMessage(content, { users: mentionIds });
   if (!sent) return { ok: false, error: "No se pudo enviar (revisa el bot y el canal)." };
 
   return { ok: true, pinged: mentionIds.length, unlinked: war.pending.length - mentionIds.length };

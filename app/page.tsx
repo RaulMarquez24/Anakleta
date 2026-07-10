@@ -253,6 +253,19 @@ export default async function ClanHomePage({
         <span aria-hidden className="text-ink-soft">›</span>
       </Link>
 
+      {/* Avisar por Discord (mensaje libre etiquetando miembros/rol) */}
+      <Link
+        href="/discord"
+        className="mb-6 flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 hover:bg-surface-2/60"
+      >
+        <span className="text-2xl">🔔</span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-extrabold text-ink">Avisar por Discord</span>
+          <span className="block text-xs text-ink-soft">Mensaje libre etiquetando a quien quieras</span>
+        </span>
+        <span aria-hidden className="text-ink-soft">›</span>
+      </Link>
+
       {/* --- Análisis del clan (antes "Stats") --- */}
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="font-extrabold text-ink">Análisis del clan</h2>
