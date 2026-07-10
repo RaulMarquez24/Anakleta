@@ -194,6 +194,28 @@ async function fetchLeagueGroup(
   return { season: group.season ?? null, refs };
 }
 
+// Estado de la CWL de nuestro clan según el leaguegroup: temporada (YYYY-MM) y
+// fase. La usa el cron para detectar cuándo arranca (cerrar inscripción
+// individual) y cuándo termina (retirar el rol). Sin grupo activo -> season null.
+export async function getCwlSeasonState(
+  clanTag = process.env.COC_CLAN_TAG ?? "",
+): Promise<{ season: string | null; state: string | null; active: boolean }> {
+  if (!clanTag) return { season: null, state: null, active: false };
+  try {
+    const group = await cocFetch<CocLeagueGroup>(
+      `/clans/${encodeTag(clanTag)}/currentwar/leaguegroup`,
+    );
+    const state = group.state ?? null; // notInWar | preparation | inWar | ended
+    const active = state === "preparation" || state === "inWar";
+    return { season: group.season ?? null, state, active };
+  } catch (err) {
+    if (err instanceof CocApiError && (err.status === 404 || err.status === 403)) {
+      return { season: null, state: null, active: false };
+    }
+    throw err;
+  }
+}
+
 async function fetchWars(
   refs: { round: number; tag: string }[],
   clanTag: string,

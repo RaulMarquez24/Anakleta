@@ -1,10 +1,10 @@
 // Bot de Discord del clan Añakleta. Proceso 24/7 (Fly.io) conectado al gateway.
 // Comparte la BD de Supabase con la app (misma service key).
 //
-// Inscripción a la CWL, de dos formas:
+// Inscripción a la CWL atada a la temporada activa (ver bot/cwl.js), de dos formas:
 //  1) Texto libre en el canal de inscripciones ("me apunto", "me desapunto",
-//     "¿estoy apuntado?", "¿cómo me apunto?") -> detección tolerante a erratas.
-//  2) Slash commands (en cualquier canal): /apuntar, /desapuntar, /lista-cwl.
+//     "¿estoy apuntado?", "quién hay", "¿cómo me apunto?") -> tolerante a erratas.
+//  2) Slash commands (en cualquier canal): /apuntar, /desapuntar, /lista-cwl, /help.
 
 import {
   Client,
@@ -15,10 +15,11 @@ import {
 } from "discord.js";
 import { createClient } from "@supabase/supabase-js";
 import { classifyIntent } from "./match.js";
+import * as cwl from "./cwl.js";
 
 // Súbelo cuando cambies algo. En `fly logs` verás esta línea al arrancar: si NO
 // cambia tras un deploy, es que el deploy no ha subido el código nuevo.
-const BOT_VERSION = "v5 list+help";
+const BOT_VERSION = "v6 season-lists";
 
 // Texto de ayuda, compartido por «¿cómo me apunto?» (texto libre) y /help.
 const HELP_TEXT =
@@ -60,52 +61,58 @@ const client = new Client({
   partials: [Partials.Channel],
 });
 
-// --- Acceso a datos (cwl_signups) ---
+// --- Lógica de inscripción (compartida por texto libre y slash) ---
 
-async function isSignedUp(id) {
-  const { data, error } = await db
-    .from("cwl_signups")
-    .select("discord_id")
-    .eq("discord_id", id)
-    .maybeSingle();
-  if (error) console.error("[db] isSignedUp error:", error.message);
-  return Boolean(data);
+// Texto de la lista actual (mismo render que el mensaje fijo).
+async function listReply() {
+  const list = await cwl.getActiveList(db);
+  if (!list) return "📋 No hay ninguna lista de CWL abierta todavía.";
+  const part = cwl.partition(list, await cwl.getSignups(db, list.season));
+  return cwl.renderListText(list, part);
 }
 
-async function signUp(id, username) {
-  const { error } = await db
-    .from("cwl_signups")
-    .upsert(
-      { discord_id: id, username, created_at: new Date().toISOString() },
-      { onConflict: "discord_id" },
-    );
-  if (error) {
-    console.error("[db] signUp error:", error.message);
-    throw error; // que NO reaccione ✅ si no se guardó
+// Devuelve un aviso de cola si el usuario quedó fuera del corte, o null si dentro.
+async function queueNote(list, discordId) {
+  const part = cwl.partition(list, await cwl.getSignups(db, list.season));
+  const q = part.queue.findIndex((e) => e.discord_id === discordId);
+  if (q >= 0) return `⏳ Estás en **cola** (puesto ${q + 1}); entrarás si se libera una plaza.`;
+  return null;
+}
+
+// Resultado: { text, react } para responder de forma uniforme.
+async function doSignup(id, username) {
+  const list = await cwl.getActiveList(db);
+  if (!list) return { text: "🚫 Las inscripciones de CWL no están abiertas todavía." };
+  if (!cwl.isOpenForSelf(list)) {
+    return { text: "🔒 La inscripción individual está cerrada. Pídele a un colíder que te apunte." };
   }
-}
-
-async function signOut(id) {
-  const { error } = await db.from("cwl_signups").delete().eq("discord_id", id);
-  if (error) {
-    console.error("[db] signOut error:", error.message);
-    throw error;
+  if (await cwl.isSignedUp(db, list.season, id)) {
+    return { text: "☑️ Ya estás apuntado a la CWL. Mira la lista con `/lista-cwl`." };
   }
+  await cwl.addSignup(db, list.season, { discordId: id, username });
+  await cwl.assignRole(db, id);
+  await cwl.refreshLiveList(db, list.season);
+  const note = await queueNote(list, id);
+  return { react: "✅", text: note ?? undefined };
 }
 
-async function getSignups() {
-  const { data, error } = await db
-    .from("cwl_signups")
-    .select("username, created_at")
-    .order("created_at", { ascending: true });
-  if (error) console.error("[db] getSignups error:", error.message);
-  return data ?? [];
+async function doUnsignup(id) {
+  const list = await cwl.getActiveList(db);
+  if (!list || !(await cwl.isSignedUp(db, list.season, id))) {
+    return { text: "ℹ️ No estabas apuntado a la CWL." };
+  }
+  await cwl.removeSignup(db, list.season, id);
+  await cwl.removeRole(db, id);
+  await cwl.refreshLiveList(db, list.season);
+  return { react: "👋", text: "👋 Te he quitado de la CWL." };
 }
 
-function formatList(rows) {
-  if (!rows.length) return "📋 **CWL** — todavía no hay nadie apuntado.";
-  const lines = rows.map((r, i) => `\`${String(i + 1).padStart(2, " ")}.\` ${r.username}`);
-  return `📋 **Inscritos a la CWL (${rows.length}):**\n${lines.join("\n")}`;
+async function doStatus(id) {
+  const list = await cwl.getActiveList(db);
+  const yes = list && (await cwl.isSignedUp(db, list.season, id));
+  return yes
+    ? "✅ Sí, estás apuntado a la CWL. Consulta la lista con `/lista-cwl`."
+    : "❌ No estás apuntado. Escribe «me apunto» o usa `/apuntar`.";
 }
 
 // --- Slash commands ---
@@ -139,55 +146,31 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
   const id = interaction.user.id;
   const username = interaction.user.username;
+  const eph = MessageFlags.Ephemeral;
   try {
     if (interaction.commandName === "apuntar") {
-      if (await isSignedUp(id)) {
-        await interaction.reply({
-          content: "☑️ Ya estabas apuntado a la CWL. Consulta la lista con `/lista-cwl`.",
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-      await signUp(id, username);
-      await interaction.reply({
-        content: "✅ ¡Apuntado a la CWL! Para salir usa `/desapuntar`.",
-        flags: MessageFlags.Ephemeral,
-      });
+      const r = await doSignup(id, username);
+      const msg = r.react ? `✅ ¡Apuntado a la CWL!${r.text ? `\n${r.text}` : ""}` : r.text;
+      await interaction.reply({ content: msg, flags: eph });
       return;
     }
-
     if (interaction.commandName === "desapuntar") {
-      if (!(await isSignedUp(id))) {
-        await interaction.reply({
-          content: "ℹ️ No estabas apuntado a la CWL.",
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-      await signOut(id);
-      await interaction.reply({
-        content: "👋 Te he quitado de la CWL. Si cambias de idea, usa `/apuntar`.",
-        flags: MessageFlags.Ephemeral,
-      });
+      const r = await doUnsignup(id);
+      await interaction.reply({ content: r.text, flags: eph });
       return;
     }
-
     if (interaction.commandName === "lista-cwl") {
-      const rows = await getSignups();
-      await interaction.reply(formatList(rows)); // pública: la ve todo el canal
+      await interaction.reply(await listReply()); // pública: la ve todo el canal
       return;
     }
-
     if (interaction.commandName === "help") {
-      await interaction.reply({ content: HELP_TEXT, flags: MessageFlags.Ephemeral });
+      await interaction.reply({ content: HELP_TEXT, flags: eph });
       return;
     }
   } catch (err) {
     console.error("Error en interacción:", err);
     if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
-      await interaction
-        .reply({ content: "⚠️ Ha ocurrido un error. Inténtalo de nuevo.", flags: MessageFlags.Ephemeral })
-        .catch(() => {});
+      await interaction.reply({ content: "⚠️ Ha ocurrido un error. Inténtalo de nuevo.", flags: eph }).catch(() => {});
     }
   }
 });
@@ -217,40 +200,28 @@ client.on(Events.MessageCreate, async (msg) => {
       await msg.reply(HELP_TEXT);
       return;
     }
-
     if (intent === "list") {
-      const rows = await getSignups();
-      await msg.reply(formatList(rows));
+      await msg.reply(await listReply());
       return;
     }
-
     if (intent === "status") {
-      const yes = await isSignedUp(id);
-      await msg.reply(
-        yes
-          ? "✅ Sí, estás apuntado a la CWL. Consulta la lista con `/lista-cwl`."
-          : "❌ No estás apuntado. Escribe «me apunto» o usa `/apuntar`.",
-      );
+      await msg.reply(await doStatus(id));
       return;
     }
-
     if (intent === "unsignup") {
-      if (!(await isSignedUp(id))) {
-        await msg.reply("ℹ️ No estabas apuntado a la CWL. Si quieres entrar, escribe «me apunto».");
-        return;
-      }
-      await signOut(id);
-      await msg.react("👋").catch(() => {});
+      const r = await doUnsignup(id);
+      if (r.react) await msg.react(r.react).catch(() => {});
+      else if (r.text) await msg.reply(r.text);
       return;
     }
-
     if (intent === "signup") {
-      if (await isSignedUp(id)) {
-        await msg.reply("☑️ Ya estás apuntado a la CWL. Consulta la lista con `/lista-cwl`.");
-        return;
+      const r = await doSignup(id, username);
+      if (r.react) {
+        await msg.react(r.react).catch(() => {});
+        if (r.text) await msg.reply(r.text); // aviso de cola
+      } else if (r.text) {
+        await msg.reply(r.text); // cerrada / ya apuntado / sin lista
       }
-      await signUp(id, username);
-      await msg.react("✅").catch(() => {});
       return;
     }
   } catch (err) {

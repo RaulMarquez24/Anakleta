@@ -58,5 +58,10 @@ fly logs        # deberías ver "Bot conectado como ..."
 - Debe estar **siempre encendido** (el gateway es una conexión persistente). El
   `fly.toml` no define auto-stop; si Fly te lo apagara, usa
   `fly scale count 1` y evita `auto_stop_machines`.
-- La tabla `cwl_signups` debe existir en Supabase (ver `supabase/optimize.sql`).
+- Las inscripciones van atadas a la **temporada activa**: hay que ejecutar
+  `supabase/cwl.sql` (crea `cwl_lists` + `cwl_signups` y siembra la config en
+  `settings`). Sin una lista creada, el bot responde «inscripciones no abiertas».
+- Para asignar el **rol CWL** al inscribirse, el bot necesita el permiso
+  **Manage Roles** y que su rol esté **por encima** del rol CWL en la jerarquía
+  del servidor. Sin eso, la inscripción funciona igual pero no asigna rol.
 - Para probar en local: `npm install`, copia `.env.example` a `.env`, `npm start`.
