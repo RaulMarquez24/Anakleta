@@ -28,9 +28,9 @@ function lev(a, b) {
   return dp[m][n];
 }
 
-// ¿algún token se parece a `word` (tolerando erratas según su longitud)?
-function fuzzyHas(toks, word) {
-  const maxD = word.length <= 5 ? 1 : 2;
+// ¿algún token se parece a `word`? maxD por defecto según longitud; se puede
+// forzar (p. ej. 1 para evitar confundir 1ª persona con 3ª: apunto vs apuntan).
+function fuzzyHas(toks, word, maxD = word.length <= 5 ? 1 : 2) {
   return toks.some((t) => t === word || lev(t, word) <= maxD);
 }
 
@@ -49,14 +49,18 @@ const STATUS_PHRASES = [
   "estoy anotad", "me apunte",
 ];
 
-// Apuntarse.
+// Apuntarse. Frases (subcadena) en 1ª persona + palabras clave (token, maxD=1
+// para no confundir "apunto" con "apuntan"/"se apunta").
 const JOIN_PHRASES = [
-  "me apunto", "apuntame", "apuntarme", "me uno", "unirme", "me sumo",
+  "me apunto", "me uno", "unirme", "me sumo", "me meto",
   "cuenta conmigo", "cuenten conmigo", "quiero jugar", "quiero participar",
   "quiero cwl", "voy a la cwl", "voy a jugar", "yo juego", "yo voy",
-  "estoy dentro", "me anoto", "anotame", "+1",
+  "estoy dentro", "me anoto",
 ];
-const JOIN_WORDS = ["apunto", "apuntame", "apuntarme", "participo", "participar", "anotame", "anoto"];
+const JOIN_WORDS = [
+  "participo", "apuntame", "apuntarme", "apuntenme", "entro", "entrar",
+  "anoto", "anotame", "+1",
+];
 
 const anyPhrase = (text, arr) => arr.some((p) => text.includes(normalize(p)));
 
@@ -82,13 +86,9 @@ export function classifyIntent(raw) {
     return "unsignup";
   }
 
-  // 3) Apuntarse
-  if (
-    anyPhrase(text, JOIN_PHRASES) ||
-    hasStem("apunt") ||
-    hasStem("particip") ||
-    JOIN_WORDS.some((w) => fuzzyHas(toks, w))
-  ) {
+  // 3) Apuntarse. Sin stems amplios (evita "se apuntan"/"a participar" en 3ª
+  // persona): solo frases en 1ª persona o palabras clave con erratas ajustadas.
+  if (anyPhrase(text, JOIN_PHRASES) || JOIN_WORDS.some((w) => fuzzyHas(toks, w, 1))) {
     return "signup";
   }
 
