@@ -31,3 +31,13 @@ alter table clans add column if not exists war_win_streak    int;
 alter table members add column if not exists note    text;
 alter table members add column if not exists note_by text;
 alter table members add column if not exists note_at timestamptz;
+
+-- 5) Mensajes cortos guardados (reclutamiento/anuncios para copiar al juego).
+create table if not exists messages (
+  id         bigint generated always as identity primary key,
+  text       text not null,
+  created_by text,
+  created_at timestamptz default now()
+);
+grant all privileges on table messages to service_role;
+grant usage, select on sequence messages_id_seq to service_role;

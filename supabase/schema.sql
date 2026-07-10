@@ -12,6 +12,14 @@ create table if not exists profiles (
   updated_at  timestamptz default now()
 );
 
+-- Mensajes cortos guardados (reclutamiento / anuncios para copiar al juego).
+create table if not exists messages (
+  id         bigint generated always as identity primary key,
+  text       text not null,
+  created_by text,
+  created_at timestamptz default now()
+);
+
 -- Metadata del clan (normalmente una sola fila).
 create table if not exists clans (
   tag           text primary key,
