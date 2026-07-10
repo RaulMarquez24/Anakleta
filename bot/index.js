@@ -22,7 +22,7 @@ import * as coc from "./coc.js";
 
 // Súbelo cuando cambies algo. En `fly logs` verás esta línea al arrancar: si NO
 // cambia tras un deploy, es que el deploy no ha subido el código nuevo.
-const BOT_VERSION = "v11 bienvenida";
+const BOT_VERSION = "v12 bienvenida-feedback";
 
 // Texto de ayuda, compartido por «¿cómo me apunto?» (texto libre) y /help.
 const HELP_TEXT =
@@ -385,10 +385,10 @@ client.on(Events.MessageCreate, async (msg) => {
 // --- Bienvenida: al entrar alguien, pedirle el tag por DM (o en el general) ---
 
 const WELCOME_DM =
-  "¡Bienvenido a **Añakleta**! 👋\n\n" +
-  "Para identificarte en el clan, pégame aquí tu **tag de Clash of Clans** " +
-  "(lo ves en tu perfil del juego, empieza por `#`, ej. `#2ABC123`) y te pongo tu " +
-  "nombre del juego como apodo del servidor.";
+  "👋 ¡Bienvenido/a a **Añakleta**!\n\n" +
+  "Para que sepamos quién eres, pégame aquí tu **tag de Clash of Clans** y te pongo " +
+  "tu nombre del juego como apodo del servidor.\n" +
+  "-# 📍 Lo tienes en el juego: tu perfil, justo debajo de tu nombre (empieza por `#`, ej. `#2ABC123`).";
 
 client.on(Events.GuildMemberAdd, async (member) => {
   try {
@@ -416,17 +416,24 @@ client.on(Events.GuildMemberAdd, async (member) => {
 async function handleDm(msg) {
   const m = msg.content.match(TAG_RE);
   if (!m) {
+    // Distinguir "lo intentó con un # inválido" de un mensaje cualquiera.
+    const tried = msg.content.includes("#");
     await msg
       .reply(
-        "👋 Pégame tu **tag de Clash of Clans** (lo ves en tu perfil del juego, empieza por `#`, " +
-          "ej. `#2ABC123`) y te pongo tu nombre del juego como apodo.",
+        tried
+          ? "Mmm, ese tag no me cuadra 🤔. Son 8-9 caracteres tras la **#** (solo: `0 2 8 9 P Y L Q G R J C U V`), p. ej. `#2ABC123`."
+          : "👋 Pégame tu **tag de Clash of Clans** para identificarte, p. ej. `#2ABC123`.\n-# Lo ves en tu perfil del juego, debajo del nombre.",
       )
       .catch(() => {});
     return;
   }
+
+  await msg.channel.sendTyping().catch(() => {}); // feedback: “escribiendo…”
   const player = await coc.getPlayer(m[1]);
   if (!player || !player.name) {
-    await msg.reply("No encuentro ese tag 🤔. Revísalo (empieza por `#`) y vuelve a pegármelo.").catch(() => {});
+    await msg
+      .reply("No encuentro ninguna cuenta con ese tag 🤔. Míralo bien (que no falte ni sobre un carácter) y vuelve a pegármelo.")
+      .catch(() => {});
     return;
   }
 
@@ -449,14 +456,16 @@ async function handleDm(msg) {
     console.error("[db] linkDiscordToMember:", err?.message ?? err);
   }
 
-  const parts = [`✅ ¡Genial, **${player.name}**!`];
-  parts.push(
+  const th = player.townHallLevel ? `  ·  🏰 TH${player.townHallLevel}` : "";
+  const lines = [`✅ ¡Listo, **${player.name}**!${th}`];
+  lines.push(
     nickOk
-      ? "Te he puesto ese nombre como apodo en el servidor."
-      : "No he podido cambiarte el apodo (permisos); cámbialo tú a ese nombre 🙏.",
+      ? "• Te he puesto ese nombre como **apodo** del servidor."
+      : "• No he podido cambiarte el apodo (permisos); cámbialo tú a ese nombre 🙏.",
   );
-  if (linked) parts.push("Y te he vinculado con tu cuenta del clan para la CWL. 🎯");
-  await msg.reply(parts.join(" ")).catch(() => {});
+  if (linked) lines.push("• **Vinculado** con tu cuenta del clan para la CWL. 🎯");
+  lines.push("-# Cuando haya Liga de Clanes, apúntate escribiendo «me apunto».");
+  await msg.reply(lines.join("\n")).catch(() => {});
 }
 
 client.login(DISCORD_BOT_TOKEN);
