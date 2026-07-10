@@ -1,10 +1,11 @@
 import { unstable_cache } from "next/cache";
+import { createServerClient } from "@/lib/supabase/server";
 
 // Cliente mínimo de la API de Discord con el token del bot. Todo server-side.
 const API = "https://discord.com/api/v10";
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
 const GUILD = process.env.DISCORD_GUILD_ID;
-const CHANNEL = process.env.DISCORD_CHANNEL_ID;
+const CHANNEL = process.env.DISCORD_CHANNEL_ID; // fallback si no hay canal guardado
 
 export interface DiscordMember {
   id: string; // user id (para etiquetar con <@id>)
@@ -73,15 +74,60 @@ export const getGuildRoles = unstable_cache(fetchGuildRoles, ["discord-guild-rol
   revalidate: 600,
 });
 
-// Publica un mensaje en el canal, etiquetando de verdad (allowed_mentions) a los
-// usuarios/roles indicados (o @everyone/@here). Devuelve true si se envió.
+export interface DiscordChannel {
+  id: string;
+  name: string;
+}
+
+async function fetchGuildChannels(): Promise<DiscordChannel[]> {
+  if (!TOKEN || !GUILD) return [];
+  try {
+    const res = await fetch(`${API}/guilds/${GUILD}/channels`, {
+      headers: { Authorization: `Bot ${TOKEN}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const raw = (await res.json()) as { id: string; name: string; type: number; position: number }[];
+    return raw
+      .filter((c) => c.type === 0 || c.type === 5) // texto y anuncios
+      .sort((a, b) => a.position - b.position)
+      .map((c) => ({ id: c.id, name: `#${c.name}` }));
+  } catch {
+    return [];
+  }
+}
+
+// Canales de texto del servidor (para elegir dónde publicar).
+export const getGuildChannels = unstable_cache(fetchGuildChannels, ["discord-guild-channels"], {
+  revalidate: 600,
+});
+
+// Canal por defecto de avisos: el guardado en settings, o el de la env var.
+export async function getDefaultChannelId(): Promise<string | null> {
+  try {
+    const svc = createServerClient();
+    const { data } = await svc
+      .from("settings")
+      .select("value")
+      .eq("key", "discord_channel_id")
+      .maybeSingle();
+    return ((data?.value as string | null) ?? null) || CHANNEL || null;
+  } catch {
+    return CHANNEL || null;
+  }
+}
+
+// Publica un mensaje en un canal (channelId; si no, el por defecto/env),
+// etiquetando de verdad (allowed_mentions) a usuarios/roles (o @everyone/@here).
 export async function sendClanMessage(
   content: string,
   opts: { users?: string[]; roles?: string[]; everyone?: boolean } = {},
+  channelId?: string | null,
 ): Promise<boolean> {
-  if (!TOKEN || !CHANNEL) return false;
+  const ch = channelId || CHANNEL;
+  if (!TOKEN || !ch) return false;
   try {
-    const res = await fetch(`${API}/channels/${CHANNEL}/messages`, {
+    const res = await fetch(`${API}/channels/${ch}/messages`, {
       method: "POST",
       headers: {
         Authorization: `Bot ${TOKEN}`,

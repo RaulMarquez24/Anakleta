@@ -1,5 +1,5 @@
 import { createServerClient } from "@/lib/supabase/server";
-import { sendClanMessage } from "@/lib/discord";
+import { sendClanMessage, getDefaultChannelId } from "@/lib/discord";
 import type { WarView } from "@/lib/war";
 
 function timeLeft(iso: string | null): string | null {
@@ -53,6 +53,7 @@ export async function sendPendingWarNotice(
     `${lines.join("\n")}\n` +
     `¡A por ellos! 💪`;
 
-  const sent = await sendClanMessage(content, { users: mentionIds });
+  const channelId = await getDefaultChannelId();
+  const sent = await sendClanMessage(content, { users: mentionIds }, channelId);
   return { sent, pinged: mentionIds.length, unlinked: war.pending.length - mentionIds.length };
 }

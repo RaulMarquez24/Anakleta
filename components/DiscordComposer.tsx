@@ -1,17 +1,22 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { DiscordMember, DiscordRole } from "@/lib/discord";
+import type { DiscordMember, DiscordRole, DiscordChannel } from "@/lib/discord";
 import { sendCustomMessage } from "@/app/discord/actions";
 
 export function DiscordComposer({
   members,
   roles,
+  channels,
+  defaultChannelId,
 }: {
   members: DiscordMember[];
   roles: DiscordRole[];
+  channels: DiscordChannel[];
+  defaultChannelId: string | null;
 }) {
   const [text, setText] = useState("");
+  const [channel, setChannel] = useState(defaultChannelId ?? channels[0]?.id ?? "");
   const [role, setRole] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [q, setQ] = useState("");
@@ -36,7 +41,7 @@ export function DiscordComposer({
   async function send() {
     setBusy(true);
     setRes(null);
-    const r = await sendCustomMessage(text, [...selected], role);
+    const r = await sendCustomMessage(text, [...selected], role, channel);
     setBusy(false);
     setRes(r);
     if (r.ok) {
@@ -49,6 +54,28 @@ export function DiscordComposer({
 
   return (
     <div className="space-y-4">
+      {/* Canal */}
+      <div className="rounded-2xl border border-line bg-surface p-4">
+        <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-soft">
+          Enviar a
+        </label>
+        {channels.length === 0 ? (
+          <p className="text-xs text-ink-soft">Se enviará al canal por defecto.</p>
+        ) : (
+          <select
+            value={channel}
+            onChange={(e) => setChannel(e.target.value)}
+            className="w-full rounded-lg border border-line bg-surface-2 px-2.5 py-2 text-sm font-semibold text-ink outline-none focus:border-gold"
+          >
+            {channels.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+
       {/* Mensaje */}
       <div className="rounded-2xl border border-line bg-surface p-4">
         <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-soft">

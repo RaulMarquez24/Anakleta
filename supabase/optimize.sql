@@ -39,6 +39,13 @@ alter table members add column if not exists discord_username text;
 alter table members add column if not exists discord_by       text;
 alter table members add column if not exists discord_at       timestamptz;
 
+-- 7) Ajustes clave-valor (p. ej. canal de Discord por defecto para avisos).
+create table if not exists settings (
+  key   text primary key,
+  value text
+);
+grant all privileges on table settings to service_role;
+
 -- 6) Control de recordatorios de guerra en Discord (para no repetir tramos).
 create table if not exists war_reminders (
   war_key    text primary key,

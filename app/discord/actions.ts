@@ -2,12 +2,25 @@
 
 import { sendClanMessage, discordConfigured } from "@/lib/discord";
 import { getCurrentUser } from "@/lib/supabase/current-user";
+import { createServerClient } from "@/lib/supabase/server";
+
+// Fija el canal por defecto para los avisos (guerra + cron).
+export async function setDefaultChannel(channelId: string): Promise<{ ok: boolean }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false };
+  const svc = createServerClient();
+  const { error } = await svc
+    .from("settings")
+    .upsert({ key: "discord_channel_id", value: channelId || null }, { onConflict: "key" });
+  return { ok: !error };
+}
 
 // role: "" (ninguno) | "everyone" | "here" | id de rol.
 export async function sendCustomMessage(
   text: string,
   userIds: string[],
   role: string,
+  channelId: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "No autorizado." };
@@ -28,11 +41,11 @@ export async function sendCustomMessage(
 
   const content = [body, mentions.join(" ")].filter(Boolean).join("\n\n");
 
-  const sent = await sendClanMessage(content, {
-    users,
-    roles: everyone || !role ? [] : [role],
-    everyone,
-  });
+  const sent = await sendClanMessage(
+    content,
+    { users, roles: everyone || !role ? [] : [role], everyone },
+    channelId,
+  );
   if (!sent) return { ok: false, error: "No se pudo enviar (revisa el bot y el canal)." };
   return { ok: true };
 }

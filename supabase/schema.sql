@@ -146,6 +146,12 @@ create table if not exists war_reminders (
   updated_at timestamptz default now()
 );
 
+-- Ajustes clave-valor (p. ej. canal de Discord por defecto para avisos).
+create table if not exists settings (
+  key   text primary key,
+  value text
+);
+
 -- Privilegios: con "expose new tables" desactivado, las tablas nuevas no reciben
 -- GRANTs automáticos. Concedemos acceso SOLO a service_role (el rol del servidor,
 -- usado por la SECRET KEY). NO se concede a anon/authenticated: los datos quedan
