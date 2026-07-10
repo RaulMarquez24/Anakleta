@@ -349,3 +349,32 @@ export async function removeSignup(db, season, discordId) {
     throw error;
   }
 }
+
+// Cuentas que este Discord tiene apuntadas en la temporada (para elegir baja).
+export async function getMySignups(db, season, discordId) {
+  const { data } = await db
+    .from("cwl_signups")
+    .select("id, member_tag, username")
+    .eq("season", season)
+    .eq("discord_id", discordId)
+    .order("created_at", { ascending: true });
+  return (data ?? []).map((r) => ({ id: r.id, name: r.username || r.member_tag || "cuenta" }));
+}
+
+export async function removeSignupsByIds(db, ids) {
+  if (!ids.length) return;
+  const { error } = await db.from("cwl_signups").delete().in("id", ids);
+  if (error) {
+    console.error("[db] removeSignupsByIds error:", error.message);
+    throw error;
+  }
+}
+
+export async function countMySignups(db, season, discordId) {
+  const { count } = await db
+    .from("cwl_signups")
+    .select("id", { count: "exact", head: true })
+    .eq("season", season)
+    .eq("discord_id", discordId);
+  return count ?? 0;
+}

@@ -21,7 +21,7 @@ import * as cwl from "./cwl.js";
 
 // Súbelo cuando cambies algo. En `fly logs` verás esta línea al arrancar: si NO
 // cambia tras un deploy, es que el deploy no ha subido el código nuevo.
-const BOT_VERSION = "v9 secundaria-relativa";
+const BOT_VERSION = "v10 desapuntar-picker";
 
 // Texto de ayuda, compartido por «¿cómo me apunto?» (texto libre) y /help.
 const HELP_TEXT =
@@ -104,6 +104,17 @@ function pickRow(season, discordId, accounts) {
   return new ActionRowBuilder().addComponents(menu);
 }
 
+// Menú para elegir qué cuentas QUITAR (baja). value = id de la inscripción.
+function unpickRow(season, discordId, accounts) {
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`cwl_unpick:${season}:${discordId}`)
+    .setPlaceholder("¿Qué cuentas quitas de la CWL?")
+    .setMinValues(1)
+    .setMaxValues(accounts.length)
+    .addOptions(accounts.map((a) => ({ label: a.name, value: String(a.id) })));
+  return new ActionRowBuilder().addComponents(menu);
+}
+
 // Resultado: { text?, react?, pick? }. `pick` = hay que preguntar qué cuentas.
 async function doSignup(id, username) {
   const list = await cwl.getActiveList(db);
@@ -148,13 +159,31 @@ async function applyPick(season, discordId, tags) {
 
 async function doUnsignup(id) {
   const list = await cwl.getActiveList(db);
-  if (!list || !(await cwl.isSignedUp(db, list.season, id))) {
-    return { text: "ℹ️ No estabas apuntado a la CWL." };
+  if (!list) return { text: "ℹ️ No estabas apuntado a la CWL." };
+  const mine = await cwl.getMySignups(db, list.season, id);
+  if (mine.length === 0) return { text: "ℹ️ No estabas apuntado a la CWL." };
+
+  // Varias cuentas -> preguntar cuáles quitar (no sacar todas de golpe).
+  if (mine.length >= 2) {
+    return { pickRemove: { season: list.season, accounts: mine } };
   }
+
   await cwl.removeSignup(db, list.season, id);
   await cwl.removeRole(db, id);
   await cwl.refreshLiveList(db, list.season);
   return { react: "👋", text: "👋 Te he quitado de la CWL." };
+}
+
+// Aplica la baja de las cuentas elegidas en el menú. Solo quita el rol si ya no
+// le queda ninguna cuenta apuntada.
+async function applyUnpick(season, discordId, ids) {
+  const mine = await cwl.getMySignups(db, season, discordId);
+  const idNums = ids.map(Number);
+  const names = mine.filter((m) => idNums.includes(m.id)).map((m) => m.name);
+  await cwl.removeSignupsByIds(db, idNums);
+  if ((await cwl.countMySignups(db, season, discordId)) === 0) await cwl.removeRole(db, discordId);
+  await cwl.refreshLiveList(db, season);
+  return `👋 Quitado: ${names.join(", ") || "nada"}.`;
 }
 
 async function doStatus(id) {
@@ -211,6 +240,22 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  // Menú de baja de cuentas ("me desapunto" con varias cuentas).
+  if (interaction.isStringSelectMenu() && interaction.customId.startsWith("cwl_unpick:")) {
+    const [, season, uid] = interaction.customId.split(":");
+    if (interaction.user.id !== uid) {
+      await interaction.reply({ content: "Este menú no es para ti 🙂", flags: eph }).catch(() => {});
+      return;
+    }
+    try {
+      const text = await applyUnpick(season, uid, interaction.values);
+      await interaction.update({ content: text, components: [] });
+    } catch {
+      await interaction.reply({ content: "⚠️ No se pudo quitar. Inténtalo de nuevo.", flags: eph }).catch(() => {});
+    }
+    return;
+  }
+
   if (!interaction.isChatInputCommand()) return;
   const id = interaction.user.id;
   const username = interaction.user.username;
@@ -231,6 +276,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
     if (interaction.commandName === "desapuntar") {
       const r = await doUnsignup(id);
+      if (r.pickRemove) {
+        await interaction.reply({
+          content: "Tienes varias cuentas apuntadas. Elige cuáles quitar:",
+          components: [unpickRow(r.pickRemove.season, id, r.pickRemove.accounts)],
+          flags: eph,
+        });
+        return;
+      }
       await interaction.reply({ content: r.text, flags: eph });
       return;
     }
@@ -285,8 +338,16 @@ client.on(Events.MessageCreate, async (msg) => {
     }
     if (intent === "unsignup") {
       const r = await doUnsignup(id);
-      if (r.react) await msg.react(r.react).catch(() => {});
-      else if (r.text) await msg.reply(r.text);
+      if (r.pickRemove) {
+        await msg.reply({
+          content: "Tienes varias cuentas apuntadas. Elige cuáles quitar:",
+          components: [unpickRow(r.pickRemove.season, id, r.pickRemove.accounts)],
+        });
+      } else if (r.react) {
+        await msg.react(r.react).catch(() => {});
+      } else if (r.text) {
+        await msg.reply(r.text);
+      }
       return;
     }
     if (intent === "signup") {
