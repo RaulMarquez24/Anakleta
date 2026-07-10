@@ -51,28 +51,42 @@ const client = new Client({
 // --- Acceso a datos (cwl_signups) ---
 
 async function isSignedUp(id) {
-  const { data } = await db.from("cwl_signups").select("discord_id").eq("discord_id", id).maybeSingle();
+  const { data, error } = await db
+    .from("cwl_signups")
+    .select("discord_id")
+    .eq("discord_id", id)
+    .maybeSingle();
+  if (error) console.error("[db] isSignedUp error:", error.message);
   return Boolean(data);
 }
 
 async function signUp(id, username) {
-  await db
+  const { error } = await db
     .from("cwl_signups")
     .upsert(
       { discord_id: id, username, created_at: new Date().toISOString() },
       { onConflict: "discord_id" },
     );
+  if (error) {
+    console.error("[db] signUp error:", error.message);
+    throw error; // que NO reaccione ✅ si no se guardó
+  }
 }
 
 async function signOut(id) {
-  await db.from("cwl_signups").delete().eq("discord_id", id);
+  const { error } = await db.from("cwl_signups").delete().eq("discord_id", id);
+  if (error) {
+    console.error("[db] signOut error:", error.message);
+    throw error;
+  }
 }
 
 async function getSignups() {
-  const { data } = await db
+  const { data, error } = await db
     .from("cwl_signups")
     .select("username, created_at")
     .order("created_at", { ascending: true });
+  if (error) console.error("[db] getSignups error:", error.message);
   return data ?? [];
 }
 
