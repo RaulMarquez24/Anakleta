@@ -32,7 +32,14 @@ export default async function GuerrasPage({
     getClanName(),
   ]);
 
-  const live = current && current.state !== "notInWar" && current.members.length > 0 ? current : null;
+  // "En curso" solo si está en guerra o preparación. Una guerra ya terminada
+  // (warEnded, típico entre rondas de CWL) NO es en curso: vive en Ligas.
+  const live =
+    current &&
+    (current.state === "inWar" || current.state === "preparation") &&
+    current.members.length > 0
+      ? current
+      : null;
 
   // Por defecto abre donde hay contenido (CWL si no hay guerras normales).
   const tab =
