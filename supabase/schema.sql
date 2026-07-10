@@ -152,6 +152,13 @@ create table if not exists settings (
   value text
 );
 
+-- Inscripciones a la CWL (las escribe el bot de Discord; las lee la app).
+create table if not exists cwl_signups (
+  discord_id text primary key,
+  username   text,
+  created_at timestamptz default now()
+);
+
 -- Privilegios: con "expose new tables" desactivado, las tablas nuevas no reciben
 -- GRANTs automáticos. Concedemos acceso SOLO a service_role (el rol del servidor,
 -- usado por la SECRET KEY). NO se concede a anon/authenticated: los datos quedan

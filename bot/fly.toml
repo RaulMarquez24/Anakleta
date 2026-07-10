@@ -1,0 +1,11 @@
+# Config de Fly.io para el bot. Ajusta "app" al nombre que crees con `fly launch`.
+app = "anakleta-bot"
+primary_region = "mad"
+
+[build]
+
+# El bot NO sirve HTTP: sin [http_service]. Debe estar siempre encendido, así que
+# no configuramos auto_stop (la máquina se mantiene corriendo para el gateway).
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

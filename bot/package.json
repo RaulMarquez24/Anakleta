@@ -1,0 +1,13 @@
+{
+  "name": "anakleta-bot",
+  "private": true,
+  "type": "module",
+  "description": "Bot de Discord del clan Añakleta (gateway 24/7, alojado en Fly.io).",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "discord.js": "^14.16.3"
+  }
+}

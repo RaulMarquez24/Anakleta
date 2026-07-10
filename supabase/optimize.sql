@@ -46,6 +46,14 @@ create table if not exists settings (
 );
 grant all privileges on table settings to service_role;
 
+-- 8) Inscripciones a la CWL (las escribe el bot de Discord; las lee la app).
+create table if not exists cwl_signups (
+  discord_id text primary key,
+  username   text,
+  created_at timestamptz default now()
+);
+grant all privileges on table cwl_signups to service_role;
+
 -- 6) Control de recordatorios de guerra en Discord (para no repetir tramos).
 create table if not exists war_reminders (
   war_key    text primary key,
