@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { CocApiError, getClan, getPlayer } from "@/lib/coc";
 import type { CocClan, CocPlayer } from "@/lib/coc-types";
 import { createServerClient } from "@/lib/supabase/server";
+import { createAuthServerClient } from "@/lib/supabase/auth-server";
 import { captureWar, type WarCaptureResult } from "@/lib/war-capture";
 
 // POST /api/snapshot — captura el estado del clan y lo persiste en Supabase.
-// Protegido con CRON_SECRET: lo llama el cron externo con la cabecera
-//   Authorization: Bearer <CRON_SECRET>
-// El dashboard NUNCA llama a este endpoint; solo lee de Supabase.
+// Dos vías de autorización:
+//   - Cron externo: cabecera Authorization: Bearer <CRON_SECRET>.
+//   - Botón del panel: usuario con sesión iniciada (líder/colíder).
+// El dashboard normal solo LEE de Supabase; esto es la escritura bajo demanda.
 
 // El enriquecimiento hace ~1 llamada por miembro a /players; damos margen.
 export const maxDuration = 60;
@@ -32,15 +34,18 @@ async function mapPool<T, R>(
 
 export async function POST(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    return NextResponse.json(
-      { error: "CRON_SECRET no configurado en el servidor" },
-      { status: 500 },
-    );
-  }
   const auth = req.headers.get("authorization");
-  if (auth !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const isCron = !!secret && auth === `Bearer ${secret}`;
+
+  // Si no viene del cron, exige sesión de usuario (el botón "forzar captura").
+  if (!isCron) {
+    const authClient = await createAuthServerClient();
+    const {
+      data: { user },
+    } = await authClient.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
   }
 
   try {

@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/supabase/current-user";
 import { AppShell } from "@/components/AppShell";
 import { ThImage } from "@/components/ThImage";
 import { InstallAppCard } from "@/components/InstallAppCard";
+import { SnapshotRunner } from "@/components/SnapshotRunner";
 import { PerfilForm } from "./PerfilForm";
 
 export const dynamic = "force-dynamic";
@@ -78,6 +79,10 @@ export default async function PerfilPage() {
 
       <div className="mt-4">
         <InstallAppCard />
+      </div>
+
+      <div className="mt-4">
+        <SnapshotRunner />
       </div>
 
       {/* Cerrar sesión */}
