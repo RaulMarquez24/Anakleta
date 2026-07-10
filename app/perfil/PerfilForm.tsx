@@ -1,14 +1,25 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import { Link2, KeyRound, Mail, type LucideIcon } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { linkPlayerTag, type LinkResult } from "./actions";
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function Card({
+  icon: Icon,
+  title,
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="rounded-2xl border border-line bg-surface p-4">
-      <h2 className="mb-3 font-extrabold text-ink">{title}</h2>
+      <h2 className="mb-3 flex items-center gap-2 font-extrabold text-ink">
+        <Icon className="h-4 w-4 text-ink-soft" />
+        {title}
+      </h2>
       {children}
     </section>
   );
@@ -31,9 +42,9 @@ export function PerfilForm({
   return (
     <div className="space-y-4">
       {email && (
-        <p className="text-sm text-ink-soft">
-          Sesión: <span className="font-bold text-ink">{email}</span>
-        </p>
+        <Card icon={Mail} title="Sesión">
+          <p className="text-sm font-bold text-ink">{email}</p>
+        </Card>
       )}
       <LinkTagCard linkedTag={linkedTag} linkedName={linkedName} />
       <PasswordCard />
@@ -73,7 +84,7 @@ function LinkTagCard({
   const alreadyLinked = linkedTag && !relink && !result?.ok;
 
   return (
-    <Card title="🔗 Tu jugador de Clash">
+    <Card icon={Link2} title="Tu jugador de Clash">
       {alreadyLinked ? (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
@@ -153,7 +164,7 @@ function PasswordCard() {
 
   if (!open) {
     return (
-      <Card title="🔒 Contraseña">
+      <Card icon={KeyRound} title="Contraseña">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm text-ink-soft">¿Quieres cambiar tu contraseña?</p>
           <button
@@ -168,7 +179,7 @@ function PasswordCard() {
   }
 
   return (
-    <Card title="🔒 Cambiar contraseña">
+    <Card icon={KeyRound} title="Cambiar contraseña">
       <form onSubmit={submit} className="space-y-3">
         <div>
           <label className="mb-1 block text-xs font-bold text-ink-soft">Nueva contraseña</label>

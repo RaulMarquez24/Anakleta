@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { RefreshCw, Zap, Puzzle, ChevronRight } from "lucide-react";
 
 interface SnapshotResult {
   ok?: boolean;
@@ -35,6 +36,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export function SnapshotRunner() {
+  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<"light" | "full" | null>(null);
   const [res, setRes] = useState<SnapshotResult | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -61,9 +63,32 @@ export function SnapshotRunner() {
   const war = res?.war && !("error" in res.war) ? res.war : null;
   const warErr = res?.war && "error" in res.war ? res.war.error : null;
 
+  if (!open) {
+    return (
+      <section className="rounded-2xl border border-line bg-surface p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <RefreshCw className="h-4 w-4 text-ink-soft" />
+            <p className="text-sm font-extrabold text-ink">Sincronizar con Clash</p>
+          </div>
+          <button
+            onClick={() => setOpen(true)}
+            className="flex flex-none items-center gap-1 rounded-full border border-line px-4 py-2 text-sm font-extrabold text-ink transition hover:bg-surface-2"
+          >
+            Abrir
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="rounded-2xl border border-line bg-surface p-4">
-      <h2 className="mb-1 font-extrabold text-ink">🔄 Sincronizar con Clash</h2>
+      <h2 className="mb-1 flex items-center gap-2 font-extrabold text-ink">
+        <RefreshCw className="h-4 w-4 text-ink-soft" />
+        Sincronizar con Clash
+      </h2>
       <p className="mb-3 text-sm text-ink-soft">
         <b>Rápido</b>: miembros, bajas y donaciones (1 llamada, úsalo las veces que quieras).{" "}
         <b>Completo</b>: además estrellas de guerra, ataques, capital y guerra (más pesado).
@@ -73,16 +98,18 @@ export function SnapshotRunner() {
         <button
           onClick={() => run("light")}
           disabled={busy !== null}
-          className="rounded-full border border-line bg-surface-2 px-4 py-2.5 text-sm font-extrabold text-ink transition hover:bg-line disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-4 py-2.5 text-sm font-extrabold text-ink transition hover:bg-line disabled:opacity-50"
         >
-          {busy === "light" ? "Actualizando…" : "⚡ Refresco rápido"}
+          <Zap className="h-4 w-4" />
+          {busy === "light" ? "Actualizando…" : "Refresco rápido"}
         </button>
         <button
           onClick={() => run("full")}
           disabled={busy !== null}
-          className="rounded-full bg-gold px-4 py-2.5 text-sm font-extrabold text-banner-dark transition hover:brightness-105 disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-full bg-gold px-4 py-2.5 text-sm font-extrabold text-banner-dark transition hover:brightness-105 disabled:opacity-50"
         >
-          {busy === "full" ? "Capturando…" : "🧩 Captura completa"}
+          <Puzzle className="h-4 w-4" />
+          {busy === "full" ? "Capturando…" : "Captura completa"}
         </button>
       </div>
 
@@ -134,6 +161,14 @@ export function SnapshotRunner() {
           </p>
         </div>
       )}
+
+      <button
+        onClick={() => setOpen(false)}
+        disabled={busy !== null}
+        className="mt-3 text-xs font-bold text-ink-soft underline disabled:opacity-50"
+      >
+        Ocultar
+      </button>
     </section>
   );
 }
