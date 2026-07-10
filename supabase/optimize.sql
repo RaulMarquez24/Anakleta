@@ -39,6 +39,14 @@ alter table members add column if not exists discord_username text;
 alter table members add column if not exists discord_by       text;
 alter table members add column if not exists discord_at       timestamptz;
 
+-- 6) Control de recordatorios de guerra en Discord (para no repetir tramos).
+create table if not exists war_reminders (
+  war_key    text primary key,
+  last_tier  int,
+  updated_at timestamptz default now()
+);
+grant all privileges on table war_reminders to service_role;
+
 -- 5) Mensajes cortos guardados (reclutamiento/anuncios para copiar al juego).
 create table if not exists messages (
   id         bigint generated always as identity primary key,

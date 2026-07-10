@@ -1,0 +1,20 @@
+name: Recordatorio de guerra (Discord)
+
+# Cada hora hace POST a /api/war-reminder. El endpoint decide si toca avisar
+# (escalado: ≤6h una vez, luego ≤3/2/1h) y no repite tramos ya avisados.
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST /api/war-reminder
+        run: |
+          curl --fail-with-body -sS -X POST \
+            "https://anakleta.vercel.app/api/war-reminder" \
+            -H "Authorization: Bearer $CRON_SECRET"
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}

@@ -139,6 +139,13 @@ create table if not exists war_members (
 );
 create index if not exists war_members_war_idx on war_members (war_id);
 
+-- Control de recordatorios de guerra en Discord (para no repetir tramos de aviso).
+create table if not exists war_reminders (
+  war_key    text primary key,
+  last_tier  int,
+  updated_at timestamptz default now()
+);
+
 -- Privilegios: con "expose new tables" desactivado, las tablas nuevas no reciben
 -- GRANTs automáticos. Concedemos acceso SOLO a service_role (el rol del servidor,
 -- usado por la SECRET KEY). NO se concede a anon/authenticated: los datos quedan
