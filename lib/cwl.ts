@@ -160,9 +160,12 @@ export function activeCutoff(list: CwlList, visibleCount: number): number {
 }
 
 export function partition(list: CwlList, entries: CwlEntry[]): CwlPartition {
-  // Ex-miembros (vinculados a un miembro NO activo) se ocultan y no ocupan plaza.
-  const hidden = entries.filter((e) => e.linked && !e.inClan);
-  const visible = entries.filter((e) => !(e.linked && !e.inClan));
+  // Ocultar ex-miembros SOLO en la inscripción presente (abierta y no terminada):
+  // ahí no deben ocupar plaza. En una liga pasada cuentan (estuvieron inscritos,
+  // aunque se fueran después).
+  const present = isOpenForSelf(list);
+  const hidden = present ? entries.filter((e) => e.linked && !e.inClan) : [];
+  const visible = present ? entries.filter((e) => !(e.linked && !e.inClan)) : entries;
   const cutoff = activeCutoff(list, visible.length);
   return { cutoff, inside: visible.slice(0, cutoff), queue: visible.slice(cutoff), hidden };
 }
