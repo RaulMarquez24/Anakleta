@@ -1,6 +1,7 @@
 // Detección de intención tolerante a erratas para la inscripción a la CWL.
-// Intenciones: "help" (¿cómo me apunto?) · "status" (¿estoy apuntado?) ·
-// "unsignup" (me desapunto) · "signup" (me apunto) · null (ruido).
+// Intenciones: "help" (¿cómo me apunto?) · "list" (¿quién hay en la lista?) ·
+// "status" (¿estoy apuntado?) · "unsignup" (me desapunto) · "signup" (me apunto) ·
+// null (ruido).
 //
 // Estrategia: sobre todo FRASES en subcadena (0 falsos positivos) y, solo para
 // palabras largas y específicas del dominio, coincidencia difusa (Levenshtein).
@@ -60,6 +61,21 @@ const HELP_PHRASES = [
 // Regla genérica: palabra de "cómo/dónde" + raíz de apuntarse en el mismo mensaje.
 const HOW_WORDS = /(^|\s)(como|komo|kmo|cmo|donde|dnd)(\s|$)/;
 const SIGNUP_STEM = /(apunt|particip|unir|sumo|sumar|anot|inscrib|registr|jueg|jugar|entr|me meto|meterme)/;
+
+// VER LA LISTA (quién está apuntado). Distinto de "status" (¿estoy YO?).
+const LIST_PHRASES = [
+  "quien hay en la lista", "quien hay en la cwl", "quien esta en la lista",
+  "quien esta apuntad", "quienes estan apuntad", "quienes hay", "quien va a la cwl",
+  "quienes van a la cwl", "quien juega la cwl", "quienes juegan la cwl",
+  "quien se apunto", "quien se ha apuntado", "quienes se han apuntado",
+  "lista de apuntados", "lista de la cwl", "lista cwl", "listame la cwl",
+  "listame los apuntados", "muestrame la lista", "muestra la lista",
+  "ensename la lista", "ver la lista", "ver los apuntados", "los apuntados",
+  "listado de la cwl", "el listado", "cuantos hay apuntad", "cuantos somos",
+  "cuantos vamos", "cuantos van", "quien mas se apunta",
+];
+// Regla genérica: "quién/cuántos" + palabra de lista/apuntarse.
+const LIST_RE = /(quien(es)?|cuant[oa]s)\b[\s\S]*\b(lista|listado|cwl|apuntad|inscrit)\b/;
 
 // ESTADO (preguntas de si estoy dentro). Frases que casi siempre son consulta.
 const STATUS_PHRASES = [
@@ -133,7 +149,7 @@ function affirmHit(toks) {
   );
 }
 
-// Devuelve "help" | "status" | "unsignup" | "signup" | null.
+// Devuelve "help" | "list" | "status" | "unsignup" | "signup" | null.
 export function classifyIntent(raw) {
   const text = normalize(raw);
   const toks = tokens(text);
@@ -152,13 +168,17 @@ export function classifyIntent(raw) {
   // 1) Estado explícito por frase ("estoy apuntado", "me tienes en la lista").
   if (anyPhrase(text, STATUS_PHRASES)) return "status";
 
-  // 2) Ayuda: cómo/dónde apuntarse. Antes que el resto para no confundir
+  // 2) Ver la lista de inscritos ("quién hay en la lista", "lístame la cwl").
+  //    Antes que el estado genérico: "quién hay en la lista?" no es "¿estoy yo?".
+  if (anyPhrase(text, LIST_PHRASES) || LIST_RE.test(text)) return "list";
+
+  // 3) Ayuda: cómo/dónde apuntarse. Antes que el resto para no confundir
   //    "¿cómo me apunto?" con un apunte real.
   if (anyPhrase(text, HELP_PHRASES) || (HOW_WORDS.test(text) && SIGNUP_STEM.test(text))) {
     return "help";
   }
 
-  // 3) Estado por pregunta genérica (? + raíz).
+  // 4) Estado por pregunta genérica (? + raíz).
   if (
     isQuestion &&
     (hasStem("apunt") || hasStem("particip") || text.includes("lista") ||
@@ -169,7 +189,7 @@ export function classifyIntent(raw) {
     return "status";
   }
 
-  // 4) Desapuntarse.
+  // 5) Desapuntarse.
   if (
     anyPhrase(text, REMOVE_PHRASES) ||
     REMOVE_WORDS.some((w) => fuzzyHas(toks, w)) ||
@@ -178,12 +198,12 @@ export function classifyIntent(raw) {
     return "unsignup";
   }
 
-  // 5) Apuntarse (frases 1ª persona o palabras clave con erratas).
+  // 6) Apuntarse (frases 1ª persona o palabras clave con erratas).
   if (anyPhrase(text, JOIN_PHRASES) || JOIN_WORDS.some((w) => fuzzyHas(toks, w, 1))) {
     return "signup";
   }
 
-  // 6) Afirmación corta ("yo", "voy", "dentro"…), sin negación.
+  // 7) Afirmación corta ("yo", "voy", "dentro"…), sin negación.
   if (!negated && affirmHit(toks)) return "signup";
 
   return null;

@@ -68,6 +68,18 @@ const cases = [
   ["aparezco en la lista?", "status"],
   ["mira si estoy apuntado", "status"],
   ["participo?", "status"],
+  // --- ver la lista (¿quién hay?) ---
+  ["quien hay en la lista", "list"],
+  ["quien hay en la cwl", "list"],
+  ["quienes estan apuntados?", "list"],
+  ["listame la cwl", "list"],
+  ["muestrame la lista", "list"],
+  ["ver los apuntados", "list"],
+  ["cuantos vamos", "list"],
+  ["cuantos hay apuntados", "list"],
+  ["quien va a la cwl", "list"],
+  ["estoy en la lista?", "status"], // "¿estoy YO?" no es ver la lista
+
   // --- ayuda (¿cómo me apunto?) ---
   ["como me apunto?", "help"],
   ["¿cómo me apunto?", "help"],
@@ -85,6 +97,7 @@ const cases = [
   ["gg equipo", null],
   ["como va la guerra", null],
   ["ya casi ganamos", null],
+  ["quien va ganando", null], // "quien" pero sin palabra de lista
 ];
 
 let ok = 0;

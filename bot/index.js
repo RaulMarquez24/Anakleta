@@ -18,7 +18,15 @@ import { classifyIntent } from "./match.js";
 
 // Súbelo cuando cambies algo. En `fly logs` verás esta línea al arrancar: si NO
 // cambia tras un deploy, es que el deploy no ha subido el código nuevo.
-const BOT_VERSION = "v4 unsignup-not-signed";
+const BOT_VERSION = "v5 list+help";
+
+// Texto de ayuda, compartido por «¿cómo me apunto?» (texto libre) y /help.
+const HELP_TEXT =
+  "ℹ️ **Cómo funciona la CWL por aquí:**\n" +
+  "• Para **apuntarte**, escribe «me apunto» (o usa `/apuntar`) y reaccionaré con ✅.\n" +
+  "• Para **ver quién hay**, escribe «quién hay en la lista» o usa `/lista-cwl`.\n" +
+  "• Para **comprobar** si estás tú, escribe «¿estoy apuntado?».\n" +
+  "• Para **salir**, escribe «me desapunto» (o usa `/desapuntar`).";
 
 const {
   DISCORD_BOT_TOKEN,
@@ -106,6 +114,7 @@ const COMMANDS = [
   { name: "apuntar", description: "Apuntarte a la Liga de Clanes (CWL)" },
   { name: "desapuntar", description: "Salir de la Liga de Clanes (CWL)" },
   { name: "lista-cwl", description: "Ver la lista de inscritos a la CWL" },
+  { name: "help", description: "Cómo funciona la inscripción a la CWL" },
 ];
 
 client.once(Events.ClientReady, async (c) => {
@@ -168,6 +177,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await interaction.reply(formatList(rows)); // pública: la ve todo el canal
       return;
     }
+
+    if (interaction.commandName === "help") {
+      await interaction.reply({ content: HELP_TEXT, flags: MessageFlags.Ephemeral });
+      return;
+    }
   } catch (err) {
     console.error("Error en interacción:", err);
     if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
@@ -200,12 +214,13 @@ client.on(Events.MessageCreate, async (msg) => {
     if (intent) console.log(`[intent] ${username} -> ${intent}`);
 
     if (intent === "help") {
-      await msg.reply(
-        "ℹ️ **Cómo funciona la CWL por aquí:**\n" +
-          "• Para **apuntarte**, escribe «me apunto» (o usa `/apuntar`) y reaccionaré con ✅.\n" +
-          "• Para **comprobar** si estás, escribe «¿estoy apuntado?» o mira `/lista-cwl`.\n" +
-          "• Para **salir**, escribe «me desapunto» (o usa `/desapuntar`).",
-      );
+      await msg.reply(HELP_TEXT);
+      return;
+    }
+
+    if (intent === "list") {
+      const rows = await getSignups();
+      await msg.reply(formatList(rows));
       return;
     }
 
