@@ -16,6 +16,8 @@ export interface MemberHistory {
   noteBy: string | null;
   noteAt: string | null;
   mainTag: string | null; // si es secundaria: tag de su cuenta principal
+  discordId: string | null; // cuenta de Discord vinculada (para avisos)
+  discordUsername: string | null;
   // Valores más recientes (última captura):
   current: {
     leagueTierName: string | null;
@@ -75,6 +77,8 @@ async function getMemberHistoryImpl(tag: string): Promise<MemberHistory | null> 
     noteBy: (member.note_by as string | null) ?? null,
     noteAt: (member.note_at as string | null) ?? null,
     mainTag: (member.main_tag as string | null) ?? null,
+    discordId: (member.discord_id as string | null) ?? null,
+    discordUsername: (member.discord_username as string | null) ?? null,
     current: {
       leagueTierName: (last?.league_tier_name as string | null) ?? null,
       leagueTierIcon: (last?.league_tier_icon as string | null) ?? null,

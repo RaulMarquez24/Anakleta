@@ -93,7 +93,7 @@ export function AccountLinker({
             onChange={(e) => setSel(e.target.value)}
             className="min-w-0 flex-1 rounded-lg border border-line bg-surface-2 px-2.5 py-1.5 text-sm font-semibold text-ink outline-none focus:border-gold"
           >
-            <option value="">— elegir cuenta —</option>
+            <option value="">Cuenta…</option>
             {candidates.map((c) => (
               <option key={c.tag} value={c.tag}>
                 {c.name}
