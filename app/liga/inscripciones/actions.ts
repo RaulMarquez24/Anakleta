@@ -12,11 +12,15 @@ import {
 
 type Result = { ok: boolean; error?: string };
 
-const PATH = "/liga/inscripciones";
-
 async function gate() {
   const user = await getCurrentUser();
   return user?.email ?? null;
+}
+
+// Refresca la página de la liga afectada + el hub de Guerras.
+function bump(season: string) {
+  revalidatePath(`/liga/${season}`);
+  revalidatePath("/guerras");
 }
 
 // Crea la lista de una temporada (si no existe) y publica el mensaje fijo.
@@ -42,7 +46,7 @@ export async function createList(
   });
   if (error) return { ok: false, error: error.message };
   await refreshLiveList(s);
-  revalidatePath(PATH);
+  bump(s);
   return { ok: true };
 }
 
@@ -53,7 +57,7 @@ export async function setState(season: string, state: "open" | "closed"): Promis
   const { error } = await svc.from("cwl_lists").update({ state }).eq("season", season);
   if (error) return { ok: false, error: error.message };
   await refreshLiveList(season);
-  revalidatePath(PATH);
+  bump(season);
   return { ok: true };
 }
 
@@ -64,7 +68,7 @@ export async function setSize(season: string, size: number | null): Promise<Resu
   const { error } = await svc.from("cwl_lists").update({ size }).eq("season", season);
   if (error) return { ok: false, error: error.message };
   await refreshLiveList(season);
-  revalidatePath(PATH);
+  bump(season);
   return { ok: true };
 }
 
@@ -82,7 +86,7 @@ export async function setDates(
   const { error } = await svc.from("cwl_lists").update(patch).eq("season", season);
   if (error) return { ok: false, error: error.message };
   await refreshLiveList(season);
-  revalidatePath(PATH);
+  bump(season);
   return { ok: true };
 }
 
@@ -109,7 +113,7 @@ export async function addSignupMember(season: string, memberTag: string): Promis
   if (error) return { ok: false, error: error.message };
   await assignCwlRole((m.discord_id as string | null) ?? null);
   await refreshLiveList(season);
-  revalidatePath(PATH);
+  bump(season);
   return { ok: true };
 }
 
@@ -132,7 +136,7 @@ export async function addSignupDiscord(
   if (error) return { ok: false, error: error.message };
   await assignCwlRole(discordId);
   await refreshLiveList(season);
-  revalidatePath(PATH);
+  bump(season);
   return { ok: true };
 }
 
@@ -149,6 +153,6 @@ export async function removeSignup(season: string, signupId: number): Promise<Re
   if (error) return { ok: false, error: error.message };
   await removeCwlRole((row?.discord_id as string | null) ?? null);
   await refreshLiveList(season);
-  revalidatePath(PATH);
+  bump(season);
   return { ok: true };
 }

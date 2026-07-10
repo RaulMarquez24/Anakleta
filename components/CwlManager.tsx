@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   createList,
@@ -32,15 +31,10 @@ export interface DiscordMemberOpt {
   label: string;
   username: string;
 }
-export interface SeasonRow {
-  season: string;
-  label: string;
-  state: string;
-}
 
 export interface CwlManagerProps {
-  season: string | null;
-  label: string | null;
+  season: string; // temporada de esta liga (la página)
+  exists: boolean; // ¿hay ya inscripción (cwl_lists) para esta liga?
   state: "open" | "closed" | null;
   size: number | null;
   cutoff: number | null;
@@ -52,11 +46,8 @@ export interface CwlManagerProps {
   hiddenNames: string[];
   clanMembers: ClanMemberOpt[];
   discordMembers: DiscordMemberOpt[];
-  history: SeasonRow[];
-  suggestedSeason: string;
 }
 
-// datetime-local <-> ISO
 function toLocalInput(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -78,12 +69,13 @@ export function CwlManager(props: CwlManagerProps) {
     });
   }
 
-  // ---- Sin lista: crear ----
-  if (!props.season || props.state === null) {
-    return <CreateCard suggested={props.suggestedSeason} pending={pending} err={err} onCreate={(s, sz, st) => run(() => createList(s, sz, st))} />;
+  const season = props.season;
+
+  // ---- Sin inscripción todavía para esta liga ----
+  if (!props.exists || props.state === null) {
+    return <CreateCard season={season} pending={pending} err={err} onCreate={(sz, st) => run(() => createList(season, sz, st))} />;
   }
 
-  const season = props.season;
   const isOpen = props.state === "open";
   const total = props.inside.length + props.queue.length;
 
@@ -94,9 +86,9 @@ export function CwlManager(props: CwlManagerProps) {
       {/* Cabecera + controles */}
       <div className="rounded-2xl border border-line bg-surface p-4">
         <div className="flex items-center gap-2">
-          <span className="text-lg">🏆</span>
+          <span className="text-lg">📋</span>
           <div className="min-w-0 flex-1">
-            <p className="font-extrabold text-ink">{props.label}</p>
+            <p className="font-extrabold text-ink">Inscripción</p>
             <p className="text-xs text-ink-soft">
               {props.inside.length}/{props.cutoff} dentro
               {props.queue.length > 0 && ` · ${props.queue.length} en cola`}
@@ -153,7 +145,6 @@ export function CwlManager(props: CwlManagerProps) {
             Fechas (opcional)
           </summary>
           <DatesEditor
-            season={season}
             opensAt={props.opensAt}
             startsAt={props.closeDate}
             endsAt={props.endsAt}
@@ -165,7 +156,6 @@ export function CwlManager(props: CwlManagerProps) {
 
       {/* Añadir (colíder) */}
       <AddPanel
-        season={season}
         clanMembers={props.clanMembers}
         discordMembers={props.discordMembers}
         pending={pending}
@@ -207,28 +197,8 @@ export function CwlManager(props: CwlManagerProps) {
 
       {total === 0 && (
         <p className="text-center text-xs text-ink-soft">
-          Comparte el canal de inscripciones: escribiendo «me apunto» se apuntan solos.
+          En el canal de inscripciones, escribiendo «me apunto» se apuntan solos.
         </p>
-      )}
-
-      {/* Histórico */}
-      {props.history.length > 0 && (
-        <div>
-          <p className="mb-2 mt-6 text-xs font-bold uppercase tracking-wide text-ink-soft">Temporadas anteriores</p>
-          <div className="space-y-2">
-            {props.history.map((s) => (
-              <Link
-                key={s.season}
-                href={`/liga/${encodeURIComponent(s.season)}`}
-                className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-3 hover:bg-surface-2/60"
-              >
-                <span className="text-base">🏆</span>
-                <span className="flex-1 font-bold text-ink">{s.label}</span>
-                <span aria-hidden className="text-ink-soft">›</span>
-              </Link>
-            ))}
-          </div>
-        </div>
       )}
     </div>
   );
@@ -295,7 +265,6 @@ function AddPanel({
   onAddMember,
   onAddDiscord,
 }: {
-  season: string;
   clanMembers: ClanMemberOpt[];
   discordMembers: DiscordMemberOpt[];
   pending: boolean;
@@ -376,17 +345,16 @@ function AddPanel({
 }
 
 function CreateCard({
-  suggested,
+  season,
   pending,
   err,
   onCreate,
 }: {
-  suggested: string;
+  season: string;
   pending: boolean;
   err: string | null;
-  onCreate: (season: string, size: number | null, startsAt: string | null) => void;
+  onCreate: (size: number | null, startsAt: string | null) => void;
 }) {
-  const [season, setSeason] = useState(suggested);
   const [size, setSize] = useState<number | null>(null);
   const [start, setStart] = useState("");
 
@@ -394,22 +362,13 @@ function CreateCard({
     <div className="space-y-4">
       {err && <p className="rounded-lg bg-banner/10 px-3 py-2 text-sm font-semibold text-banner">{err}</p>}
       <div className="rounded-2xl border border-dashed border-line bg-surface/60 p-5 text-center">
-        <p className="text-3xl">🏆</p>
-        <p className="mt-2 font-extrabold text-ink">No hay ninguna lista de CWL abierta</p>
+        <p className="text-3xl">📋</p>
+        <p className="mt-2 font-extrabold text-ink">Esta liga aún no tiene inscripción</p>
         <p className="mt-1 text-sm text-ink-soft">
-          Normalmente la crea el cron ~1 semana antes de la liga. Puedes crearla ya a mano:
+          Normalmente la abre el cron ~1 semana antes. Puedes abrirla ya a mano:
         </p>
       </div>
       <div className="space-y-3 rounded-2xl border border-line bg-surface p-4">
-        <label className="block">
-          <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-ink-soft">Temporada (AAAA-MM)</span>
-          <input
-            value={season}
-            onChange={(e) => setSeason(e.target.value)}
-            placeholder="2026-08"
-            className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm font-semibold text-ink outline-none focus:border-gold"
-          />
-        </label>
         <div>
           <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-ink-soft">Límite</span>
           <div className="flex gap-2">
@@ -440,11 +399,11 @@ function CreateCard({
           />
         </label>
         <button
-          onClick={() => season.trim() && onCreate(season.trim(), size, start ? new Date(start).toISOString() : null)}
-          disabled={pending || !season.trim()}
+          onClick={() => onCreate(size, start ? new Date(start).toISOString() : null)}
+          disabled={pending}
           className="w-full rounded-full bg-gold px-4 py-2.5 text-sm font-extrabold text-banner-dark transition hover:brightness-105 disabled:opacity-50"
         >
-          {pending ? "Creando…" : "Crear lista y publicar en Discord"}
+          {pending ? "Abriendo…" : `Abrir inscripción de ${season}`}
         </button>
       </div>
     </div>
@@ -458,7 +417,6 @@ function DatesEditor({
   pending,
   onSave,
 }: {
-  season: string;
   opensAt: string | null;
   startsAt: string | null;
   endsAt: string | null;

@@ -2,8 +2,10 @@ import Link from "next/link";
 import { getNormalWars, getCwlSeasons } from "@/lib/war-history";
 import { getCurrentWar } from "@/lib/war";
 import { getClanName } from "@/lib/dashboard";
+import { listSeasons } from "@/lib/cwl";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { AppShell } from "@/components/AppShell";
+import { NewLeagueButton } from "@/components/NewLeagueButton";
 import { ResultBadge, scoreText, seasonLabel, fmtDate } from "@/components/WarBits";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +19,13 @@ function timeLeft(iso: string | null): string | null {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+function suggestedSeason(): string {
+  const now = new Date();
+  const bump = now.getUTCDate() >= 20 ? 1 : 0;
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + bump, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 export default async function GuerrasPage({
   searchParams,
 }: {
@@ -25,12 +34,20 @@ export default async function GuerrasPage({
   const sp = await searchParams;
   const user = await getCurrentUser();
 
-  const [current, wars, seasons, clanName] = await Promise.all([
+  const [current, wars, seasons, clanName, cwlLists] = await Promise.all([
     getCurrentWar().catch(() => null),
     getNormalWars(),
     getCwlSeasons(),
     getClanName(),
+    listSeasons().catch(() => []),
   ]);
+
+  // Ligas = unión de temporadas con datos de guerra + temporadas con inscripción.
+  const warBySeason = new Map(seasons.map((s) => [s.season, s]));
+  const listBySeason = new Map(cwlLists.map((l) => [l.season, l]));
+  const ligaSeasons = Array.from(
+    new Set([...seasons.map((s) => s.season), ...cwlLists.map((l) => l.season)]),
+  ).sort((a, b) => b.localeCompare(a));
 
   // "En curso" solo si está en guerra o preparación. Una guerra ya terminada
   // (warEnded, típico entre rondas de CWL) NO es en curso: vive en Ligas.
@@ -45,7 +62,7 @@ export default async function GuerrasPage({
   const tab =
     sp.tab === "guerras" || sp.tab === "ligas"
       ? sp.tab
-      : wars.length === 0 && seasons.length > 0
+      : wars.length === 0 && ligaSeasons.length > 0
         ? "ligas"
         : "guerras";
 
@@ -105,52 +122,54 @@ export default async function GuerrasPage({
           ⚔️ Guerras{wars.length > 0 ? ` (${wars.length})` : ""}
         </Link>
         <Link href="/guerras?tab=ligas" className={tabCls(tab === "ligas")}>
-          🏆 Ligas{seasons.length > 0 ? ` (${seasons.length})` : ""}
+          🏆 Ligas{ligaSeasons.length > 0 ? ` (${ligaSeasons.length})` : ""}
         </Link>
       </div>
 
       {tab === "ligas" ? (
         <div className="space-y-2">
-          {/* Inscripciones de la CWL (lista activa + gestión) */}
-          <Link
-            href="/liga/inscripciones"
-            className="flex items-center gap-3 rounded-2xl border-2 border-gold/40 bg-gold/10 p-3.5 transition hover:bg-gold/15"
-          >
-            <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-gold/25 text-lg">
-              📋
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="font-extrabold text-ink">Inscripciones CWL</p>
-              <p className="text-xs text-ink-soft">Quién está apuntado a la liga · apuntar/quitar</p>
-            </div>
-            <span aria-hidden className="text-ink-soft">›</span>
-          </Link>
+          {/* Abrir la inscripción de una liga (crea su lista y navega a ella) */}
+          <NewLeagueButton suggested={suggestedSeason()} />
 
-          {seasons.length === 0 ? (
-            <Empty>Aún no hay ligas registradas. Se guardan solas durante la semana de CWL.</Empty>
+          {ligaSeasons.length === 0 ? (
+            <Empty>Aún no hay ligas. Abre una inscripción arriba o se crean solas durante la CWL.</Empty>
           ) : (
-            seasons.map((s) => (
-              <Link
-                key={s.season}
-                href={`/liga/${encodeURIComponent(s.season)}`}
-                className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-3.5 hover:bg-surface-2/60"
-              >
-                <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-gold/15 text-lg">
-                  🏆
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="font-extrabold text-ink">{seasonLabel(s.season)}</p>
-                  <p className="text-xs text-ink-soft">{s.wars} rondas registradas</p>
-                </div>
-                <span className="text-sm font-extrabold tabular-nums">
-                  <span className="text-grass">{s.wins}V</span>
-                  <span className="text-ink-soft"> · </span>
-                  <span className="text-banner">{s.losses}D</span>
-                  {s.ties > 0 && <span className="text-ink-soft"> · {s.ties}E</span>}
-                </span>
-                <span aria-hidden className="text-ink-soft">›</span>
-              </Link>
-            ))
+            ligaSeasons.map((season) => {
+              const s = warBySeason.get(season);
+              const l = listBySeason.get(season);
+              return (
+                <Link
+                  key={season}
+                  href={`/liga/${encodeURIComponent(season)}`}
+                  className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-3.5 hover:bg-surface-2/60"
+                >
+                  <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-gold/15 text-lg">
+                    🏆
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-extrabold text-ink">{seasonLabel(season)}</p>
+                    <p className="text-xs text-ink-soft">
+                      {s ? `${s.wars} rondas registradas` : "Sin rondas aún"}
+                      {l && (
+                        <span className={l.state === "open" ? "text-grass" : "text-ink-soft"}>
+                          {" · "}
+                          {l.state === "open" ? "📋 inscripción abierta" : "📋 inscripción"}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  {s ? (
+                    <span className="text-sm font-extrabold tabular-nums">
+                      <span className="text-grass">{s.wins}V</span>
+                      <span className="text-ink-soft"> · </span>
+                      <span className="text-banner">{s.losses}D</span>
+                      {s.ties > 0 && <span className="text-ink-soft"> · {s.ties}E</span>}
+                    </span>
+                  ) : null}
+                  <span aria-hidden className="text-ink-soft">›</span>
+                </Link>
+              );
+            })
           )}
         </div>
       ) : wars.length === 0 ? (
