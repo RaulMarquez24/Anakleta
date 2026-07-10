@@ -1,4 +1,4 @@
-﻿"use server";
+"use server";
 
 import { getSeasonScoreboard, getCwlSeasons, type SeasonScoreboard } from "@/lib/war-history";
 import { sendClanMessage, discordConfigured } from "@/lib/discord";
@@ -48,13 +48,32 @@ function cleanName(s: string): string {
   return out.replace(/\s+/g, " ").trim();
 }
 
-// Estado de cada ronda para un miembro (celda de la tabla).
-const BENCH = "·"; // no estaba alineado ese día (no jugaba)
-const MISS = "✗"; // alineado pero NO atacó (falta)
+// Colores ANSI para el code block ```ansi``` de Discord. Se usa ansi (no md)
+// porque md interpreta "_" y "*" de los nombres como cursiva/negrita y descuadra
+// filas enteras; ansi los deja intactos y encima permite color por estado.
+const ESC = "\x1b";
+const paint = (code: string, s: string) => `${ESC}[${code}m${s}${ESC}[0m`;
+const DIM = "30"; // gris (separadores, índice, "no jugaba")
+const RED = "1;31"; // rojo (no atacó)
+const GREEN = "32"; // 3 estrellas
+const YELLOW = "33"; // 1-2 estrellas
+const CYAN = "36"; // %
+const GOLD = "1;33"; // título / totales
+const HEAD = "1;36"; // cabecera en negrita
 
-// Construye el contenido (líneas de texto) del resumen. Va todo dentro de un
-// code block ```md```, que Discord colorea (cabeceras, numeración, citas), así
-// no se ve monótono. El título y el resumen de estrellas van DENTRO del bloque.
+const MISS = "X"; // alineado pero NO atacó (ASCII: ancho fijo garantizado)
+const BENCH = "·"; // no estaba alineado ese día
+
+// Celda de 2 columnas (" 3", " X", " ·") ya coloreada según el estado.
+function cellField(c: { stars: number; attacked: boolean } | undefined): string {
+  if (!c) return paint(DIM, ` ${BENCH}`); // no jugaba
+  if (!c.attacked) return paint(RED, ` ${MISS}`); // alineado y no atacó
+  const col = c.stars >= 3 ? GREEN : c.stars === 0 ? RED : YELLOW;
+  return paint(col, ` ${c.stars}`); // atacó (0-3 estrellas)
+}
+
+// Construye el contenido (líneas) del resumen para un code block ```ansi```.
+// El título, la cabecera de columnas y el resumen van DENTRO del bloque.
 function buildLines(sb: SeasonScoreboard, title: string): string[] {
   const rr = sb.rounds;
   const ranked = sb.rows; // ya viene ordenado por estrellas desc, luego % desc
@@ -64,38 +83,49 @@ function buildLines(sb: SeasonScoreboard, title: string): string[] {
   const nameByTag = new Map(ranked.map((r) => [r.tag, cleanName(r.name) || "jugador"]));
   const nameW = Math.min(16, Math.max(8, ...[...nameByTag.values()].map((n) => n.length)));
 
-  const cell = (row: (typeof ranked)[number], r: number): string => {
-    const c = row.byRound[r];
-    if (!c) return BENCH; // sin fila esa ronda = no jugaba
-    if (!c.attacked) return MISS; // alineado y no atacó
-    return String(c.stars); // atacó (0-3 estrellas)
-  };
+  const bar = paint(DIM, "|");
+  // Región de rondas: "R1 R2 ... R7". Coincide en columnas con las celdas " N".
+  const roundsHdr = rr.map((r) => `R${r}`).join(" ");
 
   let n = 0;
   const rowLine = (row: (typeof ranked)[number]): string => {
     n++;
-    const idx = `${n}.`.padStart(3);
+    const idx = paint(DIM, `${n}.`.padStart(3));
     const name = (nameByTag.get(row.tag) ?? "jugador").padEnd(nameW);
-    const cells = rr.map((r) => cell(row, r)).join(" ");
-    const stars = String(row.totalStars).padStart(2);
-    const pct = String(Math.round(row.totalDestruction)).padStart(3);
-    return `${idx} ${name} | ${cells} | ⭐ ${stars} · ${pct}%`;
+    const cells = rr.map((r) => cellField(row.byRound[r])).join(" ");
+    const stars = paint(GOLD, String(row.totalStars).padStart(3));
+    const pct = paint(CYAN, `${String(Math.round(row.totalDestruction)).padStart(3)}%`);
+    // idx(3) · name(nameW) · |cells · | · ⭐ stars(3) pct(4)
+    return `${idx} ${name} ${bar}${cells} ${bar} ${paint(YELLOW, "⭐")} ${stars} ${pct}`;
   };
+
+  // Cabecera alineada con las filas (mismos anchos de columna).
+  const headTxt = `  # ${"Jugador".padEnd(nameW)} |${roundsHdr} | ⭐ Est    %`;
+  const rule = paint(DIM, "─".repeat(headTxt.length));
+  const legend =
+    `${paint(GREEN, "0-3")} = estrellas    ${paint(RED, MISS)} = no atacó    ` +
+    `${paint(DIM, BENCH)} = no jugaba`;
 
   const totalStars = ranked.reduce((acc, r) => acc + r.totalStars, 0);
   const lines: string[] = [];
-  lines.push(`## 🏆 ${title}`);
-  lines.push(`> Ronda 1-${rr.length}   ·   [0-3]=estrellas   ·   ${MISS}=no atacó   ·   ${BENCH}=no jugaba`);
+  lines.push(paint(GOLD, `🏆 ${title}`));
+  lines.push(legend);
   lines.push("");
-  lines.push(`# Participantes (${played.length})`);
+  lines.push(paint(HEAD, headTxt));
+  lines.push(rule);
+  lines.push(paint(HEAD, `Participantes (${played.length})`));
   for (const row of played) lines.push(rowLine(row));
   if (idle.length) {
     lines.push("");
-    lines.push(`# Sin atacar (${idle.length})`);
+    lines.push(paint(HEAD, `Sin atacar (${idle.length})`));
     for (const row of idle) lines.push(rowLine(row));
   }
-  lines.push("");
-  lines.push(`# ⭐ ${totalStars} estrellas del clan · ${ranked.length} en alineación`);
+  lines.push(rule);
+  lines.push(
+    paint(GOLD, `⭐ ${totalStars} estrellas del clan`) +
+      paint(DIM, "  ·  ") +
+      `${ranked.length} en alineación`,
+  );
   return lines;
 }
 
@@ -129,12 +159,13 @@ export async function sendSeasonSummary(
 
   const lines = buildLines(sb, `Participación CWL · ${label(season)}${suffix}`);
 
-  // Trocear en code blocks ```md``` bajo el límite de Discord (~2000 chars).
+  // Trocear en code blocks ```ansi``` bajo el límite de Discord (~2000 chars).
+  // Los códigos de color inflan la longitud, así que cortamos con margen.
   const chunks: string[] = [];
   let buf: string[] = [];
   let len = 0;
   for (const l of lines) {
-    if (len + l.length + 1 > 1850 && buf.length) {
+    if (len + l.length + 1 > 1500 && buf.length) {
       chunks.push(buf.join("\n"));
       buf = [];
       len = 0;
@@ -145,7 +176,7 @@ export async function sendSeasonSummary(
   if (buf.length) chunks.push(buf.join("\n"));
 
   for (const chunk of chunks) {
-    const content = `\`\`\`md\n${chunk}\n\`\`\``;
+    const content = `\`\`\`ansi\n${chunk}\n\`\`\``;
     const ok = await sendClanMessage(content, {}, channelId);
     if (!ok) return { ok: false, error: "No se pudo enviar a Discord (revisa el bot/canal)." };
   }
