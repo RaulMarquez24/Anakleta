@@ -69,13 +69,45 @@ export async function getConfig(db) {
   const { data } = await db
     .from("settings")
     .select("key, value")
-    .in("key", ["cwl_list_channel_id", "cwl_role_id", "clan_role_id"]);
+    .in("key", ["cwl_list_channel_id", "cwl_role_id", "clan_role_id", "welcome_channel_id"]);
   const map = new Map((data ?? []).map((r) => [r.key, r.value]));
   return {
     listChannelId: map.get("cwl_list_channel_id") || process.env.CWL_LIST_CHANNEL_ID || null,
     cwlRoleId: map.get("cwl_role_id") || process.env.CWL_ROLE_ID || null,
     clanRoleId: map.get("clan_role_id") || process.env.CLAN_ROLE_ID || null,
+    welcomeChannelId: map.get("welcome_channel_id") || process.env.WELCOME_CHANNEL_ID || null,
   };
+}
+
+// Publica en un canal mencionando a un usuario (fallback de bienvenida).
+export async function postMention(channelId, content, userId) {
+  if (!TOKEN || !channelId) return false;
+  try {
+    const res = await fetch(`${API}/channels/${channelId}/messages`, {
+      method: "POST",
+      headers: { Authorization: `Bot ${TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ content, allowed_mentions: { parse: [], users: [userId] } }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// Vincula un Discord con una cuenta del clan (por tag). Devuelve el miembro
+// vinculado (name) o null si ese tag no es de un miembro del clan.
+export async function linkDiscordToMember(db, tag, discordId, username) {
+  const { data } = await db
+    .from("members")
+    .update({
+      discord_id: discordId,
+      discord_username: username,
+      discord_by: "bot",
+      discord_at: new Date().toISOString(),
+    })
+    .eq("tag", tag)
+    .select("tag, name");
+  return data && data.length ? data[0] : null;
 }
 
 // --- Listas ---

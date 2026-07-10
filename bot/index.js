@@ -18,10 +18,11 @@ import {
 import { createClient } from "@supabase/supabase-js";
 import { classifyIntent } from "./match.js";
 import * as cwl from "./cwl.js";
+import * as coc from "./coc.js";
 
 // Súbelo cuando cambies algo. En `fly logs` verás esta línea al arrancar: si NO
 // cambia tras un deploy, es que el deploy no ha subido el código nuevo.
-const BOT_VERSION = "v10 desapuntar-picker";
+const BOT_VERSION = "v11 bienvenida";
 
 // Texto de ayuda, compartido por «¿cómo me apunto?» (texto libre) y /help.
 const HELP_TEXT =
@@ -57,11 +58,16 @@ const db = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers, // privilegiado: para el evento de "usuario entró"
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent, // privilegiado: activar en el portal
+    GatewayIntentBits.DirectMessages, // recibir DMs (flujo de identificación)
   ],
   partials: [Partials.Channel],
 });
+
+// Charset de un tag de CoC (sin la almohadilla). Sirve para detectarlo en un DM.
+const TAG_RE = /#?([0289PYLQGRJCUV]{5,10})/i;
 
 // --- Lógica de inscripción (compartida por texto libre y slash) ---
 
@@ -309,6 +315,12 @@ client.on(Events.MessageCreate, async (msg) => {
   try {
     if (msg.author.bot) return;
 
+    // DM (sin servidor): flujo de identificación por tag de CoC.
+    if (!msg.guild) {
+      await handleDm(msg);
+      return;
+    }
+
     // DEBUG temporal: ver qué llega (canal, contenido) en los logs de Fly.
     console.log(
       `[msg] ch=${msg.channelId} user=${msg.author.username} content=${JSON.stringify(msg.content)}`,
@@ -369,5 +381,82 @@ client.on(Events.MessageCreate, async (msg) => {
     console.error("Error en messageCreate:", err);
   }
 });
+
+// --- Bienvenida: al entrar alguien, pedirle el tag por DM (o en el general) ---
+
+const WELCOME_DM =
+  "¡Bienvenido a **Añakleta**! 👋\n\n" +
+  "Para identificarte en el clan, pégame aquí tu **tag de Clash of Clans** " +
+  "(lo ves en tu perfil del juego, empieza por `#`, ej. `#2ABC123`) y te pongo tu " +
+  "nombre del juego como apodo del servidor.";
+
+client.on(Events.GuildMemberAdd, async (member) => {
+  try {
+    if (member.user.bot) return;
+    const ok = await member.send(WELCOME_DM).then(() => true).catch(() => false);
+    if (!ok) {
+      // MD cerrados -> saludo en el general etiquetándole.
+      const { welcomeChannelId } = await cwl.getConfig(db);
+      if (welcomeChannelId) {
+        await cwl.postMention(
+          welcomeChannelId,
+          `👋 ¡Bienvenido <@${member.id}>! Escríbeme por privado tu **tag de Clash of Clans** ` +
+            "(ej. `#2ABC123`) para ponerte tu nombre del juego, o pásaselo a un colíder.",
+          member.id,
+        );
+      }
+    }
+  } catch (err) {
+    console.error("Error en GuildMemberAdd:", err);
+  }
+});
+
+// Identificación por DM: el usuario pega su tag -> ponemos su nombre de CoC como
+// apodo y (si es del clan) vinculamos su Discord con esa cuenta.
+async function handleDm(msg) {
+  const m = msg.content.match(TAG_RE);
+  if (!m) {
+    await msg
+      .reply(
+        "👋 Pégame tu **tag de Clash of Clans** (lo ves en tu perfil del juego, empieza por `#`, " +
+          "ej. `#2ABC123`) y te pongo tu nombre del juego como apodo.",
+      )
+      .catch(() => {});
+    return;
+  }
+  const player = await coc.getPlayer(m[1]);
+  if (!player || !player.name) {
+    await msg.reply("No encuentro ese tag 🤔. Revísalo (empieza por `#`) y vuelve a pegármelo.").catch(() => {});
+    return;
+  }
+
+  // Poner el nombre de CoC como apodo del servidor.
+  let nickOk = false;
+  try {
+    const guild = await client.guilds.fetch(DISCORD_GUILD_ID);
+    const member = await guild.members.fetch(msg.author.id);
+    await member.setNickname(String(player.name).slice(0, 32));
+    nickOk = true;
+  } catch {
+    nickOk = false; // owner / rol más alto / sin permiso Manage Nicknames
+  }
+
+  // Vincular con la cuenta del clan (si ese tag es de un miembro).
+  let linked = null;
+  try {
+    linked = await cwl.linkDiscordToMember(db, player.tag, msg.author.id, msg.author.username);
+  } catch (err) {
+    console.error("[db] linkDiscordToMember:", err?.message ?? err);
+  }
+
+  const parts = [`✅ ¡Genial, **${player.name}**!`];
+  parts.push(
+    nickOk
+      ? "Te he puesto ese nombre como apodo en el servidor."
+      : "No he podido cambiarte el apodo (permisos); cámbialo tú a ese nombre 🙏.",
+  );
+  if (linked) parts.push("Y te he vinculado con tu cuenta del clan para la CWL. 🎯");
+  await msg.reply(parts.join(" ")).catch(() => {});
+}
 
 client.login(DISCORD_BOT_TOKEN);
