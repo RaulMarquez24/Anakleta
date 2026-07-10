@@ -35,6 +35,7 @@ export interface DiscordMemberOpt {
 export interface CwlManagerProps {
   season: string; // temporada de esta liga (la página)
   exists: boolean; // ¿hay ya inscripción (cwl_lists) para esta liga?
+  ended: boolean; // ¿la liga ya terminó? (no se puede reabrir la inscripción)
   state: "open" | "closed" | null;
   size: number | null;
   cutoff: number | null;
@@ -59,6 +60,7 @@ export function CwlManager(props: CwlManagerProps) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
 
   function run(fn: () => Promise<{ ok: boolean; error?: string }>) {
     setErr(null);
@@ -80,88 +82,104 @@ export function CwlManager(props: CwlManagerProps) {
   const total = props.inside.length + props.queue.length;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {err && <p className="rounded-lg bg-banner/10 px-3 py-2 text-sm font-semibold text-banner">{err}</p>}
 
-      {/* Cabecera + controles */}
-      <div className="rounded-2xl border border-line bg-surface p-4">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">📋</span>
-          <div className="min-w-0 flex-1">
-            <p className="font-extrabold text-ink">Inscripción</p>
-            <p className="text-xs text-ink-soft">
-              {props.inside.length}/{props.cutoff} dentro
-              {props.queue.length > 0 && ` · ${props.queue.length} en cola`}
-            </p>
-          </div>
-          <span
-            className={`flex-none rounded-full px-2.5 py-1 text-xs font-extrabold ${
-              isOpen ? "bg-grass/15 text-grass" : "bg-banner/15 text-banner"
-            }`}
-          >
-            {isOpen ? "🟢 Abierta" : "🔒 Cerrada"}
-          </span>
+      {/* Cabecera */}
+      <div className="flex items-center gap-2">
+        <span className="text-lg">📋</span>
+        <div className="min-w-0 flex-1">
+          <p className="font-extrabold text-ink">Inscripción</p>
+          <p className="text-xs text-ink-soft">
+            {props.inside.length}/{props.cutoff} dentro
+            {props.queue.length > 0 && ` · ${props.queue.length} en cola`}
+          </p>
         </div>
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            onClick={() => run(() => setListState(season, isOpen ? "closed" : "open"))}
-            disabled={pending}
-            className="rounded-full bg-surface-2 px-3.5 py-1.5 text-sm font-extrabold text-ink transition hover:bg-line disabled:opacity-50"
-          >
-            {isOpen ? "🔒 Cerrar inscripción" : "🟢 Reabrir inscripción"}
-          </button>
-        </div>
-
-        {/* Corte */}
-        <div className="mt-3">
-          <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-ink-soft">Límite de plazas</p>
-          <div className="flex gap-2">
-            {[
-              { label: "Auto (15→30)", val: null as number | null },
-              { label: "15 fijo", val: 15 },
-              { label: "30 fijo", val: 30 },
-            ].map((o) => {
-              const active = props.size === o.val;
-              return (
-                <button
-                  key={o.label}
-                  onClick={() => run(() => setSize(season, o.val))}
-                  disabled={pending}
-                  className={`flex-1 rounded-full px-2 py-1.5 text-xs font-extrabold transition disabled:opacity-50 ${
-                    active ? "bg-gold text-banner-dark" : "bg-surface-2 text-ink-soft hover:bg-line"
-                  }`}
-                >
-                  {o.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Fechas (avanzado) */}
-        <details className="mt-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-ink-soft">
-            Fechas (opcional)
-          </summary>
-          <DatesEditor
-            opensAt={props.opensAt}
-            startsAt={props.closeDate}
-            endsAt={props.endsAt}
-            pending={pending}
-            onSave={(d) => run(() => setDates(season, d))}
-          />
-        </details>
+        <span
+          className={`flex-none rounded-full px-2.5 py-1 text-xs font-extrabold ${
+            isOpen ? "bg-grass/15 text-grass" : "bg-banner/15 text-banner"
+          }`}
+        >
+          {isOpen ? "🟢 Abierta" : props.ended ? "🏁 Cerrada (terminada)" : "🔒 Cerrada"}
+        </span>
+        <button
+          onClick={() => setEditing((v) => !v)}
+          className={`flex-none rounded-full px-3 py-1.5 text-xs font-extrabold transition ${
+            editing ? "bg-gold text-banner-dark" : "bg-surface-2 text-ink-soft hover:bg-line"
+          }`}
+        >
+          {editing ? "✓ Hecho" : "✏️ Gestionar"}
+        </button>
       </div>
 
-      {/* Añadir (colíder) */}
-      <AddPanel
-        clanMembers={props.clanMembers}
-        discordMembers={props.discordMembers}
-        pending={pending}
-        onAddMember={(tag) => run(() => addSignupMember(season, tag))}
-        onAddDiscord={(id, username) => run(() => addSignupDiscord(season, id, username))}
-      />
+      {/* Panel de edición (oculto por defecto; evita tocar nada sin querer) */}
+      {editing && (
+        <div className="space-y-3 rounded-2xl border-2 border-gold/50 bg-gold/5 p-3">
+          <p className="text-xs font-bold text-gold-deep">
+            ✏️ Modo edición — los cambios se guardan al instante.
+          </p>
+
+          {/* Abrir/cerrar: solo mientras la liga NO haya terminado */}
+          {!props.ended && (
+            <button
+              onClick={() => run(() => setListState(season, isOpen ? "closed" : "open"))}
+              disabled={pending}
+              className="rounded-full bg-surface-2 px-3.5 py-1.5 text-sm font-extrabold text-ink transition hover:bg-line disabled:opacity-50"
+            >
+              {isOpen ? "🔒 Cerrar inscripción" : "🟢 Reabrir inscripción"}
+            </button>
+          )}
+
+          {/* Corte */}
+          <div>
+            <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-ink-soft">Límite de plazas</p>
+            <div className="flex gap-2">
+              {[
+                { label: "Auto (15→30)", val: null as number | null },
+                { label: "15 fijo", val: 15 },
+                { label: "30 fijo", val: 30 },
+              ].map((o) => {
+                const active = props.size === o.val;
+                return (
+                  <button
+                    key={o.label}
+                    onClick={() => run(() => setSize(season, o.val))}
+                    disabled={pending}
+                    className={`flex-1 rounded-full px-2 py-1.5 text-xs font-extrabold transition disabled:opacity-50 ${
+                      active ? "bg-gold text-banner-dark" : "bg-surface-2 text-ink-soft hover:bg-line"
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Añadir a mano */}
+          <AddPanel
+            clanMembers={props.clanMembers}
+            discordMembers={props.discordMembers}
+            pending={pending}
+            onAddMember={(tag) => run(() => addSignupMember(season, tag))}
+            onAddDiscord={(id, username) => run(() => addSignupDiscord(season, id, username))}
+          />
+
+          {/* Fechas */}
+          <details>
+            <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-ink-soft">
+              Fechas (opcional)
+            </summary>
+            <DatesEditor
+              opensAt={props.opensAt}
+              startsAt={props.closeDate}
+              endsAt={props.endsAt}
+              pending={pending}
+              onSave={(d) => run(() => setDates(season, d))}
+            />
+          </details>
+        </div>
+      )}
 
       {/* Dentro */}
       <Section title={`✅ Dentro (${props.inside.length})`}>
@@ -169,7 +187,14 @@ export function CwlManager(props: CwlManagerProps) {
           <Empty>Nadie apuntado todavía.</Empty>
         ) : (
           props.inside.map((e, i) => (
-            <EntryRow key={e.id} i={i + 1} e={e} pending={pending} onRemove={() => run(() => removeSignup(season, e.id))} />
+            <EntryRow
+              key={e.id}
+              i={i + 1}
+              e={e}
+              editing={editing}
+              pending={pending}
+              onRemove={() => run(() => removeSignup(season, e.id))}
+            />
           ))
         )}
       </Section>
@@ -178,7 +203,15 @@ export function CwlManager(props: CwlManagerProps) {
       {props.queue.length > 0 && (
         <Section title={`⏳ En cola (${props.queue.length})`} hint="Entran si se libera una plaza.">
           {props.queue.map((e, i) => (
-            <EntryRow key={e.id} i={i + 1} e={e} queued pending={pending} onRemove={() => run(() => removeSignup(season, e.id))} />
+            <EntryRow
+              key={e.id}
+              i={i + 1}
+              e={e}
+              queued
+              editing={editing}
+              pending={pending}
+              onRemove={() => run(() => removeSignup(season, e.id))}
+            />
           ))}
         </Section>
       )}
@@ -195,7 +228,7 @@ export function CwlManager(props: CwlManagerProps) {
         </details>
       )}
 
-      {total === 0 && (
+      {total === 0 && !editing && (
         <p className="text-center text-xs text-ink-soft">
           En el canal de inscripciones, escribiendo «me apunto» se apuntan solos.
         </p>
@@ -208,12 +241,14 @@ function EntryRow({
   i,
   e,
   queued,
+  editing,
   pending,
   onRemove,
 }: {
   i: number;
   e: CwlEntryView;
   queued?: boolean;
+  editing: boolean;
   pending: boolean;
   onRemove: () => void;
 }) {
@@ -230,14 +265,18 @@ function EntryRow({
           {e.source === "app" && " · añadido a mano"}
         </p>
       </div>
-      <button
-        onClick={onRemove}
-        disabled={pending}
-        aria-label="Quitar"
-        className="flex-none rounded-full px-2 py-1 text-sm font-extrabold text-ink-soft transition hover:bg-banner/10 hover:text-banner disabled:opacity-50"
-      >
-        ✕
-      </button>
+      {editing && (
+        <button
+          onClick={() => {
+            if (confirm(`¿Quitar a ${e.name} de la inscripción?`)) onRemove();
+          }}
+          disabled={pending}
+          aria-label="Quitar"
+          className="flex-none rounded-full px-2 py-1 text-sm font-extrabold text-ink-soft transition hover:bg-banner/10 hover:text-banner disabled:opacity-50"
+        >
+          ✕
+        </button>
+      )}
     </div>
   );
 }
@@ -276,7 +315,7 @@ function AddPanel({
   const [did, setDid] = useState(discordMembers[0]?.id ?? "");
 
   return (
-    <div className="rounded-2xl border border-line bg-surface p-4">
+    <div className="rounded-xl border border-line bg-surface p-3">
       <p className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">Añadir a mano</p>
       <div className="mb-2 flex gap-2">
         <button
