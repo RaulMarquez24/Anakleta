@@ -1,8 +1,10 @@
 -- ============================================================================
--- SEED de desarrollo: inscripción de la CWL de Junio 2026 (2026-06).
--- Sirve para probar la vista de inscripciones con datos reales.
+-- SEED de desarrollo: inscripción de la CWL de Julio 2026 (2026-07),
+-- la liga que acaba de terminar. Sirve para probar la vista con datos reales.
 -- Requiere haber ejecutado antes supabase/cwl.sql.
 -- Idempotente: no vuelve a insertar si la temporada ya tiene inscritos.
+-- (Cuando lleguen los detalles de guerra de esa liga, la Participación se
+--  completa sola; esto solo carga la INSCRIPCIÓN.)
 -- ============================================================================
 
 -- 0) Corrige el índice único de discord (versión antigua era demasiado estricta:
@@ -16,8 +18,8 @@ insert into cwl_lists
   (season, state, size, opens_at, starts_at, ends_at, created_by,
    announced_open, announced_mid, announced_last, roles_cleared)
 values
-  ('2026-06', 'closed', null,
-   '2026-05-25T08:00:00Z', '2026-06-02T08:00:00Z', '2026-06-11T08:00:00Z', 'seed',
+  ('2026-07', 'closed', null,
+   '2026-06-25T08:00:00Z', '2026-07-02T08:00:00Z', '2026-07-09T08:00:00Z', 'seed',
    true, true, true, true)
 on conflict (season) do nothing;
 
@@ -26,12 +28,12 @@ on conflict (season) do nothing;
 --    también se toma del miembro si lo tiene vinculado.
 insert into cwl_signups (season, username, member_tag, discord_id, source, added_by, created_at)
 select
-  '2026-06',
+  '2026-07',
   v.name,
   (select m.tag        from members m where lower(m.name) = lower(v.name) limit 1),
   (select m.discord_id from members m where lower(m.name) = lower(v.name) limit 1),
   'app', 'seed',
-  timestamptz '2026-05-25T10:00:00Z' + (v.ord * interval '1 minute')
+  timestamptz '2026-06-25T10:00:00Z' + (v.ord * interval '1 minute')
 from (values
   (1,  'Raul2402'),
   (2,  'VITI22'),
@@ -64,4 +66,4 @@ from (values
   (28, 'Yahir.c'),
   (29, 'Yahir')
 ) as v(ord, name)
-where not exists (select 1 from cwl_signups where season = '2026-06');
+where not exists (select 1 from cwl_signups where season = '2026-07');
