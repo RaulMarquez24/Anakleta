@@ -36,11 +36,14 @@ create table cwl_signups (
   created_at  timestamptz not null default now()
 );
 
--- Un jugador (por discord o por tag) no puede estar dos veces en la misma temporada.
-create unique index if not exists cwl_signups_season_discord_idx
-  on cwl_signups (season, discord_id) where discord_id is not null;
+-- Cada cuenta (member_tag) solo una vez por temporada.
 create unique index if not exists cwl_signups_season_member_idx
   on cwl_signups (season, member_tag) where member_tag is not null;
+-- Un mismo Discord no puede AUTO-apuntarse dos veces (self-signup sin cuenta
+-- asociada). NO se restringe cuando hay member_tag: una persona puede inscribir
+-- varias cuentas (principal + secundarias) con el mismo Discord.
+create unique index if not exists cwl_signups_season_discord_idx
+  on cwl_signups (season, discord_id) where discord_id is not null and member_tag is null;
 create index if not exists cwl_signups_season_order_idx
   on cwl_signups (season, created_at);
 

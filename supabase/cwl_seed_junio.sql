@@ -5,6 +5,12 @@
 -- Idempotente: no vuelve a insertar si la temporada ya tiene inscritos.
 -- ============================================================================
 
+-- 0) Corrige el índice único de discord (versión antigua era demasiado estricta:
+--    impedía inscribir varias cuentas de una misma persona con el mismo Discord).
+drop index if exists cwl_signups_season_discord_idx;
+create unique index if not exists cwl_signups_season_discord_idx
+  on cwl_signups (season, discord_id) where discord_id is not null and member_tag is null;
+
 -- 1) La liga (inscripción va unida a la liga). Ya terminada -> 'closed'.
 insert into cwl_lists
   (season, state, size, opens_at, starts_at, ends_at, created_by,
