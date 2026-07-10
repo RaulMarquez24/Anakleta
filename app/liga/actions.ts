@@ -90,7 +90,7 @@ function buildLines(sb: SeasonScoreboard, title: string): string[] {
   let n = 0;
   const rowLine = (row: (typeof ranked)[number]): string => {
     n++;
-    const idx = `${n}.`.padStart(3); // color por defecto (legible sobre el fondo oscuro)
+    const idx = `${n}.`.padEnd(3); // izquierda; color por defecto (legible sobre el fondo oscuro)
     const name = (nameByTag.get(row.tag) ?? "jugador").padEnd(nameW);
     const cells = rr.map((r) => cellField(row.byRound[r])).join(" ");
     const stars = paint(GOLD, String(row.totalStars).padStart(3));
@@ -100,7 +100,7 @@ function buildLines(sb: SeasonScoreboard, title: string): string[] {
   };
 
   // Cabecera alineada con las filas (mismos anchos de columna).
-  const headTxt = `  # ${"Jugador".padEnd(nameW)} |${roundsHdr} | Est    %`;
+  const headTxt = `${"#".padEnd(3)} ${"Jugador".padEnd(nameW)} |${roundsHdr} | Est    %`;
   const rule = paint(DIM, "─".repeat(headTxt.length));
   const legend =
     `${paint(GREEN, "0-3")} = estrellas    ${paint(RED, MISS)} = no atacó    ` +
