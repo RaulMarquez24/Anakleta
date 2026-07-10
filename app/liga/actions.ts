@@ -1,6 +1,6 @@
 "use server";
 
-import { getSeasonScoreboard, type SeasonScoreboard } from "@/lib/war-history";
+import { getSeasonScoreboard, getCwlSeasons, type SeasonScoreboard } from "@/lib/war-history";
 import { sendClanMessage, discordConfigured } from "@/lib/discord";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 
@@ -10,7 +10,7 @@ const MONTHS = [
 ];
 
 function label(season: string): string {
-  const m = season.match(/^(\d{4})-(\d{2})$/);
+  const m = season.match(/^(\d{4})-(\d{2})/); // prefijo: soporta "2026-06" o "2026-06-01…"
   if (!m) return season;
   return `${MONTHS[Number(m[2]) - 1] ?? m[2]} ${m[1]}`;
 }
@@ -47,7 +47,23 @@ export async function sendSeasonSummary(
   const sb = await getSeasonScoreboard(season);
   if (sb.rows.length === 0) return { ok: false, error: "No hay datos guardados de esa temporada." };
 
-  const title = `**🏆 Participación CWL · ${label(season)}**`;
+  // Si hay dos CWL el mismo mes (p. ej. un evento como el Mundial), distínguelo.
+  let suffix = "";
+  try {
+    const all = await getCwlSeasons();
+    const monthKey = (s: string) => s.slice(0, 7);
+    const sameMonth = all
+      .filter((s) => monthKey(s.season) === monthKey(season))
+      .sort((a, b) => (a.from ?? "").localeCompare(b.from ?? "")); // el más antiguo = CWL normal
+    if (sameMonth.length > 1) {
+      const idx = sameMonth.findIndex((s) => s.season === season);
+      if (idx > 0) suffix = sameMonth.length === 2 ? " · Evento" : ` · Evento ${idx}`;
+    }
+  } catch {
+    /* si falla, sin sufijo */
+  }
+
+  const title = `**🏆 Participación CWL · ${label(season)}${suffix}**`;
   const totalStars = sb.rows.reduce((n, r) => n + r.totalStars, 0);
   const footer = `⭐ **${totalStars}** estrellas del clan · **${sb.rows.length}** participantes`;
   const lines = buildTable(sb);
