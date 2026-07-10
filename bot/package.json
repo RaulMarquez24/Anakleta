@@ -4,7 +4,8 @@
   "type": "module",
   "description": "Bot de Discord del clan Añakleta (gateway 24/7, alojado en Fly.io).",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "node match.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

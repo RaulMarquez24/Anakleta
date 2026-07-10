@@ -70,6 +70,16 @@ client.on(Events.MessageCreate, async (msg) => {
     const intent = classifyIntent(msg.content);
     if (intent) console.log(`[intent] ${username} -> ${intent}`);
 
+    if (intent === "help") {
+      await msg.reply(
+        "ℹ️ **Cómo funciona la CWL por aquí:**\n" +
+          "• Para **apuntarte**, escribe «me apunto» y reaccionaré con ✅.\n" +
+          "• Para **comprobar** si estás, escribe «¿estoy apuntado?».\n" +
+          "• Para **salir**, escribe «me desapunto».",
+      );
+      return;
+    }
+
     if (intent === "status") {
       const yes = await isSignedUp(id);
       await msg.reply(yes ? "✅ Sí, estás apuntado a la CWL." : "❌ No estás apuntado. Escribe «me apunto».");

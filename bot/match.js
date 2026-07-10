@@ -1,5 +1,10 @@
-// Detección de intención (apuntarse / preguntar / desapuntarse) tolerante a
-// erratas. Diccionarios de frases y palabras clave + distancia de Levenshtein.
+// Detección de intención tolerante a erratas para la inscripción a la CWL.
+// Intenciones: "help" (¿cómo me apunto?) · "status" (¿estoy apuntado?) ·
+// "unsignup" (me desapunto) · "signup" (me apunto) · null (ruido).
+//
+// Estrategia: sobre todo FRASES en subcadena (0 falsos positivos) y, solo para
+// palabras largas y específicas del dominio, coincidencia difusa (Levenshtein).
+// Las palabras cortas/ambiguas NUNCA van en fuzzy (chocan con el habla normal).
 
 export function normalize(s) {
   return s
@@ -34,49 +39,91 @@ function fuzzyHas(toks, word, maxD = word.length <= 5 ? 1 : 2) {
 
 const anyPhrase = (text, arr) => arr.some((p) => text.includes(normalize(p)));
 
-// --- Diccionarios ---
+// --- Diccionarios (todo en minúscula y sin tildes: se comparan ya normalizados) ---
 
-// Desapuntarse (se comprueba antes que apuntarse).
-const REMOVE_PHRASES = [
-  "me desapunto", "desapuntame", "me borro", "borrame", "me salgo", "me bajo",
-  "quitame", "quitadme", "sacame", "me quito", "me retiro", "me caigo",
-  "ya no juego", "ya no voy", "ya no participo", "no me apunto", "no participo",
-  "no voy a jugar", "no puedo jugar", "no podre", "no voy a poder", "al final no",
-  "no cuenten conmigo", "cancelo", "anulame", "fuera", "-1",
+// AYUDA: "¿cómo me apunto?", "¿dónde participo?", "¿qué hago para apuntarme?"…
+const HELP_PHRASES = [
+  "como me apunto", "como me anoto", "como me uno", "como me sumo", "como me meto",
+  "como me inscribo", "como me registro", "como participo", "como entro", "como juego",
+  "como se apunta", "como se apunta uno", "como se participa", "como se juega",
+  "como se inscribe", "como se anota", "como se entra",
+  "como puedo apuntarme", "como puedo participar", "como puedo jugar", "como puedo entrar",
+  "como hago para apuntarme", "como hago para participar", "como hago para jugar",
+  "como hago para entrar", "como funciona la cwl", "como funciona esto",
+  "como funciona la liga", "como va lo de la cwl", "como va esto de la cwl",
+  "donde me apunto", "donde me anoto", "donde me inscribo", "donde participo",
+  "donde me uno", "donde hay que apuntarse",
+  "que hago para apuntarme", "que hago para participar", "que hago para jugar",
+  "que hay que hacer para", "que tengo que hacer para", "que tengo que poner para",
+  "que se pone para apuntarse", "como me apunto a la cwl", "como participo en la cwl",
 ];
-// "salgo" fuera: en fuzzy chocaba con "algo".
-const REMOVE_WORDS = [
-  "desapunto", "desapuntame", "desapuntarme", "borrame", "quitame",
-  "sacame", "retiro", "cancelo", "anulame",
-];
+// Regla genérica: palabra de "cómo/dónde" + raíz de apuntarse en el mismo mensaje.
+const HOW_WORDS = /(^|\s)(como|komo|kmo|cmo|donde|dnd)(\s|$)/;
+const SIGNUP_STEM = /(apunt|particip|unir|sumo|sumar|anot|inscrib|registr|jueg|jugar|entr|me meto|meterme)/;
 
-// Estado (preguntas): frases explícitas, o pregunta ("?") + palabra clave.
+// ESTADO (preguntas de si estoy dentro). Frases que casi siempre son consulta.
 const STATUS_PHRASES = [
-  "estoy apuntad", "estoy en la lista", "estoy dentro", "sigo apuntad",
-  "estoy anotad", "me apunte", "me apuntaste", "me pusiste", "me metiste",
-  "estoy incluid", "aparezco", "figuro",
+  "estoy apuntad", "estoy anotad", "estoy inscrit", "estoy incluid", "estoy metid",
+  "estoy en la lista", "estoy en la cwl", "estoy en la guerra",
+  "sigo apuntad", "sigo anotad", "sigo inscrit", "sigo dentro", "sigo en la lista",
+  "me apuntaste", "me anotaste", "me pusiste", "me metiste", "me inscribiste",
+  "me registraste", "me contaste", "me incluiste", "me apunte ya",
+  "me tienes apuntad", "me tienes anotad", "me tienes en la lista", "me tienes en la cwl",
+  "aparezco", "figuro", "salgo en la lista",
+  "quede apuntad", "quede anotad", "quede dentro",
+  "mira si estoy", "revisa si estoy", "chequea si estoy", "comprueba si estoy",
+  "confirma si estoy", "confirmame si estoy", "puedes ver si estoy", "puedes mirar si estoy",
+  "estoy o no", "voy o no", "cuento o no",
 ];
 
-// Apuntarse — frases (subcadena) en 1ª persona.
+// DESAPUNTARSE (se comprueba antes que apuntarse).
+const REMOVE_PHRASES = [
+  "me desapunto", "desapuntame", "desapuntadme", "me borro", "borrame", "borradme",
+  "me salgo", "me bajo", "me bajo de la cwl", "quitame", "quitadme", "sacame", "sacadme",
+  "me quito", "me retiro", "me retiro de la cwl", "me caigo", "me piro",
+  "me doy de baja", "dame de baja", "darme de baja", "me tengo que bajar",
+  "tengo que desapuntarme", "borra mi cuenta", "quita mi cuenta",
+  "ya no juego", "ya no voy", "ya no participo", "ya no puedo", "ya no me apunto",
+  "no me apunto", "no participo", "no voy a jugar", "no voy a participar",
+  "no voy a entrar", "no puedo jugar", "no puedo participar", "no podre",
+  "no voy a poder", "no puedo esta cwl", "esta cwl no puedo",
+  "al final no", "al final no puedo", "al final no voy",
+  "no cuenten conmigo", "no conteis conmigo", "no me conteis",
+  "paso de la cwl", "paso esta vez", "cancelo", "anulame", "fuera", "-1",
+];
+// Palabras largas y específicas (fuzzy). Nada corto ni ambiguo.
+const REMOVE_WORDS = [
+  "desapunto", "desapuntame", "desapuntarme", "desapuntar", "borrame",
+  "quitame", "sacame", "retiro", "cancelo", "anulame",
+];
+
+// APUNTARSE — frases (subcadena) en 1ª persona / imperativas hacia el bot.
 const JOIN_PHRASES = [
-  "me apunto", "me uno", "unirme", "quiero unirme", "me sumo", "sumame",
-  "me meto", "meteme", "cuenta conmigo", "cuenten conmigo", "contad conmigo",
-  "quiero jugar", "quiero participar", "quiero entrar", "quiero cwl",
-  "quiero la cwl", "voy a la cwl", "voy a jugar", "voy a participar",
-  "yo juego", "yo participo", "yo entro", "yo voy", "estoy dentro",
-  "me anoto", "me pongo", "me ofrezco", "pongo mi cuenta", "meto mi cuenta",
+  "me apunto", "me apunte", "me anoto", "me anote", "me uno", "unirme", "me sumo",
+  "me meto", "me pongo", "me ofrezco", "me inscribo", "me registro",
+  "quiero apuntarme", "quiero apuntar", "me quiero apuntar", "quiero unirme",
+  "quiero inscribirme", "quiero registrarme", "me gustaria apuntarme",
+  "me gustaria participar", "me gustaria jugar", "quiero jugar", "quiero participar",
+  "quiero entrar", "quiero jugar la cwl", "quiero la cwl", "quiero entrar a la cwl",
+  "voy a la cwl", "voy a jugar", "voy a participar", "voy a entrar", "voy a apuntarme",
+  "yo juego", "yo participo", "yo entro", "yo voy", "yo me apunto", "yo tambien juego",
+  "juego la cwl", "juego yo", "estoy dentro", "me apunto a la cwl", "me apunto yo",
+  "cuenta conmigo", "cuenten conmigo", "contad conmigo", "contar conmigo",
+  "apuntame", "apuntadme", "anotame", "anotadme", "sumame", "meteme",
+  "ponme", "ponme en la lista", "meteme en la lista", "agregame", "añademe",
+  "pongo mi cuenta", "meto mi cuenta", "va me apunto", "claro que me apunto",
 ];
-// Palabras clave (token, maxD=1: no confundir 1ª persona con "apuntan"/"se apunta").
+// Palabras clave (token, maxD=1). Solo verbos largos de 1ª persona / imperativos.
+// OJO: nunca "apunto" suelto en fuzzy (choca con "apunta/apuntan" de 3ª persona).
 const JOIN_WORDS = [
-  "participo", "apuntame", "apuntarme", "apuntenme", "entro", "entrar",
-  "anoto", "anotame", "anotadme", "sumame", "meteme", "+1",
+  "participo", "apuntame", "apuntarme", "apuntenme", "apuntadme", "entro", "entrar",
+  "anoto", "anotame", "anotadme", "sumame", "meteme", "inscribo", "inscribirme", "+1",
 ];
 
-// Afirmaciones cortas: valen SOLO si el mensaje es corto (≤3 palabras) y sin
-// negación. Así "yo/voy/dentro/presente" cuentan sueltos, pero no en frases largas.
+// Afirmaciones cortas: valen SOLO en mensajes de ≤3 palabras y sin negación.
 const AFFIRM = [
   "yo", "voy", "presente", "aqui", "dentro", "entro", "apunto", "participo",
-  "tambien", "conmigo", "in",
+  "tambien", "conmigo", "in", "sip", "claro", "vale", "obvio",
 ];
 
 function affirmHit(toks) {
@@ -86,32 +133,43 @@ function affirmHit(toks) {
   );
 }
 
-// Devuelve "status" | "unsignup" | "signup" | null.
+// Devuelve "help" | "status" | "unsignup" | "signup" | null.
 export function classifyIntent(raw) {
   const text = normalize(raw);
   const toks = tokens(text);
-  const isQuestion = /\?/.test(raw) || /^(estoy|sigo)\b/.test(text);
+  // Solo "?" cuenta como pregunta. Los estados sin "?" ("estoy apuntado") ya los
+  // capta STATUS_PHRASES; así "estoy dentro" suelto queda libre para ser apunte.
+  const isQuestion = /\?/.test(raw);
   const hasStem = (s) => text.includes(s);
   const negated = /(^|\s)(no|ya no|tampoco)(\s|$)/.test(text);
-  // Negación PEGADA a un verbo de juego en 1ª persona ("no voy", "ya no juego").
-  // No usamos "liga"/"cwl" aquí: "no hay liga" no es desapuntarse.
+  // Negación PEGADA a un verbo de juego ("no voy", "ya no juego"). No usamos
+  // "liga"/"cwl": "no hay liga" no es desapuntarse.
   const negatedPlay =
     /(^|\s)(no|ya no|tampoco)\s+(voy|juego|jugare|jugar|participo|participar|apunto|entro|cuento|puedo|podre)\b/.test(
       text,
     );
 
-  // 1) Pregunta de estado
+  // 1) Estado explícito por frase ("estoy apuntado", "me tienes en la lista").
+  if (anyPhrase(text, STATUS_PHRASES)) return "status";
+
+  // 2) Ayuda: cómo/dónde apuntarse. Antes que el resto para no confundir
+  //    "¿cómo me apunto?" con un apunte real.
+  if (anyPhrase(text, HELP_PHRASES) || (HOW_WORDS.test(text) && SIGNUP_STEM.test(text))) {
+    return "help";
+  }
+
+  // 3) Estado por pregunta genérica (? + raíz).
   if (
-    anyPhrase(text, STATUS_PHRASES) ||
-    (isQuestion &&
-      (hasStem("apunt") || hasStem("particip") || text.includes("lista") ||
-        text.includes("dentro") || text.includes("anotad") ||
-        text.includes("aparezc") || text.includes("figur") || text.includes("incluid")))
+    isQuestion &&
+    (hasStem("apunt") || hasStem("particip") || text.includes("lista") ||
+      text.includes("dentro") || text.includes("anotad") || text.includes("inscrit") ||
+      text.includes("aparezc") || text.includes("figur") || text.includes("incluid") ||
+      text.includes("metid") || text.includes("cuento"))
   ) {
     return "status";
   }
 
-  // 2) Desapuntarse (incluye negación + palabra de juego: "no voy", "no puedo jugar").
+  // 4) Desapuntarse.
   if (
     anyPhrase(text, REMOVE_PHRASES) ||
     REMOVE_WORDS.some((w) => fuzzyHas(toks, w)) ||
@@ -120,12 +178,12 @@ export function classifyIntent(raw) {
     return "unsignup";
   }
 
-  // 3) Apuntarse (frases 1ª persona o palabras clave con erratas ajustadas)
+  // 5) Apuntarse (frases 1ª persona o palabras clave con erratas).
   if (anyPhrase(text, JOIN_PHRASES) || JOIN_WORDS.some((w) => fuzzyHas(toks, w, 1))) {
     return "signup";
   }
 
-  // 4) Afirmación corta ("yo", "voy", "dentro"…), sin negación
+  // 6) Afirmación corta ("yo", "voy", "dentro"…), sin negación.
   if (!negated && affirmHit(toks)) return "signup";
 
   return null;
