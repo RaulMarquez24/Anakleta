@@ -16,6 +16,10 @@ import {
 import { createClient } from "@supabase/supabase-js";
 import { classifyIntent } from "./match.js";
 
+// Súbelo cuando cambies algo. En `fly logs` verás esta línea al arrancar: si NO
+// cambia tras un deploy, es que el deploy no ha subido el código nuevo.
+const BOT_VERSION = "v3 slash+already-signed";
+
 const {
   DISCORD_BOT_TOKEN,
   DISCORD_GUILD_ID, // opcional: registra los comandos al instante en este servidor
@@ -105,15 +109,18 @@ const COMMANDS = [
 ];
 
 client.once(Events.ClientReady, async (c) => {
-  console.log(`Bot conectado como ${c.user.tag}`);
+  console.log(`Bot conectado como ${c.user.tag} — ${BOT_VERSION}`);
+  console.log(`DISCORD_GUILD_ID=${DISCORD_GUILD_ID ?? "(sin definir)"}`);
   try {
-    if (DISCORD_GUILD_ID) {
-      await c.application.commands.set(COMMANDS, DISCORD_GUILD_ID); // instantáneo
-      console.log(`Slash commands registrados en el servidor ${DISCORD_GUILD_ID}`);
-    } else {
-      await c.application.commands.set(COMMANDS); // global (tarda ~1h en propagar)
-      console.log("Slash commands registrados globalmente (pueden tardar ~1h)");
-    }
+    const set = DISCORD_GUILD_ID
+      ? await c.application.commands.set(COMMANDS, DISCORD_GUILD_ID) // instantáneo
+      : await c.application.commands.set(COMMANDS); // global (tarda ~1h en propagar)
+    const names = set.map((cmd) => `/${cmd.name}`).join(", ");
+    console.log(
+      DISCORD_GUILD_ID
+        ? `Slash commands registrados en el servidor ${DISCORD_GUILD_ID}: ${names}`
+        : `Slash commands registrados globalmente (tardan ~1h): ${names}`,
+    );
   } catch (err) {
     console.error("No se pudieron registrar los slash commands:", err);
   }
