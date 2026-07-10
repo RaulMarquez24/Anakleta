@@ -6,19 +6,19 @@ export const MAX_LEN = 128;
 export const RECRUIT_TEMPLATES: { label: string; text: string }[] = [
   {
     label: "Reclutar",
-    text: "Añakleta busca jugadores activos para guerras diarias y CWL. Buen ambiente y Discord. ¡Únete!",
+    text: "Añakleta busca jugadores activos para guerras diarias, CWL seria y capital. Donaciones al día, buen ambiente y Discord. ¡Únete!",
   },
   {
     label: "Tras limpieza",
-    text: "Hemos hecho limpieza en Añakleta. Plazas libres para gente activa en CWL y guerras. ¡Entra ya!",
+    text: "Limpieza hecha en Añakleta: plazas libres para gente activa. Guerras diarias, CWL y capital, donaciones al día. ¡Entra ya!",
   },
   {
     label: "Competitivo",
-    text: "Clan de guerras y CWL busca THs altos y activos. Donaciones al día y buen rollo. ¡Te esperamos!",
+    text: "Clan competitivo de guerras y CWL busca THs altos y activos. Se pide participar, donar y Discord. Buen rollo. ¡Te esperamos!",
   },
   {
     label: "Directo",
-    text: "¿Activo y con ganas de guerra? Únete a Añakleta: CWL, guerras diarias y buen ambiente.",
+    text: "¿Activo y con ganas de guerra? Únete a Añakleta: guerras diarias, CWL seria, capital y buen ambiente. Donaciones al día. ¡Vamos!",
   },
 ];
 
