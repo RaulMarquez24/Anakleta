@@ -120,6 +120,7 @@ export async function getSignups(db, season) {
       linked: Boolean(m),
       inClan: m ? Boolean(m.is_active) : false,
       isSecondary: Boolean(m?.main_tag),
+      mainTag: m?.main_tag ?? null,
     };
   });
 }
@@ -136,9 +137,25 @@ export function partition(list, entries) {
   const hidden = present ? entries.filter((e) => e.linked && !e.inClan) : [];
   const visible = present ? entries.filter((e) => !(e.linked && !e.inClan)) : entries;
 
+  // "Secundaria" es relativo a la persona: solo si tiene 2+ cuentas apuntadas.
+  // Agrupamos por persona (mismo Discord, o misma cuenta principal).
+  const secondaryIds = new Set();
+  const groups = new Map();
+  for (const e of visible) {
+    const key = e.discord_id ? `d:${e.discord_id}` : e.linked ? `m:${e.mainTag ?? e.member_tag}` : `x:${e.id}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(e);
+  }
+  for (const g of groups.values()) {
+    if (g.length <= 1) continue;
+    let primaryIdx = g.findIndex((e) => !e.isSecondary);
+    if (primaryIdx < 0) primaryIdx = 0;
+    g.forEach((e, i) => i !== primaryIdx && secondaryIds.add(e.id));
+  }
+
   // Principales primero (prioridad del resto de gente); secundarias con lo que sobre.
-  const primaries = visible.filter((e) => !e.isSecondary);
-  const secondaries = visible.filter((e) => e.isSecondary);
+  const primaries = visible.filter((e) => !secondaryIds.has(e.id));
+  const secondaries = visible.filter((e) => secondaryIds.has(e.id));
   const cutoff = activeCutoff(list, visible.length);
   const inside = primaries.slice(0, cutoff);
   const queue = primaries.slice(cutoff);

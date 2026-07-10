@@ -21,7 +21,7 @@ import * as cwl from "./cwl.js";
 
 // Súbelo cuando cambies algo. En `fly logs` verás esta línea al arrancar: si NO
 // cambia tras un deploy, es que el deploy no ha subido el código nuevo.
-const BOT_VERSION = "v8 fix-multi-desapuntar";
+const BOT_VERSION = "v9 secundaria-relativa";
 
 // Texto de ayuda, compartido por «¿cómo me apunto?» (texto libre) y /help.
 const HELP_TEXT =

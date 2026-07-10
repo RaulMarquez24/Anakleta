@@ -49,7 +49,8 @@ export interface CwlEntry extends CwlSignupRow {
   linked: boolean; // hay un miembro conocido (activo o no) asociado
   inClan: boolean; // ese miembro está activo en el clan ahora
   leftAt: string | null; // fecha de salida del clan (last_seen_at) si ya no está
-  isSecondary: boolean; // es una cuenta secundaria (member.main_tag != null)
+  isSecondary: boolean; // la cuenta ES secundaria (member.main_tag != null)
+  mainTag: string | null; // tag de su cuenta principal (para agrupar por persona)
 }
 
 export interface CwlPartition {
@@ -153,6 +154,7 @@ export async function getSignups(season: string): Promise<CwlEntry[]> {
       inClan,
       leftAt: m && !inClan ? ((m.last_seen_at as string | null) ?? null) : null,
       isSecondary: Boolean(m?.main_tag),
+      mainTag: (m?.main_tag as string | null) ?? null,
     };
   });
 }
@@ -171,10 +173,28 @@ export function partition(list: CwlList, entries: CwlEntry[]): CwlPartition {
   const hidden = present ? entries.filter((e) => e.linked && !e.inClan) : [];
   const visible = present ? entries.filter((e) => !(e.linked && !e.inClan)) : entries;
 
+  // "Secundaria" es relativo a la PERSONA: solo si tiene 2+ cuentas apuntadas.
+  // Agrupamos por persona (mismo Discord, o misma cuenta principal). En cada
+  // persona, 1 cuenta es principal (su main si está, o la primera apuntada) y las
+  // demás son secundarias. Con una sola cuenta, cuenta como principal aunque sea
+  // técnicamente una secundaria.
+  const secondaryIds = new Set<number>();
+  const groups = new Map<string, CwlEntry[]>();
+  for (const e of visible) {
+    const key = e.discord_id ? `d:${e.discord_id}` : e.linked ? `m:${e.mainTag ?? e.memberTag}` : `x:${e.id}`;
+    (groups.get(key) ?? groups.set(key, []).get(key)!).push(e);
+  }
+  for (const g of groups.values()) {
+    if (g.length <= 1) continue;
+    let primaryIdx = g.findIndex((e) => !e.isSecondary); // la principal (main) si está
+    if (primaryIdx < 0) primaryIdx = 0; // si no, la primera apuntada
+    g.forEach((e, i) => i !== primaryIdx && secondaryIds.add(e.id));
+  }
+
   // Prioridad: los PRINCIPALES (del resto de gente) van primero; las secundarias
   // solo entran con las plazas que sobren. Cada grupo mantiene su orden de inscripción.
-  const primaries = visible.filter((e) => !e.isSecondary);
-  const secondaries = visible.filter((e) => e.isSecondary);
+  const primaries = visible.filter((e) => !secondaryIds.has(e.id));
+  const secondaries = visible.filter((e) => secondaryIds.has(e.id));
   const cutoff = activeCutoff(list, visible.length);
   const inside = primaries.slice(0, cutoff);
   const queue = primaries.slice(cutoff);
