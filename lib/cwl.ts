@@ -193,37 +193,46 @@ function fmtDate(iso: string | null): string | null {
   }
 }
 
-function entryLine(i: number, e: CwlEntry): string {
+function entryLine(i: number, e: CwlEntry, queued = false): string {
+  const num = `\`${String(i).padStart(2, " ")}\``;
   const th = e.townHall ? ` · TH${e.townHall}` : "";
-  const dot = e.discord_id ? "" : " 🎮"; // sin discord vinculado (añadido a mano)
-  return `\`${String(i).padStart(2, " ")}.\` ${e.name}${th}${dot}`;
+  const noDiscord = e.discord_id ? "" : " · 🎮";
+  const tail = queued ? " · ⏳" : "";
+  return `${num} ${e.name}${th}${noDiscord}${tail}`;
 }
 
+// Texto del mensaje fijo. DEBE coincidir con bot/cwl.js (lo editan los dos).
 export function renderListText(list: CwlList, part: CwlPartition): string {
-  const state = list.state === "open" ? "🟢 Abierta" : "🔒 Cerrada";
+  const open = list.state === "open";
+  const stateTxt = open ? "🟢 Inscripción abierta" : "🔒 Inscripción cerrada";
   const occupied = part.inside.length + Math.min(part.secondaries.length, part.secondaryCutoff);
-  const lines: string[] = [];
-  lines.push(`📋 **Inscritos CWL · ${seasonLabel(list.season)}**`);
-  lines.push(`${state} · ${occupied}/${part.cutoff} plazas`);
-  const close = fmtDate(list.starts_at);
-  if (list.state === "open" && close) lines.push(`⏳ Cierre de inscripción: ${close}`);
-  lines.push("");
-  lines.push(`**✅ Dentro (${part.inside.length})**`);
-  if (part.inside.length) part.inside.forEach((e, i) => lines.push(entryLine(i + 1, e)));
-  else lines.push("_nadie todavía — escribe «me apunto»_");
+  const close = open ? fmtDate(list.starts_at) : null;
+
+  const L: string[] = [];
+  L.push(`## 🏆 Liga de Clanes · ${seasonLabel(list.season)}`);
+  L.push(`-# ${stateTxt}  ·  ${occupied}/${part.cutoff} plazas${close ? `  ·  cierra el ${close}` : ""}`);
+  L.push("");
+
+  L.push(`**✅ Dentro** · ${part.inside.length}`);
+  if (part.inside.length) part.inside.forEach((e, i) => L.push(entryLine(i + 1, e)));
+  else L.push("-# nadie todavía");
+
   if (part.secondaries.length) {
-    lines.push("");
-    lines.push(`**➕ Secundarias (${part.secondaries.length})** _(entran si sobran plazas)_`);
-    part.secondaries.forEach((e, i) =>
-      lines.push(entryLine(i + 1, e) + (i < part.secondaryCutoff ? "" : "  ⏳ cola")),
-    );
+    L.push("");
+    L.push(`**➕ Secundarias** · ${part.secondaries.length}`);
+    L.push("-# menor prioridad: entran con las plazas que sobren");
+    part.secondaries.forEach((e, i) => L.push(entryLine(i + 1, e, i >= part.secondaryCutoff)));
   }
+
   if (part.queue.length) {
-    lines.push("");
-    lines.push(`**⏳ En cola (${part.queue.length})** _(entran si se libera plaza)_`);
-    part.queue.forEach((e, i) => lines.push(entryLine(i + 1, e)));
+    L.push("");
+    L.push(`**⏳ En cola** · ${part.queue.length}`);
+    part.queue.forEach((e, i) => L.push(entryLine(i + 1, e, true)));
   }
-  return lines.join("\n");
+
+  L.push("");
+  L.push("-# 📣 Para apuntarte escribe «me apunto» o usa `/apuntar` · esta lista se actualiza sola");
+  return L.join("\n");
 }
 
 // --- Efectos: mensaje fijo en tiempo real + rol CWL ---
