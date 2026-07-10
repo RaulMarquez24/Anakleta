@@ -1,6 +1,6 @@
 # Config de Fly.io para el bot. Ajusta "app" al nombre que crees con `fly launch`.
 app = "anakleta-bot"
-primary_region = "mad"
+primary_region = "cdg"
 
 [build]
 
