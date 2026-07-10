@@ -218,11 +218,12 @@ export async function isSignedUp(db, season, discordId) {
   return Boolean(data);
 }
 
-export async function addSignup(db, season, { discordId, username }) {
+export async function addSignup(db, season, { discordId, username, memberTag = null }) {
   const { error } = await db.from("cwl_signups").insert({
     season,
     discord_id: discordId,
     username,
+    member_tag: memberTag,
     source: "discord",
     added_by: "self",
   });
@@ -230,6 +231,67 @@ export async function addSignup(db, season, { discordId, username }) {
     console.error("[db] addSignup error:", error.message);
     throw error;
   }
+}
+
+// Cuentas del clan (activas) que pertenecen a un usuario de Discord: las
+// vinculadas directamente (discord_id) + sus secundarias (main_tag apunta a
+// alguna de ellas). Mains primero. Sirve para preguntar cuáles apuntar.
+export async function getAccountsForDiscord(db, discordId) {
+  const { data: direct } = await db
+    .from("members")
+    .select("tag, name, town_hall, main_tag, is_active")
+    .eq("discord_id", discordId)
+    .eq("is_active", true);
+  const accounts = [...(direct ?? [])];
+  const seen = new Set(accounts.map((a) => a.tag));
+  const tags = [...seen];
+  if (tags.length) {
+    const { data: secs } = await db
+      .from("members")
+      .select("tag, name, town_hall, main_tag, is_active")
+      .in("main_tag", tags)
+      .eq("is_active", true);
+    for (const s of secs ?? []) {
+      if (!seen.has(s.tag)) {
+        accounts.push(s);
+        seen.add(s.tag);
+      }
+    }
+  }
+  // Mains (sin main_tag) primero, luego por nombre.
+  accounts.sort((a, b) => (a.main_tag ? 1 : 0) - (b.main_tag ? 1 : 0) || String(a.name).localeCompare(String(b.name), "es"));
+  return accounts.map((a) => ({ tag: a.tag, name: a.name, town_hall: a.town_hall }));
+}
+
+// Apunta varias cuentas concretas (por tag) de un mismo Discord. Evita duplicar
+// las que ya estén en esa temporada. Devuelve nombres añadidos / ya existentes.
+export async function addAccounts(db, season, discordId, accounts) {
+  const { data: existing } = await db
+    .from("cwl_signups")
+    .select("member_tag")
+    .eq("season", season)
+    .not("member_tag", "is", null);
+  const have = new Set((existing ?? []).map((r) => r.member_tag));
+  const toAdd = accounts.filter((a) => !have.has(a.tag));
+  if (toAdd.length) {
+    const rows = toAdd.map((a) => ({
+      season,
+      member_tag: a.tag,
+      discord_id: discordId,
+      username: a.name,
+      source: "discord",
+      added_by: "self",
+    }));
+    const { error } = await db.from("cwl_signups").insert(rows);
+    if (error) {
+      console.error("[db] addAccounts error:", error.message);
+      throw error;
+    }
+  }
+  return {
+    added: toAdd.map((a) => a.name),
+    already: accounts.filter((a) => have.has(a.tag)).map((a) => a.name),
+  };
 }
 
 export async function removeSignup(db, season, discordId) {

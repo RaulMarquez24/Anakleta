@@ -12,6 +12,8 @@ import {
   GatewayIntentBits,
   Partials,
   MessageFlags,
+  ActionRowBuilder,
+  StringSelectMenuBuilder,
 } from "discord.js";
 import { createClient } from "@supabase/supabase-js";
 import { classifyIntent } from "./match.js";
@@ -19,7 +21,7 @@ import * as cwl from "./cwl.js";
 
 // Súbelo cuando cambies algo. En `fly logs` verás esta línea al arrancar: si NO
 // cambia tras un deploy, es que el deploy no ha subido el código nuevo.
-const BOT_VERSION = "v6 season-lists";
+const BOT_VERSION = "v7 multi-account";
 
 // Texto de ayuda, compartido por «¿cómo me apunto?» (texto libre) y /help.
 const HELP_TEXT =
@@ -79,21 +81,62 @@ async function queueNote(list, discordId) {
   return null;
 }
 
-// Resultado: { text, react } para responder de forma uniforme.
+// Menú de selección de cuentas (cuando el usuario tiene varias vinculadas).
+function pickRow(season, discordId, accounts) {
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`cwl_pick:${season}:${discordId}`)
+    .setPlaceholder("¿Qué cuentas apuntas a la CWL?")
+    .setMinValues(1)
+    .setMaxValues(accounts.length)
+    .addOptions(
+      accounts.map((a) => ({
+        label: a.town_hall ? `${a.name} (TH${a.town_hall})` : a.name,
+        value: a.tag,
+      })),
+    );
+  return new ActionRowBuilder().addComponents(menu);
+}
+
+// Resultado: { text?, react?, pick? }. `pick` = hay que preguntar qué cuentas.
 async function doSignup(id, username) {
   const list = await cwl.getActiveList(db);
   if (!list) return { text: "🚫 Las inscripciones de CWL no están abiertas todavía." };
   if (!cwl.isOpenForSelf(list)) {
     return { text: "🔒 La inscripción individual está cerrada. Pídele a un colíder que te apunte." };
   }
+
+  // ¿Tiene varias cuentas del clan? -> preguntar cuáles apuntar.
+  const accounts = await cwl.getAccountsForDiscord(db, id);
+  if (accounts.length >= 2) {
+    return { pick: { season: list.season, accounts } };
+  }
+
   if (await cwl.isSignedUp(db, list.season, id)) {
     return { text: "☑️ Ya estás apuntado a la CWL. Mira la lista con `/lista-cwl`." };
   }
-  await cwl.addSignup(db, list.season, { discordId: id, username });
+  const acc = accounts[0] ?? null;
+  await cwl.addSignup(db, list.season, {
+    discordId: id,
+    username: acc?.name ?? username,
+    memberTag: acc?.tag ?? null,
+  });
   await cwl.assignRole(db, id);
   await cwl.refreshLiveList(db, list.season);
   const note = await queueNote(list, id);
   return { react: "✅", text: note ?? undefined };
+}
+
+// Registra las cuentas elegidas en el menú de selección.
+async function applyPick(season, discordId, tags) {
+  const accounts = await cwl.getAccountsForDiscord(db, discordId);
+  const chosen = accounts.filter((a) => tags.includes(a.tag));
+  const r = await cwl.addAccounts(db, season, discordId, chosen);
+  await cwl.assignRole(db, discordId);
+  await cwl.refreshLiveList(db, season);
+  const parts = [];
+  if (r.added.length) parts.push(`✅ Apuntado: ${r.added.join(", ")}`);
+  if (r.already.length) parts.push(`ℹ️ Ya estaban: ${r.already.join(", ")}`);
+  return parts.join(" · ") || "Sin cambios.";
 }
 
 async function doUnsignup(id) {
@@ -143,13 +186,38 @@ client.once(Events.ClientReady, async (c) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  const eph = MessageFlags.Ephemeral;
+
+  // Menú de selección de cuentas ("me apunto" con varias cuentas).
+  if (interaction.isStringSelectMenu() && interaction.customId.startsWith("cwl_pick:")) {
+    const [, season, uid] = interaction.customId.split(":");
+    if (interaction.user.id !== uid) {
+      await interaction.reply({ content: "Este menú no es para ti 🙂", flags: eph }).catch(() => {});
+      return;
+    }
+    try {
+      const text = await applyPick(season, uid, interaction.values);
+      await interaction.update({ content: text, components: [] });
+    } catch {
+      await interaction.reply({ content: "⚠️ No se pudo apuntar. Inténtalo de nuevo.", flags: eph }).catch(() => {});
+    }
+    return;
+  }
+
   if (!interaction.isChatInputCommand()) return;
   const id = interaction.user.id;
   const username = interaction.user.username;
-  const eph = MessageFlags.Ephemeral;
   try {
     if (interaction.commandName === "apuntar") {
       const r = await doSignup(id, username);
+      if (r.pick) {
+        await interaction.reply({
+          content: "Tienes varias cuentas vinculadas. Elige cuáles apuntar:",
+          components: [pickRow(r.pick.season, id, r.pick.accounts)],
+          flags: eph,
+        });
+        return;
+      }
       const msg = r.react ? `✅ ¡Apuntado a la CWL!${r.text ? `\n${r.text}` : ""}` : r.text;
       await interaction.reply({ content: msg, flags: eph });
       return;
@@ -216,7 +284,12 @@ client.on(Events.MessageCreate, async (msg) => {
     }
     if (intent === "signup") {
       const r = await doSignup(id, username);
-      if (r.react) {
+      if (r.pick) {
+        await msg.reply({
+          content: "Tienes varias cuentas vinculadas. Elige cuáles apuntar a la CWL:",
+          components: [pickRow(r.pick.season, id, r.pick.accounts)],
+        });
+      } else if (r.react) {
         await msg.react(r.react).catch(() => {});
         if (r.text) await msg.reply(r.text); // aviso de cola
       } else if (r.text) {
