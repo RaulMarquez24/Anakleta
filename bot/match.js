@@ -28,69 +28,105 @@ function lev(a, b) {
   return dp[m][n];
 }
 
-// ¿algún token se parece a `word`? maxD por defecto según longitud; se puede
-// forzar (p. ej. 1 para evitar confundir 1ª persona con 3ª: apunto vs apuntan).
 function fuzzyHas(toks, word, maxD = word.length <= 5 ? 1 : 2) {
   return toks.some((t) => t === word || lev(t, word) <= maxD);
 }
 
+const anyPhrase = (text, arr) => arr.some((p) => text.includes(normalize(p)));
+
 // --- Diccionarios ---
-// Desapuntarse (se comprueba antes que apuntarse por los "no me apunto", etc.)
+
+// Desapuntarse (se comprueba antes que apuntarse).
 const REMOVE_PHRASES = [
   "me desapunto", "desapuntame", "me borro", "borrame", "me salgo", "me bajo",
-  "quitame", "me quito", "ya no juego", "ya no voy", "ya no participo",
-  "no me apunto", "no participo", "no voy a jugar", "-1",
+  "quitame", "quitadme", "sacame", "me quito", "me retiro", "me caigo",
+  "ya no juego", "ya no voy", "ya no participo", "no me apunto", "no participo",
+  "no voy a jugar", "no puedo jugar", "no podre", "no voy a poder", "al final no",
+  "no cuenten conmigo", "cancelo", "anulame", "fuera", "-1",
 ];
-const REMOVE_WORDS = ["desapunto", "desapuntame", "desapuntarme", "borrame", "salgo", "quitame"];
+// "salgo" fuera: en fuzzy chocaba con "algo".
+const REMOVE_WORDS = [
+  "desapunto", "desapuntame", "desapuntarme", "borrame", "quitame",
+  "sacame", "retiro", "cancelo", "anulame",
+];
 
-// Estado (preguntas). Frases explícitas o pregunta ("?") + palabra clave.
+// Estado (preguntas): frases explícitas, o pregunta ("?") + palabra clave.
 const STATUS_PHRASES = [
   "estoy apuntad", "estoy en la lista", "estoy dentro", "sigo apuntad",
-  "estoy anotad", "me apunte",
+  "estoy anotad", "me apunte", "me apuntaste", "me pusiste", "me metiste",
+  "estoy incluid", "aparezco", "figuro",
 ];
 
-// Apuntarse. Frases (subcadena) en 1ª persona + palabras clave (token, maxD=1
-// para no confundir "apunto" con "apuntan"/"se apunta").
+// Apuntarse — frases (subcadena) en 1ª persona.
 const JOIN_PHRASES = [
-  "me apunto", "me uno", "unirme", "me sumo", "me meto",
-  "cuenta conmigo", "cuenten conmigo", "quiero jugar", "quiero participar",
-  "quiero cwl", "voy a la cwl", "voy a jugar", "yo juego", "yo voy",
-  "estoy dentro", "me anoto",
+  "me apunto", "me uno", "unirme", "quiero unirme", "me sumo", "sumame",
+  "me meto", "meteme", "cuenta conmigo", "cuenten conmigo", "contad conmigo",
+  "quiero jugar", "quiero participar", "quiero entrar", "quiero cwl",
+  "quiero la cwl", "voy a la cwl", "voy a jugar", "voy a participar",
+  "yo juego", "yo participo", "yo entro", "yo voy", "estoy dentro",
+  "me anoto", "me pongo", "me ofrezco", "pongo mi cuenta", "meto mi cuenta",
 ];
+// Palabras clave (token, maxD=1: no confundir 1ª persona con "apuntan"/"se apunta").
 const JOIN_WORDS = [
   "participo", "apuntame", "apuntarme", "apuntenme", "entro", "entrar",
-  "anoto", "anotame", "+1",
+  "anoto", "anotame", "anotadme", "sumame", "meteme", "+1",
 ];
 
-const anyPhrase = (text, arr) => arr.some((p) => text.includes(normalize(p)));
+// Afirmaciones cortas: valen SOLO si el mensaje es corto (≤3 palabras) y sin
+// negación. Así "yo/voy/dentro/presente" cuentan sueltos, pero no en frases largas.
+const AFFIRM = [
+  "yo", "voy", "presente", "aqui", "dentro", "entro", "apunto", "participo",
+  "tambien", "conmigo", "in",
+];
+
+function affirmHit(toks) {
+  if (toks.length === 0 || toks.length > 3) return false;
+  return toks.some((t) =>
+    AFFIRM.some((a) => t === a || (a.length >= 5 && lev(t, a) <= 1)),
+  );
+}
 
 // Devuelve "status" | "unsignup" | "signup" | null.
 export function classifyIntent(raw) {
-  const isQuestion = /\?/.test(raw) || /^(estoy|voy|sigo)\b/.test(normalize(raw));
   const text = normalize(raw);
   const toks = tokens(text);
-  const hasStem = (stem) => text.includes(stem);
+  const isQuestion = /\?/.test(raw) || /^(estoy|sigo)\b/.test(text);
+  const hasStem = (s) => text.includes(s);
+  const negated = /(^|\s)(no|ya no|tampoco)(\s|$)/.test(text);
+  // Negación PEGADA a un verbo de juego en 1ª persona ("no voy", "ya no juego").
+  // No usamos "liga"/"cwl" aquí: "no hay liga" no es desapuntarse.
+  const negatedPlay =
+    /(^|\s)(no|ya no|tampoco)\s+(voy|juego|jugare|jugar|participo|participar|apunto|entro|cuento|puedo|podre)\b/.test(
+      text,
+    );
 
   // 1) Pregunta de estado
   if (
     anyPhrase(text, STATUS_PHRASES) ||
     (isQuestion &&
       (hasStem("apunt") || hasStem("particip") || text.includes("lista") ||
-        text.includes("dentro") || text.includes("anotad")))
+        text.includes("dentro") || text.includes("anotad") ||
+        text.includes("aparezc") || text.includes("figur") || text.includes("incluid")))
   ) {
     return "status";
   }
 
-  // 2) Desapuntarse
-  if (anyPhrase(text, REMOVE_PHRASES) || fuzzyHas(toks, "desapunto") || REMOVE_WORDS.some((w) => fuzzyHas(toks, w))) {
+  // 2) Desapuntarse (incluye negación + palabra de juego: "no voy", "no puedo jugar").
+  if (
+    anyPhrase(text, REMOVE_PHRASES) ||
+    REMOVE_WORDS.some((w) => fuzzyHas(toks, w)) ||
+    negatedPlay
+  ) {
     return "unsignup";
   }
 
-  // 3) Apuntarse. Sin stems amplios (evita "se apuntan"/"a participar" en 3ª
-  // persona): solo frases en 1ª persona o palabras clave con erratas ajustadas.
+  // 3) Apuntarse (frases 1ª persona o palabras clave con erratas ajustadas)
   if (anyPhrase(text, JOIN_PHRASES) || JOIN_WORDS.some((w) => fuzzyHas(toks, w, 1))) {
     return "signup";
   }
+
+  // 4) Afirmación corta ("yo", "voy", "dentro"…), sin negación
+  if (!negated && affirmHit(toks)) return "signup";
 
   return null;
 }
