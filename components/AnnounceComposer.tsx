@@ -21,6 +21,7 @@ export function AnnounceComposer({
   const [file, setFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [imageSize, setImageSize] = useState<"big" | "thumb">("big");
+  const [format, setFormat] = useState<"embed" | "md">("embed");
   const [mention, setMention] = useState<"none" | "everyone" | "clan">("none");
   const [channelId, setChannelId] = useState(defaultChannelId ?? "");
   const [busy, setBusy] = useState(false);
@@ -70,6 +71,7 @@ export function AnnounceComposer({
     fd.set("mention", mention);
     fd.set("channelId", channelId);
     fd.set("imageSize", imageSize);
+    fd.set("format", format);
     if (file) fd.set("image", file);
     let r: { ok: boolean; error?: string };
     try {
@@ -103,6 +105,32 @@ export function AnnounceComposer({
       </h2>
 
       <div className="space-y-2.5">
+        {/* Formato: embed (tarjeta) o markdown (mensaje con vista previa del enlace) */}
+        <div className="flex gap-1 rounded-full border border-line bg-surface-2 p-1">
+          {(
+            [
+              { id: "embed", label: "Embed" },
+              { id: "md", label: "Markdown" },
+            ] as const
+          ).map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setFormat(f.id)}
+              className={`flex-1 rounded-full px-3 py-1.5 text-xs font-extrabold transition ${
+                format === f.id ? "bg-gold text-banner-dark" : "text-ink-soft hover:bg-surface"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-[11px] text-ink-soft">
+          {format === "embed"
+            ? "Tarjeta con borde, escudo y botón. Más “oficial”."
+            : "Mensaje normal; Discord genera la vista previa del enlace (ideal para la tienda)."}
+        </p>
+
         <input
           className={inputCls}
           value={title}

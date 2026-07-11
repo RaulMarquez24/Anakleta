@@ -75,6 +75,22 @@ export async function sendAnnouncement(
     }
   }
 
+  // Formato: "md" = mensaje normal (Discord previsualiza el enlace/imagen solo);
+  // cualquier otro = embed (tarjeta).
+  if (str("format") === "md") {
+    const lines: string[] = [];
+    if (content) lines.push(content); // mención
+    lines.push(title ? `## 📢 ${title}` : "## 📢 Anuncio");
+    if (body) lines.push(body.slice(0, 1600));
+    if (validUrl) lines.push(validUrl); // se previsualiza como enlace
+    if (validImg && !file) lines.push(validImg); // se previsualiza como imagen
+    const text = lines.join("\n\n").slice(0, 2000);
+    const ok = await postAnnouncement(channelId, { content: text, everyone, roles, file });
+    return ok
+      ? { ok: true }
+      : { ok: false, error: "No se pudo publicar (revisa el bot y el canal)." };
+  }
+
   const thumb = str("imageSize") === "thumb"; // miniatura vs imagen grande
   const badge = await getClanBadge();
 
