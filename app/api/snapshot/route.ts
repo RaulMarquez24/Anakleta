@@ -4,6 +4,7 @@ import type { CocClan, CocPlayer } from "@/lib/coc-types";
 import { createServerClient } from "@/lib/supabase/server";
 import { createAuthServerClient } from "@/lib/supabase/auth-server";
 import { captureWar, type WarCaptureResult } from "@/lib/war-capture";
+import { logCronRun } from "@/lib/cron-log";
 
 // POST /api/snapshot — captura el estado del clan y lo persiste en Supabase.
 // Dos vías de autorización:
@@ -202,7 +203,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({
+    const result = {
       ok: true,
       mode,
       captured_at: capturedAt,
@@ -211,7 +212,9 @@ export async function POST(req: NextRequest) {
       members_enriched: enrichedOk,
       members_deactivated: goneTags.length,
       war,
-    });
+    };
+    await logCronRun("snapshot", true, result);
+    return NextResponse.json(result);
   } catch (err) {
     if (err instanceof CocApiError) {
       return NextResponse.json(
