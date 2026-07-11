@@ -131,11 +131,10 @@ async function getClanTrendsImpl(): Promise<ClanTrendPoint[]> {
 // Devuelve una vista de cada miembro activo con su última captura y el delta
 // respecto a la anterior. Las capturas son clan-wide (mismo captured_at para
 // todos), así que basta con localizar los dos timestamps más recientes.
-export const getMembersOverview = unstable_cache(getMembersOverviewImpl, ["members-overview"], {
-  revalidate: 300,
-});
-
-async function getMembersOverviewImpl(): Promise<DashboardData> {
+// Sin caché a propósito: incluye el Discord vinculado (que el bot cambia por
+// fuera) y otros campos editables. Lectura directa a Supabase para que las
+// tarjetas y el Home reflejen siempre el estado real (páginas force-dynamic).
+export async function getMembersOverview(): Promise<DashboardData> {
   const supabase = createServerClient();
 
   // Los dos captured_at más recientes (distintos).

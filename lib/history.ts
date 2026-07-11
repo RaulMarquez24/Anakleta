@@ -39,11 +39,10 @@ export interface MemberHistory {
   }[];
 }
 
-export const getMemberHistory = unstable_cache(getMemberHistoryImpl, ["member-history"], {
-  revalidate: 300,
-});
-
-async function getMemberHistoryImpl(tag: string): Promise<MemberHistory | null> {
+// Sin caché a propósito: la ficha muestra datos que cambian por fuera (nota,
+// Discord vinculado por el bot, cuentas). Lectura directa a Supabase en cada
+// visita para que nunca salga desactualizada (la página es force-dynamic).
+export async function getMemberHistory(tag: string): Promise<MemberHistory | null> {
   const supabase = createServerClient();
 
   const { data: member } = await supabase
