@@ -25,8 +25,8 @@ export default async function MensajesPage() {
   return (
     <AppShell email={user?.email} title="Mensajes" back="/">
       <p className="mb-4 text-sm text-ink-soft">
-        Mensajes cortos (máx. 128 caracteres) para reclutar o anunciar. Escríbelos, guárdalos y
-        cópialos de un toque para pegarlos en Clash.
+        Mensajes cortos (máx. 128 caracteres) para reclutar, invitar al Discord o anunciar.
+        Escríbelos, guárdalos y cópialos de un toque para pegarlos en Clash.
       </p>
       <MessagesManager initial={initial} />
     </AppShell>

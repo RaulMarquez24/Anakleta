@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 import { addMessage, deleteMessage } from "@/app/mensajes/actions";
-import { MAX_LEN, RECRUIT_TEMPLATES, type ClanMessage } from "@/app/mensajes/shared";
+import {
+  MAX_LEN,
+  RECRUIT_TEMPLATES,
+  DISCORD_TEMPLATES,
+  DISCORD_INVITE,
+  type ClanMessage,
+} from "@/app/mensajes/shared";
 
 function CopyBtn({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -95,6 +101,43 @@ export function MessagesManager({ initial }: { initial: ClanMessage[] }) {
                   {t.label}
                 </span>
                 <span className="text-[11px] font-bold text-ink-soft">{t.text.length}/{MAX_LEN}</span>
+              </div>
+              <p className="text-sm text-ink">{t.text}</p>
+              <div className="mt-2 flex items-center gap-2">
+                <span className="ml-auto" />
+                <button
+                  onClick={() => setText(t.text)}
+                  className="flex-none rounded-full border border-line bg-surface-2 px-3 py-1.5 text-xs font-extrabold text-ink transition hover:bg-line"
+                >
+                  Usar
+                </button>
+                <CopyBtn text={t.text} />
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Invitación al Discord */}
+      <div>
+        <p className="mb-1.5 text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">
+          Invitación al Discord
+        </p>
+        <div className="mb-2 flex items-center gap-2 rounded-2xl border border-line bg-surface p-3.5">
+          <span className="truncate font-mono text-sm text-ink">{DISCORD_INVITE}</span>
+          <span className="ml-auto" />
+          <CopyBtn text={DISCORD_INVITE} />
+        </div>
+        <ul className="space-y-2">
+          {DISCORD_TEMPLATES.map((t) => (
+            <li key={t.label} className="rounded-2xl border border-line bg-surface p-3.5">
+              <div className="mb-1 flex items-center gap-2">
+                <span className="rounded-full bg-[#5865F2]/20 px-2 py-0.5 text-[10px] font-extrabold uppercase text-[#5865F2]">
+                  {t.label}
+                </span>
+                <span className="text-[11px] font-bold text-ink-soft">
+                  {t.text.length}/{MAX_LEN}
+                </span>
               </div>
               <p className="text-sm text-ink">{t.text}</p>
               <div className="mt-2 flex items-center gap-2">
