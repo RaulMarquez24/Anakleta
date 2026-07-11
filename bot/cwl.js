@@ -252,10 +252,8 @@ export function renderListText(list, part) {
 
 export async function refreshLiveList(db, season) {
   const list = await getList(db, season);
-  if (!list) return;
-  const cfg = await getConfig(db);
-  const channelId = list.channel_id || cfg.listChannelId;
-  if (!channelId) return;
+  if (!list || !list.channel_id) return; // ligas ya empezadas no tienen canal
+  const channelId = list.channel_id;
 
   const part = partition(list, await getSignups(db, season));
   const content = renderListText(list, part);
@@ -263,8 +261,8 @@ export async function refreshLiveList(db, season) {
   let messageId = list.message_id;
   const edited = messageId ? await editMessage(channelId, messageId, content) : false;
   if (!edited) messageId = await postMessage(channelId, content);
-  if (messageId !== list.message_id || channelId !== list.channel_id) {
-    await db.from("cwl_lists").update({ message_id: messageId, channel_id: channelId }).eq("season", season);
+  if (messageId !== list.message_id) {
+    await db.from("cwl_lists").update({ message_id: messageId }).eq("season", season);
   }
 }
 

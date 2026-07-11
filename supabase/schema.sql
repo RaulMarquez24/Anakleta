@@ -152,6 +152,16 @@ create table if not exists settings (
   value text
 );
 
+-- Registro de ejecuciones de los crons (traza; ver supabase/cron_runs.sql).
+create table if not exists cron_runs (
+  id         bigint generated always as identity primary key,
+  job        text not null,
+  ok         boolean not null default true,
+  summary    jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists cron_runs_time_idx on cron_runs (created_at desc);
+
 -- Inscripciones a la CWL, atadas a cada temporada (ver supabase/cwl.sql para el
 -- detalle y la config sembrada en settings). Las escriben el bot y la app.
 create table if not exists cwl_lists (

@@ -3,6 +3,7 @@ import { getCurrentWar } from "@/lib/war";
 import { discordConfigured } from "@/lib/discord";
 import { sendPendingWarNotice } from "@/lib/war-notify";
 import { createServerClient } from "@/lib/supabase/server";
+import { logCronRun } from "@/lib/cron-log";
 
 export const maxDuration = 60;
 
@@ -54,12 +55,14 @@ export async function POST(req: NextRequest) {
     .from("war_reminders")
     .upsert({ war_key: warKey, last_tier: tier, updated_at: new Date().toISOString() }, { onConflict: "war_key" });
 
-  return NextResponse.json({
+  const result = {
     ok: true,
     tier,
     hoursLeft: Number(hoursLeft.toFixed(1)),
     pending: war.pending.length,
     pinged: r.pinged,
     unlinked: r.unlinked,
-  });
+  };
+  await logCronRun("war-reminder", true, result);
+  return NextResponse.json(result);
 }

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createList } from "@/app/liga/inscripciones/actions";
+import { createList, announceOpen } from "@/app/liga/inscripciones/actions";
 
 // Abre la inscripción de una nueva liga (temporada AAAA-MM) y navega a su página.
 export function NewLeagueButton({ suggested }: { suggested: string }) {
@@ -10,6 +10,7 @@ export function NewLeagueButton({ suggested }: { suggested: string }) {
   const [open, setOpen] = useState(false);
   const [month, setMonth] = useState(suggested);
   const [event, setEvent] = useState(false);
+  const [notify, setNotify] = useState(true);
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
 
@@ -22,8 +23,12 @@ export function NewLeagueButton({ suggested }: { suggested: string }) {
     setErr(null);
     start(async () => {
       const r = await createList(s, null, null, event);
-      if (!r.ok) setErr(r.error ?? "No se pudo crear.");
-      else router.push(`/liga/${encodeURIComponent(r.season ?? s)}`);
+      if (!r.ok) {
+        setErr(r.error ?? "No se pudo crear.");
+        return;
+      }
+      if (notify) await announceOpen(r.season ?? s);
+      router.push(`/liga/${encodeURIComponent(r.season ?? s)}`);
     });
   }
 
@@ -71,6 +76,10 @@ export function NewLeagueButton({ suggested }: { suggested: string }) {
       <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-ink-soft">
         <input type="checkbox" checked={event} onChange={(e) => setEvent(e.target.checked)} />
         Es un evento (liga extra del mismo mes, p. ej. Mundial)
+      </label>
+      <label className="mt-1 flex items-center gap-2 text-xs font-semibold text-ink-soft">
+        <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
+        Avisar al canal general (@Clan) al abrir
       </label>
     </div>
   );

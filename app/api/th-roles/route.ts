@@ -7,6 +7,7 @@ import {
   addGuildRole,
   removeGuildRole,
 } from "@/lib/discord";
+import { logCronRun } from "@/lib/cron-log";
 
 export const maxDuration = 60;
 
@@ -83,7 +84,7 @@ export async function POST(req: NextRequest) {
     else permFail.push(`${who} (TH${th})`);
   }
 
-  return NextResponse.json({
+  const result = {
     ok: true,
     roles: thRole.size,
     candidates,
@@ -100,5 +101,7 @@ export async function POST(req: NextRequest) {
     noRoleForTh,
     noTh,
     permFail,
-  });
+  };
+  await logCronRun("th-roles", permFail.length === 0, result);
+  return NextResponse.json(result);
 }

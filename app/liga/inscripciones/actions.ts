@@ -7,6 +7,7 @@ import {
   getCwlConfig,
   getList,
   refreshLiveList,
+  sendOpenAnnouncement,
   assignCwlRole,
   removeCwlRole,
 } from "@/lib/cwl";
@@ -85,6 +86,16 @@ export async function createList(
   if (!started) await refreshLiveList(target); // publica el mensaje fijo solo si no ha empezado
   bump(target);
   return { ok: true, season: target };
+}
+
+// Envía manualmente el anuncio de apertura (@Clan) al canal de avisos (#general).
+export async function announceOpen(season: string): Promise<Result> {
+  const email = await gate();
+  if (!email) return { ok: false, error: "No autorizado." };
+  const ok = await sendOpenAnnouncement(season);
+  if (!ok) return { ok: false, error: "No se pudo enviar (revisa el canal de avisos)." };
+  bump(season);
+  return { ok: true };
 }
 
 export async function setState(season: string, state: "open" | "closed"): Promise<Result> {

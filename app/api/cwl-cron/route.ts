@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { getCwlSeasonState } from "@/lib/war";
 import { discordConfigured, sendClanMessage, removeGuildRole } from "@/lib/discord";
-import { getCwlConfig, refreshLiveList, seasonLabel, type CwlList } from "@/lib/cwl";
+import { getCwlConfig, refreshLiveList, sendOpenAnnouncement, seasonLabel, type CwlList } from "@/lib/cwl";
+import { logCronRun } from "@/lib/cron-log";
 
 export const maxDuration = 60;
 
@@ -20,14 +21,6 @@ function candidate(now: Date): { season: string; opens: Date; starts: Date; ends
   const ends = new Date(starts.getTime() + 9 * DAY);
   const season = `${starts.getUTCFullYear()}-${String(starts.getUTCMonth() + 1).padStart(2, "0")}`;
   return { season, opens, starts, ends };
-}
-
-function fmtDate(d: Date): string {
-  try {
-    return new Intl.DateTimeFormat("es", { day: "numeric", month: "long" }).format(d);
-  } catch {
-    return d.toISOString().slice(0, 10);
-  }
 }
 
 // POST /api/cwl-cron — lo llama el cron diario (Bearer CRON_SECRET).
@@ -104,14 +97,8 @@ export async function POST(req: NextRequest) {
       nowMs >= opens.getTime() &&
       nowMs < starts.getTime()
     ) {
-      if (await announce(
-        `🎉 ${mention}¡Ya están **abiertas las inscripciones de la CWL de ${label}**!\n` +
-          `Para entrar escribe «**participo**» (o usa \`/apuntar\`). Cierra el **${fmtDate(starts)}**.` +
-          (listMention ? `\n📋 Lista en directo en ${listMention}.` : ""),
-      )) {
-        patch.announced_open = true;
-        actions.push("aviso apertura");
-      }
+      // sendOpenAnnouncement usa el canal de avisos y marca announced_open.
+      if (await sendOpenAnnouncement(list.season)) actions.push("aviso apertura");
     }
 
     if (cronOwned && list.state === "open" && !list.announced_mid && nowMs >= mid.getTime() && nowMs < starts.getTime()) {
@@ -174,5 +161,8 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, season: cand.season, actions });
+  const result = { ok: true, season: cand.season, actions };
+  // Solo dejamos traza si HIZO algo (evita ruido diario cuando no toca nada).
+  if (actions.length) await logCronRun("cwl-cron", true, result);
+  return NextResponse.json(result);
 }

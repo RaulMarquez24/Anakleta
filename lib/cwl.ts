@@ -5,6 +5,7 @@ import {
   editChannelMessage,
   addGuildRole,
   removeGuildRole,
+  sendClanMessage,
 } from "@/lib/discord";
 
 // ============================================================================
@@ -271,26 +272,65 @@ export function renderListText(list: CwlList, part: CwlPartition): string {
 
 // --- Efectos: mensaje fijo en tiempo real + rol CWL ---
 
-// Renderiza la lista y edita (o crea) el mensaje fijo del canal configurado.
+// Renderiza la lista y edita (o crea) el mensaje fijo. Solo publica si la liga
+// tiene canal asignado (channel_id): las ligas ya empezadas se crean sin canal
+// (solo registro manual), así que aquí no se publican en Discord.
 export async function refreshLiveList(season: string): Promise<void> {
   const svc = createServerClient();
   const list = await getList(season);
-  if (!list) return;
-  const cfg = await getCwlConfig();
-  const channelId = list.channel_id || cfg.listChannelId;
-  if (!channelId) return;
+  if (!list || !list.channel_id) return;
+  const channelId = list.channel_id;
 
   const part = partition(list, await getSignups(season));
   const content = renderListText(list, part);
 
   let messageId = list.message_id;
   const edited = messageId ? await editChannelMessage(channelId, messageId, content) : false;
-  if (!edited) {
-    messageId = await postChannelMessage(channelId, content);
+  if (!edited) messageId = await postChannelMessage(channelId, content);
+  if (messageId !== list.message_id) {
+    await svc.from("cwl_lists").update({ message_id: messageId }).eq("season", season);
   }
-  if (messageId !== list.message_id || channelId !== list.channel_id) {
-    await svc.from("cwl_lists").update({ message_id: messageId, channel_id: channelId }).eq("season", season);
+}
+
+// --- Anuncio de apertura (a #general, con @Clan). Manual desde la app o cron. ---
+
+function fmtDayLong(iso: string | null): string | null {
+  if (!iso) return null;
+  try {
+    return new Intl.DateTimeFormat("es", { day: "numeric", month: "long" }).format(new Date(iso));
+  } catch {
+    return null;
   }
+}
+
+export function buildOpenText(list: CwlList, cfg: CwlConfig): string {
+  const mention = cfg.clanRoleId ? `<@&${cfg.clanRoleId}> ` : "";
+  const listMention = cfg.listChannelId ? `<#${cfg.listChannelId}>` : "";
+  const close = fmtDayLong(list.starts_at);
+  return (
+    `🎉 ${mention}¡Ya están **abiertas las inscripciones de la CWL de ${seasonLabel(list.season)}**!\n` +
+    `Para entrar escribe «**participo**» (o usa \`/apuntar\`).` +
+    (close ? ` Cierra el **${close}**.` : "") +
+    (listMention ? `\n📋 Lista en directo en ${listMention}.` : "")
+  );
+}
+
+// Envía el anuncio de apertura al canal de avisos y marca announced_open.
+export async function sendOpenAnnouncement(season: string): Promise<boolean> {
+  const list = await getList(season);
+  if (!list) return false;
+  const cfg = await getCwlConfig();
+  if (!cfg.announceChannelId) return false;
+  const ok = await sendClanMessage(
+    buildOpenText(list, cfg),
+    { roles: cfg.clanRoleId ? [cfg.clanRoleId] : [] },
+    cfg.announceChannelId,
+  );
+  if (ok) {
+    const svc = createServerClient();
+    await svc.from("cwl_lists").update({ announced_open: true }).eq("season", season);
+  }
+  return ok;
 }
 
 export async function assignCwlRole(discordId: string | null): Promise<void> {

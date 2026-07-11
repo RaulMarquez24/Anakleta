@@ -8,6 +8,8 @@ import {
   Star,
   Coins,
   MessageCircle,
+  History,
+  ChevronRight,
   LogOut,
   type LucideIcon,
 } from "lucide-react";
@@ -137,6 +139,19 @@ export default async function PerfilPage() {
 
       <SectionHeader icon={RefreshCw}>Sincronización</SectionHeader>
       <SnapshotRunner />
+
+      <SectionHeader icon={History}>Tareas automáticas</SectionHeader>
+      <Link
+        href="/registro"
+        className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 hover:bg-surface-2/60"
+      >
+        <History className="h-5 w-5 flex-none text-ink-soft" />
+        <div className="min-w-0 flex-1">
+          <p className="font-extrabold text-ink">Registro de tareas</p>
+          <p className="text-xs text-ink-soft">Roles de TH, inscripciones de CWL y avisos de guerra</p>
+        </div>
+        <ChevronRight className="h-4 w-4 flex-none text-ink-soft" />
+      </Link>
 
       <SectionHeader icon={Smartphone}>Aplicación</SectionHeader>
       <InstallAppCard />

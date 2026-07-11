@@ -11,6 +11,7 @@ import {
   addSignupDiscord,
   removeSignup,
   deleteList,
+  announceOpen,
 } from "@/app/liga/inscripciones/actions";
 
 export interface CwlEntryView {
@@ -87,6 +88,20 @@ export function CwlManager(props: CwlManagerProps) {
 
   const season = props.season;
 
+  // Crear la inscripción y, si se marca, enviar el anuncio de apertura al general.
+  function createAndMaybeAnnounce(size: number | null, startsAt: string | null, announce: boolean) {
+    setErr(null);
+    start(async () => {
+      const r = await createList(season, size, startsAt);
+      if (!r.ok) {
+        setErr(r.error ?? "No se pudo crear.");
+        return;
+      }
+      if (announce) await announceOpen(r.season ?? season);
+      router.refresh();
+    });
+  }
+
   function del() {
     if (!confirm("¿Eliminar la inscripción de esta liga? Se borrará la lista y sus apuntados. No se puede deshacer.")) return;
     setErr(null);
@@ -99,7 +114,7 @@ export function CwlManager(props: CwlManagerProps) {
 
   // ---- Sin inscripción todavía para esta liga ----
   if (!props.exists || props.state === null) {
-    return <CreateCard season={season} pending={pending} err={err} onCreate={(sz, st) => run(() => createList(season, sz, st))} />;
+    return <CreateCard season={season} pending={pending} err={err} onCreate={createAndMaybeAnnounce} />;
   }
 
   const isOpen = props.state === "open";
@@ -146,16 +161,29 @@ export function CwlManager(props: CwlManagerProps) {
             ✏️ Modo edición — los cambios se guardan al instante.
           </p>
 
-          {/* Abrir/cerrar: solo mientras la liga NO haya terminado */}
-          {!props.ended && (
+          <div className="flex flex-wrap gap-2">
+            {/* Abrir/cerrar: solo mientras la liga NO haya terminado */}
+            {!props.ended && (
+              <button
+                onClick={() => run(() => setListState(season, isOpen ? "closed" : "open"))}
+                disabled={pending}
+                className="rounded-full bg-surface-2 px-3.5 py-1.5 text-sm font-extrabold text-ink transition hover:bg-line disabled:opacity-50"
+              >
+                {isOpen ? "🔒 Cerrar inscripción" : "🟢 Reabrir inscripción"}
+              </button>
+            )}
+            {/* Anuncio de apertura manual (@Clan al general), con confirmación */}
             <button
-              onClick={() => run(() => setListState(season, isOpen ? "closed" : "open"))}
+              onClick={() => {
+                if (confirm("¿Enviar el anuncio de apertura al canal general, etiquetando al clan?"))
+                  run(() => announceOpen(season));
+              }}
               disabled={pending}
-              className="rounded-full bg-surface-2 px-3.5 py-1.5 text-sm font-extrabold text-ink transition hover:bg-line disabled:opacity-50"
+              className="rounded-full bg-[#5865F2]/15 px-3.5 py-1.5 text-sm font-extrabold text-[#5865F2] transition hover:bg-[#5865F2]/25 disabled:opacity-50"
             >
-              {isOpen ? "🔒 Cerrar inscripción" : "🟢 Reabrir inscripción"}
+              📣 Enviar anuncio
             </button>
-          )}
+          </div>
 
           {/* Corte */}
           <div>
@@ -460,10 +488,11 @@ function CreateCard({
   season: string;
   pending: boolean;
   err: string | null;
-  onCreate: (size: number | null, startsAt: string | null) => void;
+  onCreate: (size: number | null, startsAt: string | null, announce: boolean) => void;
 }) {
   const [size, setSize] = useState<number | null>(null);
   const [start, setStart] = useState("");
+  const [notify, setNotify] = useState(true);
 
   return (
     <div className="space-y-4">
@@ -505,8 +534,12 @@ function CreateCard({
             className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm font-semibold text-ink outline-none focus:border-gold"
           />
         </label>
+        <label className="flex items-center gap-2 text-xs font-semibold text-ink-soft">
+          <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
+          Avisar al canal general (@Clan) al abrir
+        </label>
         <button
-          onClick={() => onCreate(size, start ? new Date(start).toISOString() : null)}
+          onClick={() => onCreate(size, start ? new Date(start).toISOString() : null, notify)}
           disabled={pending}
           className="w-full rounded-full bg-gold px-4 py-2.5 text-sm font-extrabold text-banner-dark transition hover:brightness-105 disabled:opacity-50"
         >
