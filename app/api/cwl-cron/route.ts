@@ -8,11 +8,14 @@ export const maxDuration = 60;
 
 const DAY = 86_400_000;
 
-// Temporada candidata (la CWL que toca gestionar) y sus fechas por calendario.
-// A partir del día 20 miramos ya al mes siguiente (pre-inscripción ~1 semana).
+// PRÓXIMA CWL a gestionar y sus fechas por calendario. La liga arranca ~día 2.
+// Si el inicio de este mes ya pasó (con 2 días de margen), miramos al mes que
+// viene. Así el 11/07 la candidata es AGOSTO, no la de julio ya jugada.
 function candidate(now: Date): { season: string; opens: Date; starts: Date; ends: Date } {
-  const bump = now.getUTCDate() >= 20 ? 1 : 0;
-  const starts = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + bump, 2, 8, 0, 0));
+  let starts = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 2, 8, 0, 0));
+  if (now.getTime() > starts.getTime() + 2 * DAY) {
+    starts = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 2, 8, 0, 0));
+  }
   const opens = new Date(starts.getTime() - 7 * DAY);
   const ends = new Date(starts.getTime() + 9 * DAY);
   const season = `${starts.getUTCFullYear()}-${String(starts.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -86,7 +89,12 @@ export async function POST(req: NextRequest) {
     const label = seasonLabel(list.season);
     const patch: Partial<CwlList> = {};
 
-    if (!list.announced_open && nowMs >= opens.getTime()) {
+    if (
+      list.state === "open" &&
+      !list.announced_open &&
+      nowMs >= opens.getTime() &&
+      nowMs < starts.getTime()
+    ) {
       await refreshLiveList(list.season); // publica el mensaje fijo
       if (await announce(
         `🎉 ${mention}¡Abiertas las inscripciones de la **CWL de ${label}**! ` +
