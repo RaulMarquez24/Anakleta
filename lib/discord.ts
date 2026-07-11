@@ -191,23 +191,76 @@ export async function editChannelMessage(
   }
 }
 
-// Asigna / retira un rol del servidor a un usuario (necesita permiso Manage Roles
-// y que el rol del bot esté por encima del rol en la jerarquía).
-async function roleOp(method: "PUT" | "DELETE", userId: string, roleId: string): Promise<boolean> {
-  if (!TOKEN || !GUILD || !userId || !roleId) return false;
+// Borra un mensaje (p. ej. el mensaje fijo de la lista al eliminar la liga).
+export async function deleteChannelMessage(channelId: string, messageId: string): Promise<boolean> {
+  if (!TOKEN || !channelId || !messageId) return false;
   try {
-    const res = await fetch(`${API}/guilds/${GUILD}/members/${userId}/roles/${roleId}`, {
-      method,
+    const res = await fetch(`${API}/channels/${channelId}/messages/${messageId}`, {
+      method: "DELETE",
       headers: { Authorization: `Bot ${TOKEN}` },
       cache: "no-store",
     });
-    return res.ok; // 204 al éxito
+    return res.ok;
   } catch {
     return false;
   }
 }
 
+// Asigna / retira un rol del servidor a un usuario (necesita permiso Manage Roles
+// y que el rol del bot esté por encima del rol en la jerarquía).
+// Reintenta ante 429 (rate limit) respetando el retry_after de Discord.
+async function roleOp(method: "PUT" | "DELETE", userId: string, roleId: string): Promise<boolean> {
+  if (!TOKEN || !GUILD || !userId || !roleId) return false;
+  const url = `${API}/guilds/${GUILD}/members/${userId}/roles/${roleId}`;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { Authorization: `Bot ${TOKEN}` },
+        cache: "no-store",
+      });
+      if (res.ok) return true; // 204
+      if (res.status === 429) {
+        const j = (await res.json().catch(() => ({}))) as { retry_after?: number };
+        const waitMs = Math.min(5000, Math.ceil(((j.retry_after ?? 1) + 0.1) * 1000));
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue; // reintenta
+      }
+      console.error(`[discord] role ${method} ${roleId} -> HTTP ${res.status}`);
+      return false;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
 export const addGuildRole = (userId: string, roleId: string) => roleOp("PUT", userId, roleId);
 export const removeGuildRole = (userId: string, roleId: string) => roleOp("DELETE", userId, roleId);
+
+// Roles actuales de un miembro. null si no está en el servidor (404) o error.
+// Reintenta ante 429 para no confundir rate limit con "no está en el servidor".
+export async function getMemberRoleIds(userId: string): Promise<string[] | null> {
+  if (!TOKEN || !GUILD || !userId) return null;
+  const url = `${API}/guilds/${GUILD}/members/${userId}`;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const res = await fetch(url, { headers: { Authorization: `Bot ${TOKEN}` }, cache: "no-store" });
+      if (res.ok) {
+        const m = (await res.json()) as { roles?: string[] };
+        return Array.isArray(m.roles) ? m.roles : [];
+      }
+      if (res.status === 429) {
+        const j = (await res.json().catch(() => ({}))) as { retry_after?: number };
+        await new Promise((r) => setTimeout(r, Math.min(5000, Math.ceil(((j.retry_after ?? 1) + 0.1) * 1000))));
+        continue;
+      }
+      return null; // 404 (no está en el servidor) u otro error
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
 
 export const discordConfigured = Boolean(TOKEN && GUILD);

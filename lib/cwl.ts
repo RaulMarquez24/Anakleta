@@ -5,6 +5,7 @@ import {
   editChannelMessage,
   addGuildRole,
   removeGuildRole,
+  sendClanMessage,
 } from "@/lib/discord";
 
 // ============================================================================
@@ -48,13 +49,18 @@ export interface CwlEntry extends CwlSignupRow {
   memberTag: string | null; // tag del miembro resuelto (por member_tag o por discord)
   linked: boolean; // hay un miembro conocido (activo o no) asociado
   inClan: boolean; // ese miembro está activo en el clan ahora
+  leftAt: string | null; // fecha de salida del clan (last_seen_at) si ya no está
+  isSecondary: boolean; // la cuenta ES secundaria (member.main_tag != null)
+  mainTag: string | null; // tag de su cuenta principal (para agrupar por persona)
 }
 
 export interface CwlPartition {
   cutoff: number;
-  inside: CwlEntry[];
-  queue: CwlEntry[];
-  hidden: CwlEntry[]; // ex-miembros: siguen apuntados pero ocultos
+  inside: CwlEntry[]; // principales con plaza
+  queue: CwlEntry[]; // principales sin plaza (si hay más que el corte)
+  secondaries: CwlEntry[]; // cuentas secundarias (apartado propio, menor prioridad)
+  secondaryCutoff: number; // cuántas secundarias entran (plazas que sobran de los principales)
+  hidden: CwlEntry[]; // ex-miembros: siguen apuntados pero ocultos (solo presente)
 }
 
 const MONTHS = [
@@ -72,7 +78,8 @@ export function seasonLabel(season: string): string {
 // --- Config (settings clave-valor, con fallback a env) ---
 
 export interface CwlConfig {
-  listChannelId: string | null;
+  listChannelId: string | null; // #ligas-cwl (mensaje fijo del listado)
+  announceChannelId: string | null; // #general (avisos de apertura/recordatorios)
   cwlRoleId: string | null;
   clanRoleId: string | null;
 }
@@ -82,10 +89,23 @@ export async function getCwlConfig(): Promise<CwlConfig> {
   const { data } = await svc
     .from("settings")
     .select("key, value")
-    .in("key", ["cwl_list_channel_id", "cwl_role_id", "clan_role_id"]);
+    .in("key", [
+      "cwl_list_channel_id",
+      "cwl_announce_channel_id",
+      "welcome_channel_id",
+      "cwl_role_id",
+      "clan_role_id",
+    ]);
   const map = new Map((data ?? []).map((r) => [r.key as string, r.value as string]));
   return {
     listChannelId: map.get("cwl_list_channel_id") || process.env.CWL_LIST_CHANNEL_ID || null,
+    // Avisos al general: canal propio si se configura; si no, el de bienvenida (#general).
+    announceChannelId:
+      map.get("cwl_announce_channel_id") ||
+      map.get("welcome_channel_id") ||
+      process.env.CWL_ANNOUNCE_CHANNEL_ID ||
+      process.env.WELCOME_CHANNEL_ID ||
+      null,
     cwlRoleId: map.get("cwl_role_id") || process.env.CWL_ROLE_ID || null,
     clanRoleId: map.get("clan_role_id") || process.env.CLAN_ROLE_ID || null,
   };
@@ -130,7 +150,7 @@ export async function getSignups(season: string): Promise<CwlEntry[]> {
   const svc = createServerClient();
   const [{ data: signups }, { data: members }] = await Promise.all([
     svc.from("cwl_signups").select("*").eq("season", season).order("created_at", { ascending: true }),
-    svc.from("members").select("tag, name, town_hall, is_active, discord_id"),
+    svc.from("members").select("tag, name, town_hall, is_active, discord_id, last_seen_at, main_tag"),
   ]);
   const byTag = new Map((members ?? []).map((m) => [m.tag as string, m]));
   const byDiscord = new Map(
@@ -139,13 +159,17 @@ export async function getSignups(season: string): Promise<CwlEntry[]> {
 
   return ((signups ?? []) as CwlSignupRow[]).map((s) => {
     const m = (s.member_tag && byTag.get(s.member_tag)) || (s.discord_id && byDiscord.get(s.discord_id)) || null;
+    const inClan = m ? Boolean(m.is_active) : false;
     return {
       ...s,
       name: (m?.name as string) || s.username || "jugador",
       townHall: (m?.town_hall as number | null) ?? null,
       memberTag: (m?.tag as string | null) ?? s.member_tag ?? null,
       linked: Boolean(m),
-      inClan: m ? Boolean(m.is_active) : false,
+      inClan,
+      leftAt: m && !inClan ? ((m.last_seen_at as string | null) ?? null) : null,
+      isSecondary: Boolean(m?.main_tag),
+      mainTag: (m?.main_tag as string | null) ?? null,
     };
   });
 }
@@ -157,11 +181,40 @@ export function activeCutoff(list: CwlList, visibleCount: number): number {
 }
 
 export function partition(list: CwlList, entries: CwlEntry[]): CwlPartition {
-  // Ex-miembros (vinculados a un miembro NO activo) se ocultan y no ocupan plaza.
-  const hidden = entries.filter((e) => e.linked && !e.inClan);
-  const visible = entries.filter((e) => !(e.linked && !e.inClan));
+  // Ocultar ex-miembros SOLO en la inscripción presente (abierta y no terminada):
+  // ahí no deben ocupar plaza. En una liga pasada cuentan (estuvieron inscritos,
+  // aunque se fueran después).
+  const present = isOpenForSelf(list);
+  const hidden = present ? entries.filter((e) => e.linked && !e.inClan) : [];
+  const visible = present ? entries.filter((e) => !(e.linked && !e.inClan)) : entries;
+
+  // "Secundaria" es relativo a la PERSONA: solo si tiene 2+ cuentas apuntadas.
+  // Agrupamos por persona (mismo Discord, o misma cuenta principal). En cada
+  // persona, 1 cuenta es principal (su main si está, o la primera apuntada) y las
+  // demás son secundarias. Con una sola cuenta, cuenta como principal aunque sea
+  // técnicamente una secundaria.
+  const secondaryIds = new Set<number>();
+  const groups = new Map<string, CwlEntry[]>();
+  for (const e of visible) {
+    const key = e.discord_id ? `d:${e.discord_id}` : e.linked ? `m:${e.mainTag ?? e.memberTag}` : `x:${e.id}`;
+    (groups.get(key) ?? groups.set(key, []).get(key)!).push(e);
+  }
+  for (const g of groups.values()) {
+    if (g.length <= 1) continue;
+    let primaryIdx = g.findIndex((e) => !e.isSecondary); // la principal (main) si está
+    if (primaryIdx < 0) primaryIdx = 0; // si no, la primera apuntada
+    g.forEach((e, i) => i !== primaryIdx && secondaryIds.add(e.id));
+  }
+
+  // Prioridad: los PRINCIPALES (del resto de gente) van primero; las secundarias
+  // solo entran con las plazas que sobren. Cada grupo mantiene su orden de inscripción.
+  const primaries = visible.filter((e) => !secondaryIds.has(e.id));
+  const secondaries = visible.filter((e) => secondaryIds.has(e.id));
   const cutoff = activeCutoff(list, visible.length);
-  return { cutoff, inside: visible.slice(0, cutoff), queue: visible.slice(cutoff), hidden };
+  const inside = primaries.slice(0, cutoff);
+  const queue = primaries.slice(cutoff);
+  const secondaryCutoff = Math.max(0, cutoff - inside.length);
+  return { cutoff, inside, queue, secondaries, secondaryCutoff, hidden };
 }
 
 // --- Render del mensaje fijo (debe coincidir con bot/cwl.js) ---
@@ -175,53 +228,109 @@ function fmtDate(iso: string | null): string | null {
   }
 }
 
-function entryLine(i: number, e: CwlEntry): string {
+function entryLine(i: number, e: CwlEntry, queued = false): string {
+  const num = `\`${String(i).padStart(2, " ")}\``;
   const th = e.townHall ? ` · TH${e.townHall}` : "";
-  const dot = e.discord_id ? "" : " 🎮"; // sin discord vinculado (añadido a mano)
-  return `\`${String(i).padStart(2, " ")}.\` ${e.name}${th}${dot}`;
+  const noDiscord = e.discord_id ? "" : " · 🎮";
+  const tail = queued ? " · ⏳" : "";
+  return `${num} ${e.name}${th}${noDiscord}${tail}`;
 }
 
+// Texto del mensaje fijo. DEBE coincidir con bot/cwl.js (lo editan los dos).
 export function renderListText(list: CwlList, part: CwlPartition): string {
-  const state = list.state === "open" ? "🟢 Abierta" : "🔒 Cerrada";
-  const lines: string[] = [];
-  lines.push(`📋 **Inscritos CWL · ${seasonLabel(list.season)}**`);
-  lines.push(`${state} · ${part.inside.length}/${part.cutoff} plazas`);
-  const close = fmtDate(list.starts_at);
-  if (list.state === "open" && close) lines.push(`⏳ Cierre de inscripción: ${close}`);
-  lines.push("");
-  lines.push(`**✅ Dentro (${part.inside.length})**`);
-  if (part.inside.length) part.inside.forEach((e, i) => lines.push(entryLine(i + 1, e)));
-  else lines.push("_nadie todavía — escribe «me apunto»_");
-  if (part.queue.length) {
-    lines.push("");
-    lines.push(`**⏳ En cola (${part.queue.length})** _(entran si se libera plaza)_`);
-    part.queue.forEach((e, i) => lines.push(entryLine(i + 1, e)));
+  const open = list.state === "open";
+  const stateTxt = open ? "🟢 Inscripción abierta" : "🔒 Inscripción cerrada";
+  const occupied = part.inside.length + Math.min(part.secondaries.length, part.secondaryCutoff);
+  const close = open ? fmtDate(list.starts_at) : null;
+
+  const L: string[] = [];
+  L.push(`## 🏆 Liga de Clanes · ${seasonLabel(list.season)}`);
+  L.push(`-# ${stateTxt}  ·  ${occupied}/${part.cutoff} plazas${close ? `  ·  cierra el ${close}` : ""}`);
+  L.push("");
+
+  L.push(`**✅ Dentro** · ${part.inside.length}`);
+  if (part.inside.length) part.inside.forEach((e, i) => L.push(entryLine(i + 1, e)));
+  else L.push("-# nadie todavía");
+
+  if (part.secondaries.length) {
+    L.push("");
+    L.push(`**➕ Secundarias** · ${part.secondaries.length}`);
+    L.push("-# menor prioridad: entran con las plazas que sobren");
+    part.secondaries.forEach((e, i) => L.push(entryLine(i + 1, e, i >= part.secondaryCutoff)));
   }
-  return lines.join("\n");
+
+  if (part.queue.length) {
+    L.push("");
+    L.push(`**⏳ En cola** · ${part.queue.length}`);
+    part.queue.forEach((e, i) => L.push(entryLine(i + 1, e, true)));
+  }
+
+  L.push("");
+  L.push("-# 📣 Para entrar escribe «participo» o usa `/apuntar` · esta lista se actualiza sola");
+  return L.join("\n");
 }
 
 // --- Efectos: mensaje fijo en tiempo real + rol CWL ---
 
-// Renderiza la lista y edita (o crea) el mensaje fijo del canal configurado.
+// Renderiza la lista y edita (o crea) el mensaje fijo. Solo publica si la liga
+// tiene canal asignado (channel_id): las ligas ya empezadas se crean sin canal
+// (solo registro manual), así que aquí no se publican en Discord.
 export async function refreshLiveList(season: string): Promise<void> {
   const svc = createServerClient();
   const list = await getList(season);
-  if (!list) return;
-  const cfg = await getCwlConfig();
-  const channelId = list.channel_id || cfg.listChannelId;
-  if (!channelId) return;
+  if (!list || !list.channel_id) return;
+  const channelId = list.channel_id;
 
   const part = partition(list, await getSignups(season));
   const content = renderListText(list, part);
 
   let messageId = list.message_id;
   const edited = messageId ? await editChannelMessage(channelId, messageId, content) : false;
-  if (!edited) {
-    messageId = await postChannelMessage(channelId, content);
+  if (!edited) messageId = await postChannelMessage(channelId, content);
+  if (messageId !== list.message_id) {
+    await svc.from("cwl_lists").update({ message_id: messageId }).eq("season", season);
   }
-  if (messageId !== list.message_id || channelId !== list.channel_id) {
-    await svc.from("cwl_lists").update({ message_id: messageId, channel_id: channelId }).eq("season", season);
+}
+
+// --- Anuncio de apertura (a #general, con @Clan). Manual desde la app o cron. ---
+
+function fmtDayLong(iso: string | null): string | null {
+  if (!iso) return null;
+  try {
+    return new Intl.DateTimeFormat("es", { day: "numeric", month: "long" }).format(new Date(iso));
+  } catch {
+    return null;
   }
+}
+
+export function buildOpenText(list: CwlList, cfg: CwlConfig): string {
+  const mention = cfg.clanRoleId ? `<@&${cfg.clanRoleId}> ` : "";
+  const listMention = cfg.listChannelId ? `<#${cfg.listChannelId}>` : "";
+  const close = fmtDayLong(list.starts_at);
+  return (
+    `🎉 ${mention}¡Ya están **abiertas las inscripciones de la CWL de ${seasonLabel(list.season)}**!\n` +
+    `Para entrar escribe «**participo**» (o usa \`/apuntar\`).` +
+    (close ? ` Cierra el **${close}**.` : "") +
+    (listMention ? `\n📋 Lista en directo en ${listMention}.` : "")
+  );
+}
+
+// Envía el anuncio de apertura al canal de avisos y marca announced_open.
+export async function sendOpenAnnouncement(season: string): Promise<boolean> {
+  const list = await getList(season);
+  if (!list) return false;
+  const cfg = await getCwlConfig();
+  if (!cfg.announceChannelId) return false;
+  const ok = await sendClanMessage(
+    buildOpenText(list, cfg),
+    { roles: cfg.clanRoleId ? [cfg.clanRoleId] : [] },
+    cfg.announceChannelId,
+  );
+  if (ok) {
+    const svc = createServerClient();
+    await svc.from("cwl_lists").update({ announced_open: true }).eq("season", season);
+  }
+  return ok;
 }
 
 export async function assignCwlRole(discordId: string | null): Promise<void> {

@@ -4,8 +4,9 @@ Proceso 24/7 conectado al gateway de Discord. Comparte la BD de Supabase con la 
 
 ## Requisitos previos (una vez)
 
-1. **Message Content Intent**: en el Discord Developer Portal → tu app → **Bot** →
-   activa **MESSAGE CONTENT INTENT** y guarda.
+1. **Intents privilegiados**: en el Discord Developer Portal → tu app → **Bot** →
+   activa **MESSAGE CONTENT INTENT** y **SERVER MEMBERS INTENT** y guarda.
+   (Server Members hace falta para saludar cuando alguien entra al servidor.)
 2. Instala **flyctl**: https://fly.io/docs/hactl/install/ y `fly auth login`.
 
 ## Desplegar
@@ -24,8 +25,16 @@ fly secrets set \
   DISCORD_GUILD_ID=1234567890 \
   SUPABASE_URL=https://xxxx.supabase.co \
   SUPABASE_SECRET_KEY=xxxxx \
+  COC_API_BASE_URL=https://cocproxy.royaleapi.dev/v1 \
+  COC_API_TOKEN=xxxxx \
+  WELCOME_CHANNEL_ID=1234567890 \
   SIGNUP_CHANNEL_ID=1234567890   # opcional
 ```
+
+`COC_API_TOKEN` (mismo que Vercel) es para la bienvenida: traduce el tag que pega
+el usuario a su nombre de CoC. `WELCOME_CHANNEL_ID` = el general (saludo de
+respaldo si tiene los MD cerrados). Para poner el apodo, el bot necesita el
+permiso **Gestionar apodos** y su rol por encima del de esa persona.
 
 `DISCORD_GUILD_ID` es opcional pero recomendado: registra los slash commands
 (`/apuntar`, `/desapuntar`, `/lista-cwl`) al instante en ese servidor. Sin él se

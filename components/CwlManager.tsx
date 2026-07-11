@@ -10,6 +10,8 @@ import {
   addSignupMember,
   addSignupDiscord,
   removeSignup,
+  deleteList,
+  announceOpen,
 } from "@/app/liga/inscripciones/actions";
 
 export interface CwlEntryView {
@@ -19,6 +21,7 @@ export interface CwlEntryView {
   discordId: string | null;
   source: string;
   addedBy: string | null;
+  leftAt: string | null; // fecha de salida del clan (si ya no está)
 }
 export interface ClanMemberOpt {
   tag: string;
@@ -35,17 +38,30 @@ export interface DiscordMemberOpt {
 export interface CwlManagerProps {
   season: string; // temporada de esta liga (la página)
   exists: boolean; // ¿hay ya inscripción (cwl_lists) para esta liga?
+  ended: boolean; // ¿la liga ya terminó? (no se puede reabrir la inscripción)
+  canDelete: boolean; // ¿se puede eliminar? (liga sin empezar, sin rondas)
   state: "open" | "closed" | null;
   size: number | null;
   cutoff: number | null;
   closeDate: string | null; // starts_at ISO
   opensAt: string | null;
   endsAt: string | null;
-  inside: CwlEntryView[];
-  queue: CwlEntryView[];
-  hiddenNames: string[];
+  inside: CwlEntryView[]; // principales con plaza
+  queue: CwlEntryView[]; // principales en cola (si sobran del corte)
+  secondaries: CwlEntryView[]; // cuentas secundarias (apartado propio)
+  secondaryCutoff: number; // cuántas secundarias tienen plaza
+  left: CwlEntryView[]; // apuntados que ya no están en el clan (con fecha de salida)
   clanMembers: ClanMemberOpt[];
   discordMembers: DiscordMemberOpt[];
+}
+
+function fmtLeft(iso: string | null): string | null {
+  if (!iso) return null;
+  try {
+    return new Intl.DateTimeFormat("es", { day: "numeric", month: "short", year: "numeric" }).format(new Date(iso));
+  } catch {
+    return null;
+  }
 }
 
 function toLocalInput(iso: string | null): string {
@@ -59,6 +75,7 @@ export function CwlManager(props: CwlManagerProps) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
 
   function run(fn: () => Promise<{ ok: boolean; error?: string }>) {
     setErr(null);
@@ -71,97 +88,169 @@ export function CwlManager(props: CwlManagerProps) {
 
   const season = props.season;
 
+  // Crear la inscripción y, si se marca, enviar el anuncio de apertura al general.
+  function createAndMaybeAnnounce(size: number | null, startsAt: string | null, announce: boolean) {
+    setErr(null);
+    start(async () => {
+      const r = await createList(season, size, startsAt);
+      if (!r.ok) {
+        setErr(r.error ?? "No se pudo crear.");
+        return;
+      }
+      if (announce) await announceOpen(r.season ?? season);
+      router.refresh();
+    });
+  }
+
+  function del() {
+    if (!confirm("¿Eliminar la inscripción de esta liga? Se borrará la lista y sus apuntados. No se puede deshacer.")) return;
+    setErr(null);
+    start(async () => {
+      const r = await deleteList(season);
+      if (!r.ok) setErr(r.error ?? "No se pudo eliminar.");
+      else router.push("/guerras?tab=ligas");
+    });
+  }
+
   // ---- Sin inscripción todavía para esta liga ----
   if (!props.exists || props.state === null) {
-    return <CreateCard season={season} pending={pending} err={err} onCreate={(sz, st) => run(() => createList(season, sz, st))} />;
+    return <CreateCard season={season} pending={pending} err={err} onCreate={createAndMaybeAnnounce} />;
   }
 
   const isOpen = props.state === "open";
-  const total = props.inside.length + props.queue.length;
+  const secIn = Math.min(props.secondaries.length, props.secondaryCutoff);
+  const occupied = props.inside.length + secIn;
+  const total = props.inside.length + props.queue.length + props.secondaries.length;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {err && <p className="rounded-lg bg-banner/10 px-3 py-2 text-sm font-semibold text-banner">{err}</p>}
 
-      {/* Cabecera + controles */}
-      <div className="rounded-2xl border border-line bg-surface p-4">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">📋</span>
-          <div className="min-w-0 flex-1">
-            <p className="font-extrabold text-ink">Inscripción</p>
-            <p className="text-xs text-ink-soft">
-              {props.inside.length}/{props.cutoff} dentro
-              {props.queue.length > 0 && ` · ${props.queue.length} en cola`}
-            </p>
-          </div>
-          <span
-            className={`flex-none rounded-full px-2.5 py-1 text-xs font-extrabold ${
-              isOpen ? "bg-grass/15 text-grass" : "bg-banner/15 text-banner"
-            }`}
-          >
-            {isOpen ? "🟢 Abierta" : "🔒 Cerrada"}
-          </span>
+      {/* Cabecera */}
+      <div className="flex items-center gap-2">
+        <span className="text-lg">📋</span>
+        <div className="min-w-0 flex-1">
+          <p className="font-extrabold text-ink">Inscripción</p>
+          <p className="text-xs text-ink-soft">
+            {occupied}/{props.cutoff} plazas
+            {props.secondaries.length > 0 && ` · ${props.secondaries.length} secundaria(s)`}
+            {props.queue.length > 0 && ` · ${props.queue.length} en cola`}
+          </p>
         </div>
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            onClick={() => run(() => setListState(season, isOpen ? "closed" : "open"))}
-            disabled={pending}
-            className="rounded-full bg-surface-2 px-3.5 py-1.5 text-sm font-extrabold text-ink transition hover:bg-line disabled:opacity-50"
-          >
-            {isOpen ? "🔒 Cerrar inscripción" : "🟢 Reabrir inscripción"}
-          </button>
-        </div>
-
-        {/* Corte */}
-        <div className="mt-3">
-          <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-ink-soft">Límite de plazas</p>
-          <div className="flex gap-2">
-            {[
-              { label: "Auto (15→30)", val: null as number | null },
-              { label: "15 fijo", val: 15 },
-              { label: "30 fijo", val: 30 },
-            ].map((o) => {
-              const active = props.size === o.val;
-              return (
-                <button
-                  key={o.label}
-                  onClick={() => run(() => setSize(season, o.val))}
-                  disabled={pending}
-                  className={`flex-1 rounded-full px-2 py-1.5 text-xs font-extrabold transition disabled:opacity-50 ${
-                    active ? "bg-gold text-banner-dark" : "bg-surface-2 text-ink-soft hover:bg-line"
-                  }`}
-                >
-                  {o.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Fechas (avanzado) */}
-        <details className="mt-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-ink-soft">
-            Fechas (opcional)
-          </summary>
-          <DatesEditor
-            opensAt={props.opensAt}
-            startsAt={props.closeDate}
-            endsAt={props.endsAt}
-            pending={pending}
-            onSave={(d) => run(() => setDates(season, d))}
-          />
-        </details>
+        <span
+          className={`flex-none rounded-full px-2.5 py-1 text-xs font-extrabold ${
+            isOpen ? "bg-grass/15 text-grass" : "bg-banner/15 text-banner"
+          }`}
+        >
+          {isOpen ? "🟢 Abierta" : props.ended ? "🏁 Cerrada (terminada)" : "🔒 Cerrada"}
+        </span>
+        <button
+          onClick={() => setEditing((v) => !v)}
+          className={`flex-none rounded-full px-3 py-1.5 text-xs font-extrabold transition ${
+            editing ? "bg-gold text-banner-dark" : "bg-surface-2 text-ink-soft hover:bg-line"
+          }`}
+        >
+          {editing ? "✓ Hecho" : "✏️ Gestionar"}
+        </button>
       </div>
 
-      {/* Añadir (colíder) */}
-      <AddPanel
-        clanMembers={props.clanMembers}
-        discordMembers={props.discordMembers}
-        pending={pending}
-        onAddMember={(tag) => run(() => addSignupMember(season, tag))}
-        onAddDiscord={(id, username) => run(() => addSignupDiscord(season, id, username))}
-      />
+      {/* Panel de edición (oculto por defecto; evita tocar nada sin querer) */}
+      {editing && (
+        <div className="space-y-3 rounded-2xl border-2 border-gold/50 bg-gold/5 p-3">
+          <p className="text-xs font-bold text-gold-deep">
+            ✏️ Modo edición — los cambios se guardan al instante.
+          </p>
+
+          <div className="flex flex-wrap gap-2">
+            {/* Abrir/cerrar: solo mientras la liga NO haya terminado */}
+            {!props.ended && (
+              <button
+                onClick={() => run(() => setListState(season, isOpen ? "closed" : "open"))}
+                disabled={pending}
+                className="rounded-full bg-surface-2 px-3.5 py-1.5 text-sm font-extrabold text-ink transition hover:bg-line disabled:opacity-50"
+              >
+                {isOpen ? "🔒 Cerrar inscripción" : "🟢 Reabrir inscripción"}
+              </button>
+            )}
+            {/* Anuncio de apertura manual (@Clan al general), con confirmación */}
+            <button
+              onClick={() => {
+                if (confirm("¿Enviar el anuncio de apertura al canal general, etiquetando al clan?"))
+                  run(() => announceOpen(season));
+              }}
+              disabled={pending}
+              className="rounded-full bg-[#5865F2]/15 px-3.5 py-1.5 text-sm font-extrabold text-[#5865F2] transition hover:bg-[#5865F2]/25 disabled:opacity-50"
+            >
+              📣 Enviar anuncio
+            </button>
+          </div>
+
+          {/* Corte */}
+          <div>
+            <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-ink-soft">Límite de plazas</p>
+            <div className="flex gap-2">
+              {[
+                { label: "Auto (15→30)", val: null as number | null },
+                { label: "15 fijo", val: 15 },
+                { label: "30 fijo", val: 30 },
+              ].map((o) => {
+                const active = props.size === o.val;
+                return (
+                  <button
+                    key={o.label}
+                    onClick={() => run(() => setSize(season, o.val))}
+                    disabled={pending}
+                    className={`flex-1 rounded-full px-2 py-1.5 text-xs font-extrabold transition disabled:opacity-50 ${
+                      active ? "bg-gold text-banner-dark" : "bg-surface-2 text-ink-soft hover:bg-line"
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Añadir a mano */}
+          <AddPanel
+            clanMembers={props.clanMembers}
+            discordMembers={props.discordMembers}
+            pending={pending}
+            onAddMember={(tag) => run(() => addSignupMember(season, tag))}
+            onAddDiscord={(id, username) => run(() => addSignupDiscord(season, id, username))}
+          />
+
+          {/* Fechas */}
+          <details>
+            <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-ink-soft">
+              Fechas (opcional)
+            </summary>
+            <DatesEditor
+              opensAt={props.opensAt}
+              startsAt={props.closeDate}
+              endsAt={props.endsAt}
+              pending={pending}
+              onSave={(d) => run(() => setDates(season, d))}
+            />
+          </details>
+
+          {/* Eliminar la liga (solo si no ha empezado: sin rondas jugadas) */}
+          {props.canDelete && (
+            <div className="border-t border-gold/30 pt-3">
+              <button
+                onClick={del}
+                disabled={pending}
+                className="rounded-full border border-banner/40 bg-banner/10 px-3.5 py-1.5 text-sm font-extrabold text-banner transition hover:bg-banner/20 disabled:opacity-50"
+              >
+                🗑️ Eliminar esta liga
+              </button>
+              <p className="mt-1 text-[11px] text-ink-soft">
+                Borra la inscripción y sus apuntados. Solo disponible antes de que empiece la liga.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Dentro */}
       <Section title={`✅ Dentro (${props.inside.length})`}>
@@ -169,35 +258,73 @@ export function CwlManager(props: CwlManagerProps) {
           <Empty>Nadie apuntado todavía.</Empty>
         ) : (
           props.inside.map((e, i) => (
-            <EntryRow key={e.id} i={i + 1} e={e} pending={pending} onRemove={() => run(() => removeSignup(season, e.id))} />
+            <EntryRow
+              key={e.id}
+              i={i + 1}
+              e={e}
+              editing={editing}
+              pending={pending}
+              onRemove={() => run(() => removeSignup(season, e.id))}
+            />
           ))
         )}
       </Section>
 
-      {/* Cola */}
-      {props.queue.length > 0 && (
-        <Section title={`⏳ En cola (${props.queue.length})`} hint="Entran si se libera una plaza.">
-          {props.queue.map((e, i) => (
-            <EntryRow key={e.id} i={i + 1} e={e} queued pending={pending} onRemove={() => run(() => removeSignup(season, e.id))} />
+      {/* Secundarias (apartado propio): entran solo si sobran plazas tras los
+          principales del resto de gente. */}
+      {props.secondaries.length > 0 && (
+        <Section
+          title={`➕ Secundarias (${props.secondaries.length})`}
+          hint="Menor prioridad: entran con las plazas que sobren de los principales."
+        >
+          {props.secondaries.map((e, i) => (
+            <EntryRow
+              key={e.id}
+              i={i + 1}
+              e={e}
+              queued={i >= props.secondaryCutoff}
+              editing={editing}
+              pending={pending}
+              onRemove={() => run(() => removeSignup(season, e.id))}
+            />
           ))}
         </Section>
       )}
 
-      {/* Ocultos (ex-clan) */}
-      {props.hiddenNames.length > 0 && (
+      {/* Cola (principales de más, si hubiera) */}
+      {props.queue.length > 0 && (
+        <Section title={`⏳ En cola (${props.queue.length})`} hint="Entran si se libera una plaza.">
+          {props.queue.map((e, i) => (
+            <EntryRow
+              key={e.id}
+              i={i + 1}
+              e={e}
+              queued
+              editing={editing}
+              pending={pending}
+              onRemove={() => run(() => removeSignup(season, e.id))}
+            />
+          ))}
+        </Section>
+      )}
+
+      {/* Inscripción PRESENTE: ex-miembros ocultos (no ocupan plaza). En ligas
+          pasadas esta lista viene vacía y quien se fue cuenta en "Dentro". */}
+      {props.left.length > 0 && (
         <details className="rounded-2xl border border-dashed border-line bg-surface/60 p-3 text-sm">
           <summary className="cursor-pointer font-bold text-ink-soft">
-            {props.hiddenNames.length} apuntado(s) fuera del clan (ocultos)
+            {props.left.length} fuera del clan (ocultos)
           </summary>
           <p className="mt-2 text-xs text-ink-soft">
-            Siguen apuntados pero no cuentan ni se muestran mientras no estén en el clan: {props.hiddenNames.join(", ")}.
+            No ocupan plaza mientras no estén en el clan; reaparecen si vuelven:{" "}
+            {props.left.map((e) => e.name).join(", ")}.
           </p>
         </details>
       )}
 
-      {total === 0 && (
+      {total === 0 && !editing && (
         <p className="text-center text-xs text-ink-soft">
-          En el canal de inscripciones, escribiendo «me apunto» se apuntan solos.
+          En el canal de inscripciones, escribiendo «participo» se apuntan solos.
         </p>
       )}
     </div>
@@ -208,15 +335,18 @@ function EntryRow({
   i,
   e,
   queued,
+  editing,
   pending,
   onRemove,
 }: {
   i: number;
   e: CwlEntryView;
   queued?: boolean;
+  editing: boolean;
   pending: boolean;
   onRemove: () => void;
 }) {
+  const leftOn = fmtLeft(e.leftAt);
   return (
     <div className="flex items-center gap-2.5 px-3.5 py-2.5">
       <span className={`w-6 flex-none text-right text-sm font-extrabold tabular-nums ${queued ? "text-ink-soft" : "text-gold-deep"}`}>
@@ -228,16 +358,21 @@ function EntryRow({
           {e.townHall ? `TH${e.townHall}` : "sin TH"}
           {!e.discordId && " · 🎮 sin Discord"}
           {e.source === "app" && " · añadido a mano"}
+          {leftOn && <span className="text-banner"> · 🚪 salió el {leftOn}</span>}
         </p>
       </div>
-      <button
-        onClick={onRemove}
-        disabled={pending}
-        aria-label="Quitar"
-        className="flex-none rounded-full px-2 py-1 text-sm font-extrabold text-ink-soft transition hover:bg-banner/10 hover:text-banner disabled:opacity-50"
-      >
-        ✕
-      </button>
+      {editing && (
+        <button
+          onClick={() => {
+            if (confirm(`¿Quitar a ${e.name} de la inscripción?`)) onRemove();
+          }}
+          disabled={pending}
+          aria-label="Quitar"
+          className="flex-none rounded-full px-2 py-1 text-sm font-extrabold text-ink-soft transition hover:bg-banner/10 hover:text-banner disabled:opacity-50"
+        >
+          ✕
+        </button>
+      )}
     </div>
   );
 }
@@ -276,7 +411,7 @@ function AddPanel({
   const [did, setDid] = useState(discordMembers[0]?.id ?? "");
 
   return (
-    <div className="rounded-2xl border border-line bg-surface p-4">
+    <div className="rounded-xl border border-line bg-surface p-3">
       <p className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">Añadir a mano</p>
       <div className="mb-2 flex gap-2">
         <button
@@ -353,10 +488,11 @@ function CreateCard({
   season: string;
   pending: boolean;
   err: string | null;
-  onCreate: (size: number | null, startsAt: string | null) => void;
+  onCreate: (size: number | null, startsAt: string | null, announce: boolean) => void;
 }) {
   const [size, setSize] = useState<number | null>(null);
   const [start, setStart] = useState("");
+  const [notify, setNotify] = useState(true);
 
   return (
     <div className="space-y-4">
@@ -398,8 +534,12 @@ function CreateCard({
             className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm font-semibold text-ink outline-none focus:border-gold"
           />
         </label>
+        <label className="flex items-center gap-2 text-xs font-semibold text-ink-soft">
+          <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
+          Avisar al canal general (@Clan) al abrir
+        </label>
         <button
-          onClick={() => onCreate(size, start ? new Date(start).toISOString() : null)}
+          onClick={() => onCreate(size, start ? new Date(start).toISOString() : null, notify)}
           disabled={pending}
           className="w-full rounded-full bg-gold px-4 py-2.5 text-sm font-extrabold text-banner-dark transition hover:brightness-105 disabled:opacity-50"
         >

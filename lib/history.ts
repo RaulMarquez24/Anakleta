@@ -1,4 +1,3 @@
-import { unstable_cache } from "next/cache";
 import { createServerClient } from "@/lib/supabase/server";
 import { donationsNegative } from "@/lib/dashboard";
 
@@ -39,11 +38,10 @@ export interface MemberHistory {
   }[];
 }
 
-export const getMemberHistory = unstable_cache(getMemberHistoryImpl, ["member-history"], {
-  revalidate: 300,
-});
-
-async function getMemberHistoryImpl(tag: string): Promise<MemberHistory | null> {
+// Sin caché a propósito: la ficha muestra datos que cambian por fuera (nota,
+// Discord vinculado por el bot, cuentas). Lectura directa a Supabase en cada
+// visita para que nunca salga desactualizada (la página es force-dynamic).
+export async function getMemberHistory(tag: string): Promise<MemberHistory | null> {
   const supabase = createServerClient();
 
   const { data: member } = await supabase
@@ -193,12 +191,7 @@ export interface Departure {
 
 // Registro de abandonos: todos los que ya no están en el clan (is_active=false),
 // del más reciente al más antiguo.
-export const getDepartures = unstable_cache(getDeparturesImpl, ["departures"], {
-  revalidate: 300,
-  tags: ["departures"],
-});
-
-async function getDeparturesImpl(): Promise<Departure[]> {
+export async function getDepartures(): Promise<Departure[]> {
   const supabase = createServerClient();
   // select("*") a propósito: así no rompe si aún no está migrada la columna note.
   const { data } = await supabase
@@ -241,13 +234,7 @@ const SIGNALS = [
 type SignalRow = { capturedAt: string } & Record<(typeof SIGNALS)[number], number | null>;
 
 // Última actividad detectada (multi-señal) + participación en guerra del último mes.
-export const getActivityReport = unstable_cache(
-  getActivityReportImpl,
-  ["activity-report"],
-  { revalidate: 300 },
-);
-
-async function getActivityReportImpl(
+export async function getActivityReport(
   period: ActivityPeriod = "semana",
 ): Promise<ActivityReport> {
   const supabase = createServerClient();

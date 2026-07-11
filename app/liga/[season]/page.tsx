@@ -18,6 +18,7 @@ const toView = (e: Awaited<ReturnType<typeof getSignups>>[number]): CwlEntryView
   discordId: e.discord_id,
   source: e.source,
   addedBy: e.added_by,
+  leftAt: e.leftAt,
 });
 
 export default async function LigaPage({
@@ -58,108 +59,84 @@ export default async function LigaPage({
   // Partición de la inscripción (si existe la lista de esta liga).
   let inside: CwlEntryView[] = [];
   let queue: CwlEntryView[] = [];
-  let hiddenNames: string[] = [];
+  let secondaries: CwlEntryView[] = [];
+  let secondaryCutoff = 0;
+  let left: CwlEntryView[] = [];
   let cutoff: number | null = null;
   if (list) {
     const part = partition(list, await getSignups(decoded));
     inside = part.inside.map(toView);
     queue = part.queue.map(toView);
-    hiddenNames = part.hidden.map((e) => e.name);
+    secondaries = part.secondaries.map(toView);
+    secondaryCutoff = part.secondaryCutoff;
+    left = part.hidden.map(toView);
     cutoff = part.cutoff;
   }
 
   const byRound = new Map<number, WarSummary>();
   for (const w of wars) if (w.round != null) byRound.set(w.round, w);
-  const days = Array.from({ length: summary.expectedRounds }, (_, i) => i + 1);
+  const expected = summary.expectedRounds || 7;
+  const days = Array.from({ length: expected }, (_, i) => i + 1);
+  const started = summary.totalRounds > 0;
+  const ended = Boolean(list?.ends_at && Date.now() > new Date(list.ends_at).getTime());
 
   return (
     <AppShell email={user?.email} title={`🏆 ${seasonLabel(decoded)}`} back="/guerras?tab=ligas">
-      {/* Inscripción de esta liga */}
-      <div className="mb-6">
-        <CwlManager
-          season={decoded}
-          exists={Boolean(list)}
-          state={list?.state ?? null}
-          size={list?.size ?? null}
-          cutoff={cutoff}
-          closeDate={list?.starts_at ?? null}
-          opensAt={list?.opens_at ?? null}
-          endsAt={list?.ends_at ?? null}
-          inside={inside}
-          queue={queue}
-          hiddenNames={hiddenNames}
-          clanMembers={clanMembers}
-          discordMembers={discordMembers}
-        />
-      </div>
-
-      {/* Participación (rondas + resumen) */}
+      {/* 1) Rondas (siempre; las que faltan salen bloqueadas) */}
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="font-extrabold text-ink">Participación</h2>
+        <h2 className="font-extrabold text-ink">Rondas</h2>
         <p className="text-sm font-semibold text-ink-soft">
           <span className="text-grass">{summary.wins}V</span> · <span className="text-banner">{summary.losses}D</span>
-          {summary.ties > 0 && <> · {summary.ties}E</>} · {summary.totalRounds}/{summary.expectedRounds}
+          {summary.ties > 0 && <> · {summary.ties}E</>} · {summary.totalRounds}/{expected}
         </p>
       </div>
+      <div className="mb-6 overflow-hidden rounded-2xl border border-line bg-surface">
+        <ul className="divide-y divide-line">
+          {days.map((round) => {
+            const w = byRound.get(round);
+            if (!w) {
+              return (
+                <li key={round} className="flex items-center gap-3 px-3.5 py-3 opacity-60">
+                  <span className="flex h-9 w-9 flex-none items-center justify-center rounded-xl bg-surface-2 text-sm font-extrabold text-ink-soft">
+                    {round}
+                  </span>
+                  <div className="flex-1">
+                    <p className="font-bold text-ink-soft">Ronda {round}</p>
+                    <p className="text-xs text-ink-soft">Pendiente</p>
+                  </div>
+                  <span aria-hidden className="text-ink-soft">🔒</span>
+                </li>
+              );
+            }
+            return (
+              <li key={round}>
+                <Link href={`/guerra/${w.id}`} className="flex items-center gap-3 px-3.5 py-3 hover:bg-surface-2/60">
+                  <span className="flex h-9 w-9 flex-none items-center justify-center rounded-xl bg-surface-2 text-sm font-extrabold text-ink-soft">
+                    {round}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-bold text-ink">Ronda {round} · vs {w.opponentName ?? "—"}</p>
+                    <p className="text-xs text-ink-soft">{fmtDate(w.startTime)} · {scoreText(w)}</p>
+                  </div>
+                  <ResultBadge war={w} />
+                  <span aria-hidden className="text-ink-soft">›</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
 
-      {summary.totalRounds > 0 && (
-        <div className="mb-6">
-          <SendSeasonSummary season={decoded} channels={channels} defaultChannelId={defaultChannel} />
-        </div>
-      )}
-
-      {/* Los días (rondas). Las que faltan salen bloqueadas. */}
-      {summary.totalRounds === 0 ? (
-        <p className="rounded-2xl border border-line bg-surface p-4 text-sm text-ink-soft">
-          Aún no hay rondas jugadas en esta liga. Aparecerán solas durante la semana de CWL.
-        </p>
-      ) : (
-        <>
-          <div className="mb-6 overflow-hidden rounded-2xl border border-line bg-surface">
-            <ul className="divide-y divide-line">
-              {days.map((round) => {
-                const w = byRound.get(round);
-                if (!w) {
-                  return (
-                    <li key={round} className="flex items-center gap-3 px-3.5 py-3 opacity-60">
-                      <span className="flex h-9 w-9 flex-none items-center justify-center rounded-xl bg-surface-2 text-sm font-extrabold text-ink-soft">
-                        {round}
-                      </span>
-                      <div className="flex-1">
-                        <p className="font-bold text-ink-soft">Ronda {round}</p>
-                        <p className="text-xs text-ink-soft">Pendiente</p>
-                      </div>
-                      <span aria-hidden className="text-ink-soft">🔒</span>
-                    </li>
-                  );
-                }
-                return (
-                  <li key={round}>
-                    <Link href={`/guerra/${w.id}`} className="flex items-center gap-3 px-3.5 py-3 hover:bg-surface-2/60">
-                      <span className="flex h-9 w-9 flex-none items-center justify-center rounded-xl bg-surface-2 text-sm font-extrabold text-ink-soft">
-                        {round}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-bold text-ink">Ronda {round} · vs {w.opponentName ?? "—"}</p>
-                        <p className="text-xs text-ink-soft">{fmtDate(w.startTime)} · {scoreText(w)}</p>
-                      </div>
-                      <ResultBadge war={w} />
-                      <span aria-hidden className="text-ink-soft">›</span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-
-          {/* Resumen de la liga: rendimiento por miembro */}
-          <h2 className="mb-2 font-extrabold text-ink">Resumen de la liga</h2>
+      {/* 2) Resumen (colapsable) + compartir (bloqueado si no ha empezado) */}
+      <details className="mb-6 overflow-hidden rounded-2xl border border-line bg-surface" open={started}>
+        <summary className="cursor-pointer px-3.5 py-3 font-extrabold text-ink">
+          Resumen de la liga
+        </summary>
+        <div className="space-y-4 border-t border-line p-3.5">
           {summary.members.length === 0 ? (
-            <p className="rounded-2xl border border-line bg-surface p-4 text-sm text-ink-soft">
-              Aún no hay datos de alineación en esta temporada.
-            </p>
+            <p className="text-sm text-ink-soft">Aún no hay datos de alineación en esta temporada.</p>
           ) : (
-            <div className="overflow-hidden rounded-2xl border border-line bg-surface">
+            <div className="overflow-hidden rounded-xl border border-line">
               <table className="w-full text-sm">
                 <thead className="bg-surface-2 text-left text-ink-soft">
                   <tr>
@@ -192,8 +169,35 @@ export default async function LigaPage({
               </table>
             </div>
           )}
-        </>
-      )}
+          <SendSeasonSummary
+            season={decoded}
+            channels={channels}
+            defaultChannelId={defaultChannel}
+            disabled={!started}
+          />
+        </div>
+      </details>
+
+      {/* 3) Inscripción de esta liga */}
+      <CwlManager
+        season={decoded}
+        exists={Boolean(list)}
+        ended={ended}
+        canDelete={!started}
+        state={list?.state ?? null}
+        size={list?.size ?? null}
+        cutoff={cutoff}
+        closeDate={list?.starts_at ?? null}
+        opensAt={list?.opens_at ?? null}
+        endsAt={list?.ends_at ?? null}
+        inside={inside}
+        queue={queue}
+        secondaries={secondaries}
+        secondaryCutoff={secondaryCutoff}
+        left={left}
+        clanMembers={clanMembers}
+        discordMembers={discordMembers}
+      />
     </AppShell>
   );
 }

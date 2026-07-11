@@ -1,4 +1,3 @@
-import { unstable_cache } from "next/cache";
 import { createServerClient } from "@/lib/supabase/server";
 import { getCurrentWar } from "@/lib/war";
 
@@ -67,11 +66,7 @@ function toSummary(w: Record<string, unknown>): WarSummary {
 }
 
 // Guerras normales (no CWL), de la más reciente a la más antigua.
-export const getNormalWars = unstable_cache(getNormalWarsImpl, ["normal-wars"], {
-  revalidate: 300,
-});
-
-async function getNormalWarsImpl(): Promise<WarSummary[]> {
+export async function getNormalWars(): Promise<WarSummary[]> {
   const supabase = createServerClient();
   const { data } = await supabase
     .from("wars")
@@ -82,11 +77,7 @@ async function getNormalWarsImpl(): Promise<WarSummary[]> {
 }
 
 // Temporadas de CWL con su resumen (victorias/derrotas), más recientes primero.
-export const getCwlSeasons = unstable_cache(getCwlSeasonsImpl, ["cwl-seasons"], {
-  revalidate: 300,
-});
-
-async function getCwlSeasonsImpl(): Promise<CwlSeasonSummary[]> {
+export async function getCwlSeasons(): Promise<CwlSeasonSummary[]> {
   const supabase = createServerClient();
   const { data } = await supabase
     .from("wars")
@@ -112,11 +103,7 @@ async function getCwlSeasonsImpl(): Promise<CwlSeasonSummary[]> {
 }
 
 // Guerras (rondas) de una temporada de CWL, ordenadas por ronda.
-export const getSeasonWars = unstable_cache(getSeasonWarsImpl, ["season-wars"], {
-  revalidate: 300,
-});
-
-async function getSeasonWarsImpl(season: string): Promise<WarSummary[]> {
+export async function getSeasonWars(season: string): Promise<WarSummary[]> {
   const supabase = createServerClient();
   const { data } = await supabase
     .from("wars")
@@ -149,11 +136,7 @@ export interface SeasonScoreboard {
   rows: SeasonScoreRow[]; // ordenado por estrellas desc, luego % desc
 }
 
-export const getSeasonScoreboard = unstable_cache(getSeasonScoreboardImpl, ["season-scoreboard"], {
-  revalidate: 300,
-});
-
-async function getSeasonScoreboardImpl(season: string): Promise<SeasonScoreboard> {
+export async function getSeasonScoreboard(season: string): Promise<SeasonScoreboard> {
   const supabase = createServerClient();
   const { data: wars } = await supabase
     .from("wars")
@@ -227,11 +210,7 @@ export interface SeasonSummary {
 const CWL_ROUNDS = 7;
 
 // Resumen agregado de una temporada de CWL: récord + rendimiento por miembro.
-export const getSeasonSummary = unstable_cache(getSeasonSummaryImpl, ["season-summary"], {
-  revalidate: 300,
-});
-
-async function getSeasonSummaryImpl(season: string): Promise<SeasonSummary> {
+export async function getSeasonSummary(season: string): Promise<SeasonSummary> {
   const supabase = createServerClient();
   const { data: wars } = await supabase
     .from("wars")
@@ -342,11 +321,7 @@ export interface MemberSeasonStat {
 
 // Historial de guerra de un miembro: cada guerra en la que estuvo alineado + un
 // resumen por temporada de CWL.
-export const getMemberWarLog = unstable_cache(getMemberWarLogImpl, ["member-war-log"], {
-  revalidate: 300,
-});
-
-async function getMemberWarLogImpl(
+export async function getMemberWarLog(
   tag: string,
 ): Promise<{ wars: MemberWarEntry[]; seasons: MemberSeasonStat[] }> {
   const supabase = createServerClient();
@@ -398,11 +373,7 @@ async function getMemberWarLogImpl(
 }
 
 // Detalle de una guerra: cabecera + alineación de nuestro clan.
-export const getWarDetail = unstable_cache(getWarDetailImpl, ["war-detail"], {
-  revalidate: 300,
-});
-
-async function getWarDetailImpl(
+export async function getWarDetail(
   id: number,
 ): Promise<{ war: WarSummary; members: WarMemberDetail[] } | null> {
   const supabase = createServerClient();
