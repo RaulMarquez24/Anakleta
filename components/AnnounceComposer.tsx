@@ -18,6 +18,7 @@ export function AnnounceComposer({
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [url, setUrl] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
   const [mention, setMention] = useState<"none" | "everyone" | "clan">("none");
   const [channelId, setChannelId] = useState(defaultChannelId ?? "");
   const [busy, setBusy] = useState(false);
@@ -27,13 +28,14 @@ export function AnnounceComposer({
     if (busy) return;
     setBusy(true);
     setMsg(null);
-    const r = await publishAnnouncement({ title, body, url, mention, channelId });
+    const r = await publishAnnouncement({ title, body, url, imageUrl, mention, channelId });
     setBusy(false);
     if (r.ok) {
       setMsg({ ok: true, text: "Anuncio publicado." });
       setTitle("");
       setBody("");
       setUrl("");
+      setImageUrl("");
       setMention("none");
     } else {
       setMsg({ ok: false, text: r.error ?? "No se pudo." });
@@ -70,6 +72,21 @@ export function AnnounceComposer({
           onChange={(e) => setUrl(e.target.value)}
           placeholder="Enlace opcional (https://…) → aparece como botón «Abrir»"
         />
+        <input
+          className={inputCls}
+          value={imageUrl}
+          onChange={(e) => setImageUrl(e.target.value)}
+          placeholder="Imagen opcional (URL https://…) → se muestra grande"
+        />
+        {imageUrl.trim() && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={imageUrl}
+            alt=""
+            className="max-h-40 w-full rounded-lg border border-line object-cover"
+            onError={(e) => (e.currentTarget.style.display = "none")}
+          />
+        )}
 
         <div className="flex flex-wrap items-center gap-2">
           <select

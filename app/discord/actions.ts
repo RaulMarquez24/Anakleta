@@ -34,6 +34,7 @@ export async function publishAnnouncement(input: {
   title: string;
   body: string;
   url?: string;
+  imageUrl?: string;
   mention?: "none" | "everyone" | "clan";
   channelId?: string;
 }): Promise<{ ok: boolean; error?: string }> {
@@ -48,6 +49,10 @@ export async function publishAnnouncement(input: {
   const url = (input.url ?? "").trim();
   const validUrl = /^https?:\/\/\S+$/.test(url) ? url : "";
   if (url && !validUrl) return { ok: false, error: "El enlace no es válido (debe empezar por http)." };
+
+  const img = (input.imageUrl ?? "").trim();
+  const validImg = /^https?:\/\/\S+$/.test(img) ? img : "";
+  if (img && !validImg) return { ok: false, error: "La imagen no es válida (debe ser una URL http)." };
 
   const channelId =
     input.channelId || (await getSettingValue("announcements_channel_id")) || "";
@@ -73,6 +78,7 @@ export async function publishAnnouncement(input: {
     title: `📢 ${title || "Anuncio"}`,
     description: body || undefined,
     url: validUrl || undefined,
+    image: validImg ? { url: validImg } : undefined,
     color: 0xe0a81e,
     footer: { text: "Añakleta" },
     timestamp: new Date().toISOString(),
