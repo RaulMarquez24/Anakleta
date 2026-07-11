@@ -190,15 +190,20 @@ export function AnnounceComposer({
               onError={(e) => (e.currentTarget.style.display = "none")}
             />
             <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="font-bold text-ink-soft">Tamaño</span>
-              <select
-                value={imageSize}
-                onChange={(e) => setImageSize(e.target.value as "big" | "thumb")}
-                className="rounded-lg border border-line bg-surface-2 px-2 py-1 text-xs font-semibold text-ink outline-none focus:border-gold"
-              >
-                <option value="big">Grande</option>
-                <option value="thumb">Miniatura (ideal para capturas verticales)</option>
-              </select>
+              {/* El tamaño solo aplica al embed (en Markdown lo pinta Discord) */}
+              {format === "embed" && (
+                <>
+                  <span className="font-bold text-ink-soft">Tamaño</span>
+                  <select
+                    value={imageSize}
+                    onChange={(e) => setImageSize(e.target.value as "big" | "thumb")}
+                    className="rounded-lg border border-line bg-surface-2 px-2 py-1 text-xs font-semibold text-ink outline-none focus:border-gold"
+                  >
+                    <option value="big">Grande</option>
+                    <option value="thumb">Miniatura (ideal para capturas verticales)</option>
+                  </select>
+                </>
+              )}
               {file && (
                 <button
                   type="button"
