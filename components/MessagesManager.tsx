@@ -10,6 +10,8 @@ import {
   type ClanMessage,
 } from "@/app/mensajes/shared";
 
+type Tab = "reclutar" | "discord" | "guardados";
+
 function CopyBtn({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   async function copy() {
@@ -31,10 +33,52 @@ function CopyBtn({ text }: { text: string }) {
   );
 }
 
+// Tarjeta de plantilla reutilizable (reclutamiento y Discord).
+function TemplateCard({
+  label,
+  text,
+  accent,
+  onUse,
+}: {
+  label: string;
+  text: string;
+  accent: "gold" | "discord";
+  onUse: (t: string) => void;
+}) {
+  const badge =
+    accent === "discord"
+      ? "bg-[#5865F2]/20 text-[#5865F2]"
+      : "bg-gold/20 text-gold-deep";
+  return (
+    <li className="rounded-2xl border border-line bg-surface p-3.5">
+      <div className="mb-1 flex items-center gap-2">
+        <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${badge}`}>
+          {label}
+        </span>
+        <span className="text-[11px] font-bold text-ink-soft">
+          {text.length}/{MAX_LEN}
+        </span>
+      </div>
+      <p className="text-sm text-ink">{text}</p>
+      <div className="mt-2 flex items-center gap-2">
+        <span className="ml-auto" />
+        <button
+          onClick={() => onUse(text)}
+          className="flex-none rounded-full border border-line bg-surface-2 px-3 py-1.5 text-xs font-extrabold text-ink transition hover:bg-line"
+        >
+          Usar
+        </button>
+        <CopyBtn text={text} />
+      </div>
+    </li>
+  );
+}
+
 export function MessagesManager({ initial }: { initial: ClanMessage[] }) {
   const [list, setList] = useState(initial);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState<Tab>("reclutar");
 
   const len = text.length;
   const over = len > MAX_LEN;
@@ -47,6 +91,7 @@ export function MessagesManager({ initial }: { initial: ClanMessage[] }) {
     if (r.ok && r.message) {
       setList((l) => [r.message!, ...l]);
       setText("");
+      setTab("guardados"); // que se vea dónde ha ido
     }
   }
 
@@ -55,9 +100,15 @@ export function MessagesManager({ initial }: { initial: ClanMessage[] }) {
     await deleteMessage(id);
   }
 
+  const tabs: { id: Tab; label: string }[] = [
+    { id: "reclutar", label: "Reclutar" },
+    { id: "discord", label: "Discord" },
+    { id: "guardados", label: `Guardados${list.length ? ` (${list.length})` : ""}` },
+  ];
+
   return (
     <div className="space-y-4">
-      {/* Compositor */}
+      {/* Compositor (siempre visible) */}
       <div className="rounded-2xl border border-line bg-surface p-4">
         <textarea
           value={text}
@@ -88,99 +139,83 @@ export function MessagesManager({ initial }: { initial: ClanMessage[] }) {
         )}
       </div>
 
-      {/* Plantillas de reclutamiento (sugeridas) */}
-      <div>
-        <p className="mb-1.5 text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">
-          Plantillas de reclutamiento
-        </p>
+      {/* Pestañas: una lista a la vez, sin scroll eterno */}
+      <div className="flex gap-1 rounded-full border border-line bg-surface p-1">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`flex-1 rounded-full px-3 py-1.5 text-xs font-extrabold transition ${
+              tab === t.id
+                ? "bg-gold text-banner-dark"
+                : "text-ink-soft hover:bg-surface-2"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Reclutar */}
+      {tab === "reclutar" && (
         <ul className="space-y-2">
           {RECRUIT_TEMPLATES.map((t) => (
-            <li key={t.label} className="rounded-2xl border border-line bg-surface p-3.5">
-              <div className="mb-1 flex items-center gap-2">
-                <span className="rounded-full bg-gold/20 px-2 py-0.5 text-[10px] font-extrabold uppercase text-gold-deep">
-                  {t.label}
-                </span>
-                <span className="text-[11px] font-bold text-ink-soft">{t.text.length}/{MAX_LEN}</span>
-              </div>
-              <p className="text-sm text-ink">{t.text}</p>
-              <div className="mt-2 flex items-center gap-2">
-                <span className="ml-auto" />
-                <button
-                  onClick={() => setText(t.text)}
-                  className="flex-none rounded-full border border-line bg-surface-2 px-3 py-1.5 text-xs font-extrabold text-ink transition hover:bg-line"
-                >
-                  Usar
-                </button>
-                <CopyBtn text={t.text} />
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {/* Invitación al Discord */}
-      <div>
-        <p className="mb-1.5 text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">
-          Invitación al Discord
-        </p>
-        <div className="mb-2 flex items-center gap-2 rounded-2xl border border-line bg-surface p-3.5">
-          <span className="truncate font-mono text-sm text-ink">{DISCORD_INVITE}</span>
-          <span className="ml-auto" />
-          <CopyBtn text={DISCORD_INVITE} />
-        </div>
-        <ul className="space-y-2">
-          {DISCORD_TEMPLATES.map((t) => (
-            <li key={t.label} className="rounded-2xl border border-line bg-surface p-3.5">
-              <div className="mb-1 flex items-center gap-2">
-                <span className="rounded-full bg-[#5865F2]/20 px-2 py-0.5 text-[10px] font-extrabold uppercase text-[#5865F2]">
-                  {t.label}
-                </span>
-                <span className="text-[11px] font-bold text-ink-soft">
-                  {t.text.length}/{MAX_LEN}
-                </span>
-              </div>
-              <p className="text-sm text-ink">{t.text}</p>
-              <div className="mt-2 flex items-center gap-2">
-                <span className="ml-auto" />
-                <button
-                  onClick={() => setText(t.text)}
-                  className="flex-none rounded-full border border-line bg-surface-2 px-3 py-1.5 text-xs font-extrabold text-ink transition hover:bg-line"
-                >
-                  Usar
-                </button>
-                <CopyBtn text={t.text} />
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {/* Guardados */}
-      {list.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-line bg-surface/60 p-6 text-center text-sm text-ink-soft">
-          Aún no has guardado ningún mensaje. Escribe uno arriba y dale a Guardar.
-        </p>
-      ) : (
-        <ul className="space-y-2">
-          {list.map((m) => (
-            <li key={m.id} className="rounded-2xl border border-line bg-surface p-3.5">
-              <p className="text-sm text-ink">{m.text}</p>
-              <div className="mt-2 flex items-center gap-2">
-                <span className="text-[11px] font-bold text-ink-soft">{m.text.length}/{MAX_LEN}</span>
-                <span className="ml-auto" />
-                <CopyBtn text={m.text} />
-                <button
-                  onClick={() => remove(m.id)}
-                  aria-label="Borrar"
-                  className="flex-none rounded-full p-1.5 text-ink-soft transition hover:bg-surface-2 hover:text-banner"
-                >
-                  🗑
-                </button>
-              </div>
-            </li>
+            <TemplateCard key={t.label} label={t.label} text={t.text} accent="gold" onUse={setText} />
           ))}
         </ul>
       )}
+
+      {/* Discord */}
+      {tab === "discord" && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 rounded-2xl border border-line bg-surface p-3.5">
+            <span className="truncate font-mono text-sm text-ink">{DISCORD_INVITE}</span>
+            <span className="ml-auto" />
+            <CopyBtn text={DISCORD_INVITE} />
+          </div>
+          <ul className="space-y-2">
+            {DISCORD_TEMPLATES.map((t) => (
+              <TemplateCard
+                key={t.label}
+                label={t.label}
+                text={t.text}
+                accent="discord"
+                onUse={setText}
+              />
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Guardados */}
+      {tab === "guardados" &&
+        (list.length === 0 ? (
+          <p className="rounded-2xl border border-dashed border-line bg-surface/60 p-6 text-center text-sm text-ink-soft">
+            Aún no has guardado ningún mensaje. Escribe uno arriba y dale a Guardar.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {list.map((m) => (
+              <li key={m.id} className="rounded-2xl border border-line bg-surface p-3.5">
+                <p className="text-sm text-ink">{m.text}</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-ink-soft">
+                    {m.text.length}/{MAX_LEN}
+                  </span>
+                  <span className="ml-auto" />
+                  <CopyBtn text={m.text} />
+                  <button
+                    onClick={() => remove(m.id)}
+                    aria-label="Borrar"
+                    className="flex-none rounded-full p-1.5 text-ink-soft transition hover:bg-surface-2 hover:text-banner"
+                  >
+                    🗑
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ))}
     </div>
   );
 }
