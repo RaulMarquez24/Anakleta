@@ -22,7 +22,7 @@ import * as coc from "./coc.js";
 
 // Súbelo cuando cambies algo. En `fly logs` verás esta línea al arrancar: si NO
 // cambia tras un deploy, es que el deploy no ha subido el código nuevo.
-const BOT_VERSION = "v13 coc-log";
+const BOT_VERSION = "v14 th-role-dm";
 
 // Texto de ayuda, compartido por «¿cómo me apunto?» (texto libre) y /help.
 const HELP_TEXT =
@@ -437,15 +437,25 @@ async function handleDm(msg) {
     return;
   }
 
-  // Poner el nombre de CoC como apodo del servidor.
-  let nickOk = false;
+  // Miembro del servidor (para apodo y rol de TH).
+  let guild = null;
+  let member = null;
   try {
-    const guild = await client.guilds.fetch(DISCORD_GUILD_ID);
-    const member = await guild.members.fetch(msg.author.id);
-    await member.setNickname(String(player.name).slice(0, 32));
-    nickOk = true;
+    guild = await client.guilds.fetch(DISCORD_GUILD_ID);
+    member = await guild.members.fetch(msg.author.id);
   } catch {
-    nickOk = false; // owner / rol más alto / sin permiso Manage Nicknames
+    /* no está en el servidor / sin acceso */
+  }
+
+  // Apodo = nombre de CoC.
+  let nickOk = false;
+  if (member) {
+    try {
+      await member.setNickname(String(player.name).slice(0, 32));
+      nickOk = true;
+    } catch {
+      nickOk = false; // owner / rol más alto / sin permiso Manage Nicknames
+    }
   }
 
   // Vincular con la cuenta del clan (si ese tag es de un miembro).
@@ -456,16 +466,48 @@ async function handleDm(msg) {
     console.error("[db] linkDiscordToMember:", err?.message ?? err);
   }
 
-  const th = player.townHallLevel ? `  ·  🏰 TH${player.townHallLevel}` : "";
-  const lines = [`✅ ¡Listo, **${player.name}**!${th}`];
+  // Rol de TH al momento, solo si es su cuenta PRINCIPAL (como el cron diario).
+  let thOk = false;
+  if (member && guild && linked && !linked.main_tag) {
+    thOk = await syncThRole(guild, member, player.townHallLevel).catch(() => false);
+  }
+
+  const thTxt = player.townHallLevel ? `  ·  🏰 TH${player.townHallLevel}` : "";
+  const lines = [`✅ ¡Listo, **${player.name}**!${thTxt}`];
   lines.push(
     nickOk
       ? "• Te he puesto ese nombre como **apodo** del servidor."
       : "• No he podido cambiarte el apodo (permisos); cámbialo tú a ese nombre 🙏.",
   );
+  if (thOk) lines.push(`• Rol de **TH${player.townHallLevel}** asignado.`);
   if (linked) lines.push("• **Vinculado** con tu cuenta del clan para la CWL. 🎯");
   lines.push("-# Cuando haya Liga de Clanes, apúntate escribiendo «me apunto».");
   await msg.reply(lines.join("\n")).catch(() => {});
+}
+
+// Pone el rol "TH N" (por nombre) y quita cualquier otro rol de TH que tuviera.
+async function syncThRole(guild, member, townHall) {
+  if (!townHall) return false;
+  const roles = await guild.roles.fetch();
+  let desired = null;
+  const allTh = [];
+  roles.forEach((r) => {
+    const mm = r.name.match(/^th\s*(\d{1,2})$/i);
+    if (mm) {
+      allTh.push(r.id);
+      if (Number(mm[1]) === townHall) desired = r;
+    }
+  });
+  if (!desired) return false;
+  try {
+    if (!member.roles.cache.has(desired.id)) await member.roles.add(desired.id);
+    for (const id of allTh) {
+      if (id !== desired.id && member.roles.cache.has(id)) await member.roles.remove(id);
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 client.login(DISCORD_BOT_TOKEN);

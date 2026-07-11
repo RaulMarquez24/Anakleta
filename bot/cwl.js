@@ -106,7 +106,7 @@ export async function linkDiscordToMember(db, tag, discordId, username) {
       discord_at: new Date().toISOString(),
     })
     .eq("tag", tag)
-    .select("tag, name");
+    .select("tag, name, main_tag");
   return data && data.length ? data[0] : null;
 }
 
