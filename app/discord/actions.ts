@@ -1,8 +1,33 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { sendClanMessage, discordConfigured } from "@/lib/discord";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { createServerClient } from "@/lib/supabase/server";
+
+// Claves de settings que se pueden editar desde el panel (whitelist).
+const EDITABLE_SETTINGS = new Set([
+  "discord_channel_id",
+  "cwl_list_channel_id",
+  "cwl_announce_channel_id",
+  "welcome_channel_id",
+  "cwl_role_id",
+  "clan_role_id",
+]);
+
+// Guarda un ajuste (canal/rol) en la tabla settings.
+export async function setSetting(key: string, value: string): Promise<{ ok: boolean; error?: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "No autorizado." };
+  if (!EDITABLE_SETTINGS.has(key)) return { ok: false, error: "Ajuste no permitido." };
+  const svc = createServerClient();
+  const { error } = await svc
+    .from("settings")
+    .upsert({ key, value: value || null }, { onConflict: "key" });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/discord");
+  return { ok: true };
+}
 
 // Fija el canal por defecto para los avisos (guerra + cron).
 export async function setDefaultChannel(channelId: string): Promise<{ ok: boolean }> {
