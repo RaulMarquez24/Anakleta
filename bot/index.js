@@ -22,7 +22,7 @@ import * as coc from "./coc.js";
 
 // Súbelo cuando cambies algo. En `fly logs` verás esta línea al arrancar: si NO
 // cambia tras un deploy, es que el deploy no ha subido el código nuevo.
-const BOT_VERSION = "v12 bienvenida-feedback";
+const BOT_VERSION = "v13 coc-log";
 
 // Texto de ayuda, compartido por «¿cómo me apunto?» (texto libre) y /help.
 const HELP_TEXT =
