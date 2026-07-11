@@ -28,20 +28,28 @@ export const DISCORD_INVITE = "https://discord.gg/p4xKrHEVwa";
 // Plantillas para invitar al Discord desde el chat de Clash (todas ≤ 128).
 export const DISCORD_TEMPLATES: { label: string; text: string }[] = [
   {
-    label: "Únete",
-    text: `Únete al Discord de Añakleta y no te pierdas guerras, CWL ni avisos: ${DISCORD_INVITE}`,
-  },
-  {
-    label: "En el clan",
-    text: `¿Estás en el clan pero no en el Discord? Entra aquí y no te pierdas nada: ${DISCORD_INVITE}`,
+    label: "Todo",
+    text: `En el Discord de Añakleta está todo: CWL, guerras, diseños y avisos. No te lo pierdas, únete: ${DISCORD_INVITE}`,
   },
   {
     label: "CWL",
-    text: `Apúntate a la CWL y coordina las guerras desde nuestro Discord: ${DISCORD_INVITE}`,
+    text: `¿Juegas la CWL? Apúntate y organiza las guerras con el clan en nuestro Discord, rápido y sin líos: ${DISCORD_INVITE}`,
+  },
+  {
+    label: "Avisos",
+    text: `No te quedes sin atacar: en el Discord avisamos de cada guerra y CWL. Entra y no falles ninguno: ${DISCORD_INVITE}`,
+  },
+  {
+    label: "Diseños",
+    text: `Diseños de bases por ayuntamiento, guerras y CWL: lo tienes todo en el Discord de Añakleta. Únete: ${DISCORD_INVITE}`,
+  },
+  {
+    label: "Comunidad",
+    text: `Añakleta es más que el clan: Discord con guerras, CWL, diseños, memes y buen rollo. Te esperamos: ${DISCORD_INVITE}`,
   },
   {
     label: "Directo",
-    text: `Toda la info del clan está en el Discord. ¡Únete! ${DISCORD_INVITE}`,
+    text: `Si estás en el clan, tu sitio está en el Discord: guerras, CWL, diseños y avisos. Únete ahora: ${DISCORD_INVITE}`,
   },
 ];
 
