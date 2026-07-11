@@ -32,9 +32,11 @@ async function setSettingValue(key: string, value: string | null): Promise<void>
 
 export function buildClanEmbed(clan: CocClan): Record<string, unknown> {
   const badge = clan.badgeUrls?.large || clan.badgeUrls?.medium || clan.badgeUrls?.small;
+  // Enlace del juego para abrir el clan y unirse (formato /es, tag sin "#").
+  const joinUrl = `https://link.clashofclans.com/es?action=OpenClanProfile&tag=${clan.tag.replace(/^#/, "")}`;
   return {
     title: `${clan.name}  ${clan.tag}`,
-    url: `https://link.clashofclans.com/?action=OpenClanProfile&tag=${encodeURIComponent(clan.tag)}`,
+    url: joinUrl,
     description: clan.description ? clan.description.slice(0, 300) : undefined,
     color: 0xe0a81e, // dorado
     thumbnail: badge ? { url: badge } : undefined,
@@ -46,6 +48,7 @@ export function buildClanEmbed(clan: CocClan): Record<string, unknown> {
       { name: "Racha de guerra", value: `${clan.warWinStreak ?? 0}`, inline: true },
       { name: "Guerras ganadas", value: `${clan.warWins ?? 0}`, inline: true },
       { name: "Trofeos para entrar", value: `${clan.requiredTrophies ?? 0}`, inline: true },
+      { name: "Unirse al clan", value: `[Abrir en Clash of Clans](${joinUrl})`, inline: false },
     ],
     footer: { text: "Añakleta · se actualiza solo" },
     timestamp: new Date().toISOString(),
