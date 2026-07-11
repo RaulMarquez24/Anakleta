@@ -7,10 +7,12 @@ import {
   RECRUIT_TEMPLATES,
   DISCORD_TEMPLATES,
   DISCORD_INVITE,
+  DEFAULT_CATEGORIES,
   type ClanMessage,
 } from "@/app/mensajes/shared";
 
 type Tab = "reclutar" | "discord" | "guardados";
+const NEW_CAT = "__new";
 
 function CopyBtn({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -33,7 +35,15 @@ function CopyBtn({ text }: { text: string }) {
   );
 }
 
-// Tarjeta de plantilla reutilizable (reclutamiento y Discord).
+const Chip = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
+  <span
+    className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${className || "bg-surface-2 text-ink-soft"}`}
+  >
+    {children}
+  </span>
+);
+
+// Tarjeta de plantilla (auto-generada): reclutamiento o Discord.
 function TemplateCard({
   label,
   text,
@@ -46,15 +56,12 @@ function TemplateCard({
   onUse: (t: string) => void;
 }) {
   const badge =
-    accent === "discord"
-      ? "bg-[#5865F2]/20 text-[#5865F2]"
-      : "bg-gold/20 text-gold-deep";
+    accent === "discord" ? "bg-[#5865F2]/20 text-[#5865F2]" : "bg-gold/20 text-gold-deep";
   return (
     <li className="rounded-2xl border border-line bg-surface p-3.5">
       <div className="mb-1 flex items-center gap-2">
-        <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${badge}`}>
-          {label}
-        </span>
+        <Chip className={badge}>{label}</Chip>
+        <Chip>Auto</Chip>
         <span className="text-[11px] font-bold text-ink-soft">
           {text.length}/{MAX_LEN}
         </span>
@@ -79,18 +86,27 @@ export function MessagesManager({ initial }: { initial: ClanMessage[] }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<Tab>("reclutar");
+  const [category, setCategory] = useState(DEFAULT_CATEGORIES[0]);
+  const [newCat, setNewCat] = useState("");
+  const creating = category === NEW_CAT;
 
   const len = text.length;
   const over = len > MAX_LEN;
 
+  // Categorías: por defecto + las ya usadas en mensajes guardados.
+  const categories = [...new Set([...DEFAULT_CATEGORIES, ...list.map((m) => m.category)])];
+
   async function add() {
+    const cat = (creating ? newCat : category).trim() || "General";
     if (!text.trim() || over || busy) return;
     setBusy(true);
-    const r = await addMessage(text);
+    const r = await addMessage(text, cat);
     setBusy(false);
     if (r.ok && r.message) {
       setList((l) => [r.message!, ...l]);
       setText("");
+      setCategory(r.message.category);
+      setNewCat("");
       setTab("guardados"); // que se vea dónde ha ido
     }
   }
@@ -106,6 +122,8 @@ export function MessagesManager({ initial }: { initial: ClanMessage[] }) {
     { id: "guardados", label: `Guardados${list.length ? ` (${list.length})` : ""}` },
   ];
 
+  const who = (email: string | null) => (email ? email.split("@")[0] : "alguien");
+
   return (
     <div className="space-y-4">
       {/* Compositor (siempre visible) */}
@@ -117,6 +135,47 @@ export function MessagesManager({ initial }: { initial: ClanMessage[] }) {
           placeholder="Ej.: Buscamos TH15+ activos para CWL y guerras diarias. ¡Únete!"
           className="w-full resize-none rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-gold"
         />
+
+        {/* Categoría (para cuando guardas) */}
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-xs font-bold text-ink-soft">Categoría</span>
+          {creating ? (
+            <>
+              <input
+                value={newCat}
+                onChange={(e) => setNewCat(e.target.value)}
+                placeholder="Nueva categoría"
+                maxLength={40}
+                autoFocus
+                className="min-w-0 flex-1 rounded-lg border border-line bg-surface-2 px-2.5 py-1.5 text-sm text-ink outline-none focus:border-gold"
+              />
+              <button
+                onClick={() => {
+                  setCategory(DEFAULT_CATEGORIES[0]);
+                  setNewCat("");
+                }}
+                aria-label="Cancelar nueva categoría"
+                className="flex-none rounded-full px-2 py-1 text-sm font-bold text-ink-soft hover:bg-surface-2"
+              >
+                ✕
+              </button>
+            </>
+          ) : (
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="min-w-0 flex-1 rounded-lg border border-line bg-surface-2 px-2.5 py-1.5 text-sm font-semibold text-ink outline-none focus:border-gold"
+            >
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+              <option value={NEW_CAT}>＋ Nueva categoría…</option>
+            </select>
+          )}
+        </div>
+
         <div className="mt-2 flex items-center justify-between">
           <span className={`text-xs font-extrabold ${over ? "text-banner" : "text-ink-soft"}`}>
             {len}/{MAX_LEN}
@@ -125,7 +184,7 @@ export function MessagesManager({ initial }: { initial: ClanMessage[] }) {
             {text && <CopyBtn text={text} />}
             <button
               onClick={add}
-              disabled={busy || over || !text.trim()}
+              disabled={busy || over || !text.trim() || (creating && !newCat.trim())}
               className="rounded-full border border-line bg-surface-2 px-4 py-1.5 text-sm font-extrabold text-ink transition hover:bg-line disabled:opacity-50"
             >
               {busy ? "Guardando…" : "Guardar"}
@@ -146,9 +205,7 @@ export function MessagesManager({ initial }: { initial: ClanMessage[] }) {
             key={t.id}
             onClick={() => setTab(t.id)}
             className={`flex-1 rounded-full px-3 py-1.5 text-xs font-extrabold transition ${
-              tab === t.id
-                ? "bg-gold text-banner-dark"
-                : "text-ink-soft hover:bg-surface-2"
+              tab === t.id ? "bg-gold text-banner-dark" : "text-ink-soft hover:bg-surface-2"
             }`}
           >
             {t.label}
@@ -187,34 +244,50 @@ export function MessagesManager({ initial }: { initial: ClanMessage[] }) {
         </div>
       )}
 
-      {/* Guardados */}
+      {/* Guardados (agrupados por categoría) */}
       {tab === "guardados" &&
         (list.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-line bg-surface/60 p-6 text-center text-sm text-ink-soft">
-            Aún no has guardado ningún mensaje. Escribe uno arriba y dale a Guardar.
+            Aún no has guardado ningún mensaje. Escribe uno arriba, elige categoría y dale a Guardar.
           </p>
         ) : (
-          <ul className="space-y-2">
-            {list.map((m) => (
-              <li key={m.id} className="rounded-2xl border border-line bg-surface p-3.5">
-                <p className="text-sm text-ink">{m.text}</p>
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-[11px] font-bold text-ink-soft">
-                    {m.text.length}/{MAX_LEN}
-                  </span>
-                  <span className="ml-auto" />
-                  <CopyBtn text={m.text} />
-                  <button
-                    onClick={() => remove(m.id)}
-                    aria-label="Borrar"
-                    className="flex-none rounded-full p-1.5 text-ink-soft transition hover:bg-surface-2 hover:text-banner"
-                  >
-                    🗑
-                  </button>
+          <div className="space-y-4">
+            {categories
+              .map((cat) => ({ cat, msgs: list.filter((m) => m.category === cat) }))
+              .filter((g) => g.msgs.length > 0)
+              .map(({ cat, msgs }) => (
+                <div key={cat}>
+                  <p className="mb-1.5 px-1 text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">
+                    {cat} ({msgs.length})
+                  </p>
+                  <ul className="space-y-2">
+                    {msgs.map((m) => (
+                      <li key={m.id} className="rounded-2xl border border-line bg-surface p-3.5">
+                        <div className="mb-1 flex flex-wrap items-center gap-2">
+                          <Chip className="bg-grass/15 text-grass">Guardado</Chip>
+                          <span className="text-[11px] text-ink-soft">por {who(m.createdBy)}</span>
+                          <span className="text-[11px] font-bold text-ink-soft">
+                            {m.text.length}/{MAX_LEN}
+                          </span>
+                        </div>
+                        <p className="text-sm text-ink">{m.text}</p>
+                        <div className="mt-2 flex items-center gap-2">
+                          <span className="ml-auto" />
+                          <CopyBtn text={m.text} />
+                          <button
+                            onClick={() => remove(m.id)}
+                            aria-label="Borrar"
+                            className="flex-none rounded-full p-1.5 text-ink-soft transition hover:bg-surface-2 hover:text-banner"
+                          >
+                            🗑
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              </li>
-            ))}
-          </ul>
+              ))}
+          </div>
         ))}
     </div>
   );

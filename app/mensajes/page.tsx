@@ -17,6 +17,7 @@ export default async function MensajesPage() {
     initial = data.map((m) => ({
       id: m.id as number,
       text: m.text as string,
+      category: (m.category as string | null) ?? "General",
       createdBy: (m.created_by as string | null) ?? null,
       createdAt: (m.created_at as string | null) ?? null,
     }));

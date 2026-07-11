@@ -16,6 +16,7 @@ create table if not exists profiles (
 create table if not exists messages (
   id         bigint generated always as identity primary key,
   text       text not null,
+  category   text not null default 'General',
   created_by text,
   created_at timestamptz default now()
 );

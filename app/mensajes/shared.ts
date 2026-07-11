@@ -57,9 +57,13 @@ export const DISCORD_TEMPLATES: { label: string; text: string }[] = [
   },
 ];
 
+// Categorías sugeridas por defecto (se pueden crear nuevas al guardar).
+export const DEFAULT_CATEGORIES = ["General", "Reclutamiento", "Anuncios", "Eventos"];
+
 export interface ClanMessage {
   id: number;
   text: string;
+  category: string;
   createdBy: string | null;
   createdAt: string | null;
 }
