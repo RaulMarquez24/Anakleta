@@ -43,14 +43,20 @@ export async function POST(req: NextRequest) {
     .is("main_tag", null)
     .not("discord_id", "is", null);
 
+  const candidates = (members ?? []).length;
   let updated = 0;
   let noChange = 0;
   let notInGuild = 0;
   let noRoleForTh = 0;
+  let noTh = 0;
+  let permFail = 0; // el bot no pudo asignar (rol por debajo de los TH / sin permiso)
 
   for (const mem of (members ?? []) as { discord_id: string; town_hall: number | null }[]) {
     const th = mem.town_hall;
-    if (!th) continue;
+    if (!th) {
+      noTh++;
+      continue;
+    }
     const desired = thRole.get(th);
     if (!desired) {
       noRoleForTh++;
@@ -66,10 +72,21 @@ export async function POST(req: NextRequest) {
       noChange++;
       continue;
     }
-    if (!current.includes(desired)) await addGuildRole(mem.discord_id, desired);
-    for (const id of held) if (id !== desired) await removeGuildRole(mem.discord_id, id);
-    updated++;
+    let ok = current.includes(desired) ? true : await addGuildRole(mem.discord_id, desired);
+    for (const id of held) if (id !== desired) ok = (await removeGuildRole(mem.discord_id, id)) && ok;
+    if (ok) updated++;
+    else permFail++;
   }
 
-  return NextResponse.json({ ok: true, roles: thRole.size, updated, noChange, notInGuild, noRoleForTh });
+  return NextResponse.json({
+    ok: true,
+    roles: thRole.size,
+    candidates,
+    updated,
+    noChange,
+    notInGuild,
+    noRoleForTh,
+    noTh,
+    permFail,
+  });
 }
