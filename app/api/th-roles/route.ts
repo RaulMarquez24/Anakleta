@@ -38,52 +38,64 @@ export async function POST(req: NextRequest) {
   const svc = createServerClient();
   const { data: members } = await svc
     .from("members")
-    .select("discord_id, town_hall")
+    .select("name, discord_id, town_hall")
     .eq("is_active", true)
     .is("main_tag", null)
     .not("discord_id", "is", null);
 
   const candidates = (members ?? []).length;
-  let updated = 0;
-  let noChange = 0;
-  let notInGuild = 0;
-  let noRoleForTh = 0;
-  let noTh = 0;
-  let permFail = 0; // el bot no pudo asignar (rol por debajo de los TH / sin permiso)
+  const updated: string[] = []; // "Nombre TH16 → TH17"
+  const noChange: string[] = [];
+  const notInGuild: string[] = [];
+  const noRoleForTh: string[] = [];
+  const noTh: string[] = [];
+  const permFail: string[] = [];
 
-  for (const mem of (members ?? []) as { discord_id: string; town_hall: number | null }[]) {
+  // Nombre de rol de TH por id (para describir el cambio).
+  const thNameById = new Map([...thRole.entries()].map(([n, id]) => [id, `TH${n}`]));
+
+  for (const mem of (members ?? []) as { name: string; discord_id: string; town_hall: number | null }[]) {
+    const who = mem.name;
     const th = mem.town_hall;
     if (!th) {
-      noTh++;
+      noTh.push(who);
       continue;
     }
     const desired = thRole.get(th);
     if (!desired) {
-      noRoleForTh++;
+      noRoleForTh.push(`${who} (TH${th})`);
       continue;
     }
     const current = await getMemberRoleIds(mem.discord_id);
     if (current == null) {
-      notInGuild++;
+      notInGuild.push(who);
       continue;
     }
     const held = current.filter((id) => allThRoleIds.has(id));
     if (held.length === 1 && held[0] === desired) {
-      noChange++;
+      noChange.push(who);
       continue;
     }
+    const before = held.map((id) => thNameById.get(id) ?? "?").join(",") || "—";
     let ok = current.includes(desired) ? true : await addGuildRole(mem.discord_id, desired);
     for (const id of held) if (id !== desired) ok = (await removeGuildRole(mem.discord_id, id)) && ok;
-    if (ok) updated++;
-    else permFail++;
+    if (ok) updated.push(`${who}: ${before} → TH${th}`);
+    else permFail.push(`${who} (TH${th})`);
   }
 
   return NextResponse.json({
     ok: true,
     roles: thRole.size,
     candidates,
+    counts: {
+      updated: updated.length,
+      noChange: noChange.length,
+      notInGuild: notInGuild.length,
+      noRoleForTh: noRoleForTh.length,
+      noTh: noTh.length,
+      permFail: permFail.length,
+    },
     updated,
-    noChange,
     notInGuild,
     noRoleForTh,
     noTh,

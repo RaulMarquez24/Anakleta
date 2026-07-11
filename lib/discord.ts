@@ -239,19 +239,28 @@ export const addGuildRole = (userId: string, roleId: string) => roleOp("PUT", us
 export const removeGuildRole = (userId: string, roleId: string) => roleOp("DELETE", userId, roleId);
 
 // Roles actuales de un miembro. null si no está en el servidor (404) o error.
+// Reintenta ante 429 para no confundir rate limit con "no está en el servidor".
 export async function getMemberRoleIds(userId: string): Promise<string[] | null> {
   if (!TOKEN || !GUILD || !userId) return null;
-  try {
-    const res = await fetch(`${API}/guilds/${GUILD}/members/${userId}`, {
-      headers: { Authorization: `Bot ${TOKEN}` },
-      cache: "no-store",
-    });
-    if (!res.ok) return null;
-    const m = (await res.json()) as { roles?: string[] };
-    return Array.isArray(m.roles) ? m.roles : [];
-  } catch {
-    return null;
+  const url = `${API}/guilds/${GUILD}/members/${userId}`;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const res = await fetch(url, { headers: { Authorization: `Bot ${TOKEN}` }, cache: "no-store" });
+      if (res.ok) {
+        const m = (await res.json()) as { roles?: string[] };
+        return Array.isArray(m.roles) ? m.roles : [];
+      }
+      if (res.status === 429) {
+        const j = (await res.json().catch(() => ({}))) as { retry_after?: number };
+        await new Promise((r) => setTimeout(r, Math.min(5000, Math.ceil(((j.retry_after ?? 1) + 0.1) * 1000))));
+        continue;
+      }
+      return null; // 404 (no está en el servidor) u otro error
+    } catch {
+      return null;
+    }
   }
+  return null;
 }
 
 export const discordConfigured = Boolean(TOKEN && GUILD);
