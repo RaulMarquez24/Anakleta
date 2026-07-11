@@ -196,6 +196,7 @@ export async function editChannelMessage(
 export async function postChannelEmbed(
   channelId: string,
   embed: Record<string, unknown>,
+  components: unknown[] = [],
 ): Promise<string | null> {
   if (!TOKEN || !channelId) return null;
   try {
@@ -203,7 +204,7 @@ export async function postChannelEmbed(
       method: "POST",
       headers: { Authorization: `Bot ${TOKEN}`, "Content-Type": "application/json" },
       cache: "no-store",
-      body: JSON.stringify({ embeds: [embed], allowed_mentions: { parse: [] } }),
+      body: JSON.stringify({ embeds: [embed], components, allowed_mentions: { parse: [] } }),
     });
     if (!res.ok) return null;
     const msg = (await res.json()) as { id?: string };
@@ -218,6 +219,7 @@ export async function editChannelEmbed(
   channelId: string,
   messageId: string,
   embed: Record<string, unknown>,
+  components: unknown[] = [],
 ): Promise<boolean> {
   if (!TOKEN || !channelId || !messageId) return false;
   try {
@@ -225,7 +227,7 @@ export async function editChannelEmbed(
       method: "PATCH",
       headers: { Authorization: `Bot ${TOKEN}`, "Content-Type": "application/json" },
       cache: "no-store",
-      body: JSON.stringify({ embeds: [embed], allowed_mentions: { parse: [] } }),
+      body: JSON.stringify({ embeds: [embed], components, allowed_mentions: { parse: [] } }),
     });
     return res.ok;
   } catch {

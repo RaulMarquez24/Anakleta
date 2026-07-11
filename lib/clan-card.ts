@@ -30,29 +30,56 @@ async function setSettingValue(key: string, value: string | null): Promise<void>
   }
 }
 
+// Enlace del juego para abrir el clan y unirse (formato /es, tag sin "#").
+export function clanJoinUrl(clan: CocClan): string {
+  return `https://link.clashofclans.com/es?action=OpenClanProfile&tag=${clan.tag.replace(/^#/, "")}`;
+}
+
+const nf = (n: number | undefined) => (n == null ? "—" : n.toLocaleString("es-ES"));
+
 export function buildClanEmbed(clan: CocClan): Record<string, unknown> {
   const badge = clan.badgeUrls?.large || clan.badgeUrls?.medium || clan.badgeUrls?.small;
-  // Enlace del juego para abrir el clan y unirse (formato /es, tag sin "#").
-  const joinUrl = `https://link.clashofclans.com/es?action=OpenClanProfile&tag=${clan.tag.replace(/^#/, "")}`;
+  const record =
+    clan.warWins != null
+      ? `${clan.warWins}V · ${clan.warLosses ?? 0}D${clan.warTies ? ` · ${clan.warTies}E` : ""}`
+      : "—";
   return {
+    author: badge ? { name: "Añakleta", icon_url: badge } : { name: "Añakleta" },
     title: `${clan.name}  ${clan.tag}`,
-    url: joinUrl,
+    url: clanJoinUrl(clan),
     description: clan.description ? clan.description.slice(0, 300) : undefined,
     color: 0xe0a81e, // dorado
     thumbnail: badge ? { url: badge } : undefined,
     fields: [
-      { name: "Nivel", value: `${clan.clanLevel}`, inline: true },
-      { name: "Miembros", value: `${clan.members}/50`, inline: true },
-      { name: "Puntos", value: `${clan.clanPoints ?? "—"}`, inline: true },
-      { name: "Liga de guerra", value: clan.warLeague?.name ?? "—", inline: true },
-      { name: "Racha de guerra", value: `${clan.warWinStreak ?? 0}`, inline: true },
-      { name: "Guerras ganadas", value: `${clan.warWins ?? 0}`, inline: true },
-      { name: "Trofeos para entrar", value: `${clan.requiredTrophies ?? 0}`, inline: true },
-      { name: "Unirse al clan", value: `[Abrir en Clash of Clans](${joinUrl})`, inline: false },
+      { name: "🏰 Nivel", value: `${clan.clanLevel}`, inline: true },
+      { name: "👥 Miembros", value: `${clan.members}/50`, inline: true },
+      { name: "🏆 Puntos", value: nf(clan.clanPoints), inline: true },
+      { name: "⚔️ Liga de guerra", value: clan.warLeague?.name ?? "—", inline: true },
+      { name: "🔥 Racha", value: `${clan.warWinStreak ?? 0}`, inline: true },
+      { name: "🥇 Guerras (V·D)", value: record, inline: true },
+      { name: "🎯 Trofeos para entrar", value: nf(clan.requiredTrophies), inline: true },
     ],
     footer: { text: "Añakleta · se actualiza solo" },
     timestamp: new Date().toISOString(),
   };
+}
+
+// Botón real (tipo enlace) para unirse al clan desde el juego.
+export function buildClanComponents(clan: CocClan): unknown[] {
+  return [
+    {
+      type: 1, // action row
+      components: [
+        {
+          type: 2, // button
+          style: 5, // link (no necesita gestionar interacción)
+          label: "Unirse al clan",
+          emoji: { name: "⚔️" },
+          url: clanJoinUrl(clan),
+        },
+      ],
+    },
+  ];
 }
 
 export interface ClanCardResult {
@@ -78,16 +105,17 @@ export async function upsertClanCard(clanArg?: CocClan): Promise<ClanCardResult>
   }
 
   const embed = buildClanEmbed(clan);
+  const components = buildClanComponents(clan);
   const messageId = await getSetting(CARD_MESSAGE_KEY);
 
   // Si ya hay tarjeta, la editamos en su sitio.
   if (messageId) {
-    const ok = await editChannelEmbed(channelId, messageId, embed);
+    const ok = await editChannelEmbed(channelId, messageId, embed, components);
     if (ok) return { ok: true, edited: true };
     // Si falló (la borraron o cambió el canal), publicamos una nueva.
   }
 
-  const newId = await postChannelEmbed(channelId, embed);
+  const newId = await postChannelEmbed(channelId, embed, components);
   if (!newId) return { ok: false, error: "No se pudo publicar (revisa el bot y el canal)." };
   await setSettingValue(CARD_MESSAGE_KEY, newId);
   return { ok: true, posted: true };
