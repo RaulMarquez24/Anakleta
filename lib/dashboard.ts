@@ -1,4 +1,3 @@
-import { unstable_cache } from "next/cache";
 import { createServerClient } from "@/lib/supabase/server";
 
 // Las donaciones "cuentan negativo" (leeching) solo si donó poco (< 1000) Y le
@@ -88,21 +87,13 @@ export interface ClanTrendPoint {
 }
 
 // Nombre del clan (para "Añakleta vs X" en guerra). Cacheado; cambia rara vez.
-export const getClanName = unstable_cache(
-  async (): Promise<string | null> => {
-    const supabase = createServerClient();
-    const { data } = await supabase.from("clans").select("name").limit(1).maybeSingle();
-    return (data?.name as string | null) ?? null;
-  },
-  ["clan-name"],
-  { revalidate: 3600 },
-);
+export async function getClanName(): Promise<string | null> {
+  const supabase = createServerClient();
+  const { data } = await supabase.from("clans").select("name").limit(1).maybeSingle();
+  return (data?.name as string | null) ?? null;
+}
 
-export const getClanTrends = unstable_cache(getClanTrendsImpl, ["clan-trends"], {
-  revalidate: 300,
-});
-
-async function getClanTrendsImpl(): Promise<ClanTrendPoint[]> {
+export async function getClanTrends(): Promise<ClanTrendPoint[]> {
   const supabase = createServerClient();
   const { data } = await supabase
     .from("member_snapshots")
