@@ -4,6 +4,7 @@ import type { CocClan, CocPlayer } from "@/lib/coc-types";
 import { createServerClient } from "@/lib/supabase/server";
 import { createAuthServerClient } from "@/lib/supabase/auth-server";
 import { captureWar, type WarCaptureResult } from "@/lib/war-capture";
+import { upsertClanCard } from "@/lib/clan-card";
 import { logCronRun } from "@/lib/cron-log";
 
 // POST /api/snapshot — captura el estado del clan y lo persiste en Supabase.
@@ -129,6 +130,15 @@ export async function POST(req: NextRequest) {
       .eq("tag", clan.tag);
     // clanExtraErr se ignora a propósito (columnas quizá no migradas todavía).
     void clanExtraErr;
+
+    // Tarjeta viva del clan en Discord: se edita en su sitio con los datos que
+    // acabamos de leer (sin llamadas extra a CoC). Best-effort: nunca tumba la
+    // captura ni añade latencia crítica.
+    try {
+      await upsertClanCard(clan);
+    } catch {
+      /* si falla Discord, la captura sigue */
+    }
 
     // Upsert de miembros (preserva first_seen_at; refresca last_seen_at/is_active).
     const memberRows = clan.memberList.map((m) => ({

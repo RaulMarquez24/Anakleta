@@ -4,6 +4,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/AppShell";
 import { DiscordComposer } from "@/components/DiscordComposer";
 import { SettingsChannels } from "@/components/SettingsChannels";
+import { PublishClanCard } from "@/components/PublishClanCard";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,7 @@ const SETTING_KEYS = [
   "welcome_channel_id",
   "cwl_role_id",
   "clan_role_id",
+  "clan_card_channel_id",
 ];
 
 export default async function DiscordPage() {
@@ -35,6 +37,10 @@ export default async function DiscordPage() {
     <AppShell email={user?.email} title="Avisar por Discord" back="/">
       <div className="mb-4">
         <SettingsChannels channels={channels} roles={roles} current={current} />
+      </div>
+
+      <div className="mb-4">
+        <PublishClanCard />
       </div>
 
       <p className="mb-4 text-sm text-ink-soft">

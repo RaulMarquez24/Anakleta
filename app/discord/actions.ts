@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { sendClanMessage, discordConfigured } from "@/lib/discord";
+import { upsertClanCard } from "@/lib/clan-card";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { createServerClient } from "@/lib/supabase/server";
 
@@ -13,7 +14,17 @@ const EDITABLE_SETTINGS = new Set([
   "welcome_channel_id",
   "cwl_role_id",
   "clan_role_id",
+  "clan_card_channel_id",
 ]);
+
+// Publica o actualiza la tarjeta viva del clan en el canal configurado.
+export async function publishClanCard(): Promise<{ ok: boolean; error?: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "No autorizado." };
+  if (!discordConfigured) return { ok: false, error: "Discord no está configurado." };
+  const r = await upsertClanCard();
+  return r.ok ? { ok: true } : { ok: false, error: r.error };
+}
 
 // Guarda un ajuste (canal/rol) en la tabla settings.
 export async function setSetting(key: string, value: string): Promise<{ ok: boolean; error?: string }> {

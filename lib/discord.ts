@@ -191,6 +191,48 @@ export async function editChannelMessage(
   }
 }
 
+// Publica un embed (tarjeta rica) y devuelve su id, o null. Se usa para la
+// tarjeta del clan, que luego se edita en su sitio para mantenerla al día.
+export async function postChannelEmbed(
+  channelId: string,
+  embed: Record<string, unknown>,
+): Promise<string | null> {
+  if (!TOKEN || !channelId) return null;
+  try {
+    const res = await fetch(`${API}/channels/${channelId}/messages`, {
+      method: "POST",
+      headers: { Authorization: `Bot ${TOKEN}`, "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({ embeds: [embed], allowed_mentions: { parse: [] } }),
+    });
+    if (!res.ok) return null;
+    const msg = (await res.json()) as { id?: string };
+    return msg.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// Edita el embed de un mensaje. Devuelve false si ya no existe (lo borraron).
+export async function editChannelEmbed(
+  channelId: string,
+  messageId: string,
+  embed: Record<string, unknown>,
+): Promise<boolean> {
+  if (!TOKEN || !channelId || !messageId) return false;
+  try {
+    const res = await fetch(`${API}/channels/${channelId}/messages/${messageId}`, {
+      method: "PATCH",
+      headers: { Authorization: `Bot ${TOKEN}`, "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({ embeds: [embed], allowed_mentions: { parse: [] } }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 // Borra un mensaje (p. ej. el mensaje fijo de la lista al eliminar la liga).
 export async function deleteChannelMessage(channelId: string, messageId: string): Promise<boolean> {
   if (!TOKEN || !channelId || !messageId) return false;
