@@ -225,4 +225,20 @@ async function roleOp(method: "PUT" | "DELETE", userId: string, roleId: string):
 export const addGuildRole = (userId: string, roleId: string) => roleOp("PUT", userId, roleId);
 export const removeGuildRole = (userId: string, roleId: string) => roleOp("DELETE", userId, roleId);
 
+// Roles actuales de un miembro. null si no está en el servidor (404) o error.
+export async function getMemberRoleIds(userId: string): Promise<string[] | null> {
+  if (!TOKEN || !GUILD || !userId) return null;
+  try {
+    const res = await fetch(`${API}/guilds/${GUILD}/members/${userId}`, {
+      headers: { Authorization: `Bot ${TOKEN}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const m = (await res.json()) as { roles?: string[] };
+    return Array.isArray(m.roles) ? m.roles : [];
+  } catch {
+    return null;
+  }
+}
+
 export const discordConfigured = Boolean(TOKEN && GUILD);

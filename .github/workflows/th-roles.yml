@@ -1,0 +1,20 @@
+name: Roles de TH (Discord)
+
+# Una vez al día sincroniza el rol de ayuntamiento (TH) de cada miembro vinculado
+# en Discord, según la cuenta principal. Idempotente: solo toca a quien cambió.
+on:
+  schedule:
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+
+jobs:
+  th-roles:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST /api/th-roles
+        run: |
+          curl --fail-with-body -sS -X POST \
+            "https://anakleta.vercel.app/api/th-roles" \
+            -H "Authorization: Bearer $CRON_SECRET"
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
