@@ -28,6 +28,10 @@ export const DISCORD_INVITE = "https://discord.gg/p4xKrHEVwa";
 // Plantillas para invitar al Discord desde el chat de Clash (todas ≤ 128).
 export const DISCORD_TEMPLATES: { label: string; text: string }[] = [
   {
+    label: "¿Aún no?",
+    text: `¿Aún no estás en el Discord? Te pierdes la CWL, los avisos de guerra y los diseños. Únete ya: ${DISCORD_INVITE}`,
+  },
+  {
     label: "Todo",
     text: `En el Discord de Añakleta está todo: CWL, guerras, diseños y avisos. No te lo pierdas, únete: ${DISCORD_INVITE}`,
   },
