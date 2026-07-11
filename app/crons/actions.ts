@@ -1,6 +1,7 @@
 "use server";
 
 import { getCurrentUser } from "@/lib/supabase/current-user";
+import { getCronHistory, type CronHistoryItem } from "@/lib/cron-log";
 
 // Lanza un cron a mano. Sigue protegido por CRON_SECRET: la acción (con sesión
 // de usuario) llama al endpoint desde el servidor con el secreto. Devuelve el
@@ -41,4 +42,14 @@ export async function runCwlCron(): Promise<CronResult> {
 }
 export async function runWarReminder(): Promise<CronResult> {
   return call("/api/war-reminder");
+}
+
+// Historial paginado de una tarea (10 por página).
+export async function loadHistory(
+  job: string,
+  offset: number,
+): Promise<{ items: CronHistoryItem[]; hasMore: boolean }> {
+  const user = await getCurrentUser();
+  if (!user) return { items: [], hasMore: false };
+  return getCronHistory(job, offset);
 }
