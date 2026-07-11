@@ -201,6 +201,7 @@ export async function postAnnouncement(
     everyone?: boolean;
     roles?: string[];
     file?: File | null;
+    thumb?: boolean; // adjunto como miniatura (arriba-derecha) en vez de imagen grande
   } = {},
 ): Promise<boolean> {
   const ch = channelId || CHANNEL;
@@ -212,7 +213,10 @@ export async function postAnnouncement(
   try {
     if (opts.file) {
       const filename = safeName(opts.file.name);
-      const embed = opts.embed ? { ...opts.embed, image: { url: `attachment://${filename}` } } : undefined;
+      const media = { url: `attachment://${filename}` };
+      const embed = opts.embed
+        ? { ...opts.embed, ...(opts.thumb ? { thumbnail: media } : { image: media }) }
+        : undefined;
       const payload = {
         content: opts.content || undefined,
         embeds: embed ? [embed] : undefined,

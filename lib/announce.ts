@@ -14,6 +14,17 @@ async function getSettingValue(key: string): Promise<string | null> {
   }
 }
 
+// Escudo del clan (lo mantiene al día el snapshot) para la cabecera del anuncio.
+async function getClanBadge(): Promise<string | null> {
+  try {
+    const svc = createServerClient();
+    const { data } = await svc.from("clans").select("badge_url").not("badge_url", "is", null).limit(1).maybeSingle();
+    return (data?.badge_url as string | null) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // Construye y publica un anuncio (embed) a partir del FormData del compositor.
 // La imagen adjunta la aloja Discord (no ocupa nuestro servidor).
 export async function sendAnnouncement(
@@ -64,20 +75,26 @@ export async function sendAnnouncement(
     }
   }
 
+  const thumb = str("imageSize") === "thumb"; // miniatura vs imagen grande
+  const badge = await getClanBadge();
+
   const embed: Record<string, unknown> = {
+    author: { name: "Añakleta", ...(badge ? { icon_url: badge } : {}) },
     title: `📢 ${title || "Anuncio"}`,
     description: body || undefined,
     url: validUrl || undefined,
-    image: validImg ? { url: validImg } : undefined, // si hay adjunto, lo sobreescribe postAnnouncement
     color: 0xe0a81e,
     footer: { text: "Añakleta" },
     timestamp: new Date().toISOString(),
   };
+  // Imagen por URL (si hay adjunto, postAnnouncement lo coloca y manda).
+  if (validImg && !file) embed[thumb ? "thumbnail" : "image"] = { url: validImg };
+
   const components = validUrl
     ? [{ type: 1, components: [{ type: 2, style: 5, label: "Abrir", url: validUrl }] }]
     : [];
 
-  const ok = await postAnnouncement(channelId, { content, embed, components, everyone, roles, file });
+  const ok = await postAnnouncement(channelId, { content, embed, components, everyone, roles, file, thumb });
   if (!ok) return { ok: false, error: "No se pudo publicar (revisa el bot y el canal)." };
   return { ok: true };
 }

@@ -20,6 +20,7 @@ export function AnnounceComposer({
   const [imageUrl, setImageUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [imageSize, setImageSize] = useState<"big" | "thumb">("big");
   const [mention, setMention] = useState<"none" | "everyone" | "clan">("none");
   const [channelId, setChannelId] = useState(defaultChannelId ?? "");
   const [busy, setBusy] = useState(false);
@@ -68,6 +69,7 @@ export function AnnounceComposer({
     fd.set("imageUrl", imageUrl);
     fd.set("mention", mention);
     fd.set("channelId", channelId);
+    fd.set("imageSize", imageSize);
     if (file) fd.set("image", file);
     let r: { ok: boolean; error?: string };
     try {
@@ -149,25 +151,38 @@ export function AnnounceComposer({
         </div>
 
         {preview && (
-          <div className="relative">
+          <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={preview}
               alt=""
-              className="max-h-44 w-full rounded-lg border border-line object-cover"
+              className={`rounded-lg border border-line object-cover ${
+                imageSize === "thumb" ? "h-24 w-24" : "max-h-44 w-full"
+              }`}
               onError={(e) => (e.currentTarget.style.display = "none")}
             />
-            {file && (
-              <button
-                type="button"
-                onClick={clearFile}
-                aria-label="Quitar imagen"
-                className="absolute right-2 top-2 rounded-full bg-black/60 p-1 text-white hover:bg-black/80"
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="font-bold text-ink-soft">Tamaño</span>
+              <select
+                value={imageSize}
+                onChange={(e) => setImageSize(e.target.value as "big" | "thumb")}
+                className="rounded-lg border border-line bg-surface-2 px-2 py-1 text-xs font-semibold text-ink outline-none focus:border-gold"
               >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
+                <option value="big">Grande</option>
+                <option value="thumb">Miniatura (ideal para capturas verticales)</option>
+              </select>
+              {file && (
+                <button
+                  type="button"
+                  onClick={clearFile}
+                  className="flex items-center gap-1 font-bold text-banner hover:underline"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  Quitar imagen
+                </button>
+              )}
+            </div>
+          </>
         )}
 
         <div className="flex flex-wrap items-center gap-2">
