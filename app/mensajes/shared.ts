@@ -29,7 +29,7 @@ export const DISCORD_INVITE = "https://discord.gg/p4xKrHEVwa";
 export const DISCORD_TEMPLATES: { label: string; text: string }[] = [
   {
     label: "¿Aún no?",
-    text: `¿Aún no estás en el Discord? Te pierdes la CWL, los avisos de guerra y los diseños. Únete ya: ${DISCORD_INVITE}`,
+    text: `¿Aún no estás en el Discord? Ahí organizamos la CWL, las guerras y los avisos del clan. Únete ya: ${DISCORD_INVITE}`,
   },
   {
     label: "Todo",
