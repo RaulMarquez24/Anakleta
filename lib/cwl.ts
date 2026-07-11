@@ -77,7 +77,8 @@ export function seasonLabel(season: string): string {
 // --- Config (settings clave-valor, con fallback a env) ---
 
 export interface CwlConfig {
-  listChannelId: string | null;
+  listChannelId: string | null; // #ligas-cwl (mensaje fijo del listado)
+  announceChannelId: string | null; // #general (avisos de apertura/recordatorios)
   cwlRoleId: string | null;
   clanRoleId: string | null;
 }
@@ -87,10 +88,23 @@ export async function getCwlConfig(): Promise<CwlConfig> {
   const { data } = await svc
     .from("settings")
     .select("key, value")
-    .in("key", ["cwl_list_channel_id", "cwl_role_id", "clan_role_id"]);
+    .in("key", [
+      "cwl_list_channel_id",
+      "cwl_announce_channel_id",
+      "welcome_channel_id",
+      "cwl_role_id",
+      "clan_role_id",
+    ]);
   const map = new Map((data ?? []).map((r) => [r.key as string, r.value as string]));
   return {
     listChannelId: map.get("cwl_list_channel_id") || process.env.CWL_LIST_CHANNEL_ID || null,
+    // Avisos al general: canal propio si se configura; si no, el de bienvenida (#general).
+    announceChannelId:
+      map.get("cwl_announce_channel_id") ||
+      map.get("welcome_channel_id") ||
+      process.env.CWL_ANNOUNCE_CHANNEL_ID ||
+      process.env.WELCOME_CHANNEL_ID ||
+      null,
     cwlRoleId: map.get("cwl_role_id") || process.env.CWL_ROLE_ID || null,
     clanRoleId: map.get("clan_role_id") || process.env.CLAN_ROLE_ID || null,
   };
@@ -251,7 +265,7 @@ export function renderListText(list: CwlList, part: CwlPartition): string {
   }
 
   L.push("");
-  L.push("-# 📣 Para apuntarte escribe «me apunto» o usa `/apuntar` · esta lista se actualiza sola");
+  L.push("-# 📣 Para entrar escribe «participo» o usa `/apuntar` · esta lista se actualiza sola");
   return L.join("\n");
 }
 

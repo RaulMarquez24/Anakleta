@@ -244,7 +244,7 @@ export function renderListText(list, part) {
   }
 
   L.push("");
-  L.push("-# 📣 Para apuntarte escribe «me apunto» o usa `/apuntar` · esta lista se actualiza sola");
+  L.push("-# 📣 Para entrar escribe «participo» o usa `/apuntar` · esta lista se actualiza sola");
   return L.join("\n");
 }
 

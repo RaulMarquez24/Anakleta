@@ -296,7 +296,7 @@ export function CwlManager(props: CwlManagerProps) {
 
       {total === 0 && !editing && (
         <p className="text-center text-xs text-ink-soft">
-          En el canal de inscripciones, escribiendo «me apunto» se apuntan solos.
+          En el canal de inscripciones, escribiendo «participo» se apuntan solos.
         </p>
       )}
     </div>

@@ -49,12 +49,13 @@ export async function POST(req: NextRequest) {
   // Estado real de la CWL según CoC (para cerrar al arrancar y detectar el fin).
   const coc = await getCwlSeasonState().catch(() => ({ season: null, state: null, active: false }));
 
-  // Canal + mención del clan para los avisos.
-  const channelId = cfg.listChannelId;
+  // La LISTA fija vive en #ligas-cwl; los AVISOS van a #general.
+  const listChannelId = cfg.listChannelId;
+  const listMention = listChannelId ? `<#${listChannelId}>` : "";
   const mention = cfg.clanRoleId ? `<@&${cfg.clanRoleId}> ` : "";
   const announce = async (text: string) => {
-    if (!channelId) return false;
-    return sendClanMessage(text, { roles: cfg.clanRoleId ? [cfg.clanRoleId] : [] }, channelId);
+    if (!cfg.announceChannelId) return false;
+    return sendClanMessage(text, { roles: cfg.clanRoleId ? [cfg.clanRoleId] : [] }, cfg.announceChannelId);
   };
 
   // 1) Asegurar la lista de la temporada candidata (crear al abrir la ventana).
@@ -71,13 +72,16 @@ export async function POST(req: NextRequest) {
           opens_at: cand.opens.toISOString(),
           starts_at: cand.starts.toISOString(),
           ends_at: cand.ends.toISOString(),
-          channel_id: channelId,
+          channel_id: listChannelId,
           created_by: "cron",
         })
         .select("*")
         .maybeSingle();
       list = (created as CwlList | null) ?? null;
-      if (list) actions.push(`creada lista ${cand.season}`);
+      if (list) {
+        await refreshLiveList(list.season); // publica el mensaje fijo en #ligas-cwl
+        actions.push(`creada lista ${cand.season}`);
+      }
     }
   }
 
@@ -89,43 +93,49 @@ export async function POST(req: NextRequest) {
     const label = seasonLabel(list.season);
     const patch: Partial<CwlList> = {};
 
+    // Los AVISOS solo para ligas que gestiona el cron. Si la inscripción se creó
+    // a mano (created_by = email), el cron la respeta y no anuncia nada.
+    const cronOwned = list.created_by === "cron";
+
     if (
+      cronOwned &&
       list.state === "open" &&
       !list.announced_open &&
       nowMs >= opens.getTime() &&
       nowMs < starts.getTime()
     ) {
-      await refreshLiveList(list.season); // publica el mensaje fijo
       if (await announce(
-        `🎉 ${mention}¡Abiertas las inscripciones de la **CWL de ${label}**! ` +
-          `Apúntate escribiendo «me apunto» o con \`/apuntar\`. Cierre: ${fmtDate(starts)}.`,
+        `🎉 ${mention}¡Ya están **abiertas las inscripciones de la CWL de ${label}**!\n` +
+          `Para entrar escribe «**participo**» (o usa \`/apuntar\`). Cierra el **${fmtDate(starts)}**.` +
+          (listMention ? `\n📋 Lista en directo en ${listMention}.` : ""),
       )) {
         patch.announced_open = true;
         actions.push("aviso apertura");
       }
     }
 
-    if (list.state === "open" && !list.announced_mid && nowMs >= mid.getTime() && nowMs < starts.getTime()) {
+    if (cronOwned && list.state === "open" && !list.announced_mid && nowMs >= mid.getTime() && nowMs < starts.getTime()) {
       if (await announce(
         `⏳ ${mention}Quedan pocos días para cerrar las inscripciones de la **CWL de ${label}**. ` +
-          `Si vas a jugar, apúntate ya («me apunto» o \`/apuntar\`).`,
+          `Si vas a jugar, escribe «**participo**»${listMention ? ` — lista en ${listMention}` : ""}.`,
       )) {
         patch.announced_mid = true;
         actions.push("aviso media semana");
       }
     }
 
-    if (list.state === "open" && !list.announced_last && nowMs >= starts.getTime() - DAY && nowMs < starts.getTime()) {
+    if (cronOwned && list.state === "open" && !list.announced_last && nowMs >= starts.getTime() - DAY && nowMs < starts.getTime()) {
       if (await announce(
-        `⏰ ${mention}¡**Último día** para apuntarte a la CWL de ${label}! ` +
-          `Las inscripciones individuales se cierran hoy.`,
+        `⏰ ${mention}¡**Último día** para entrar en la CWL de ${label}! ` +
+          `Escribe «**participo**» hoy; luego se cierran las inscripciones individuales.`,
       )) {
         patch.announced_last = true;
         actions.push("aviso último día");
       }
     }
 
-    // Cerrar inscripción individual cuando la liga arranca (API o fecha).
+    // Cerrar inscripción individual cuando la liga arranca (API o fecha). Aplica
+    // a cualquier lista abierta (también las manuales); si no está abierta, ignora.
     const started = (coc.active && coc.season === list.season) || nowMs >= starts.getTime();
     if (list.state === "open" && started) {
       patch.state = "closed";

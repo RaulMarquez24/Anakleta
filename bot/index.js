@@ -22,12 +22,12 @@ import * as coc from "./coc.js";
 
 // Súbelo cuando cambies algo. En `fly logs` verás esta línea al arrancar: si NO
 // cambia tras un deploy, es que el deploy no ha subido el código nuevo.
-const BOT_VERSION = "v14 th-role-dm";
+const BOT_VERSION = "v15 participo";
 
 // Texto de ayuda, compartido por «¿cómo me apunto?» (texto libre) y /help.
 const HELP_TEXT =
   "ℹ️ **Cómo funciona la CWL por aquí:**\n" +
-  "• Para **apuntarte**, escribe «me apunto» (o usa `/apuntar`) y reaccionaré con ✅.\n" +
+  "• Para **entrar**, escribe «participo» (o usa `/apuntar`) y reaccionaré con ✅.\n" +
   "• Para **ver quién hay**, escribe «quién hay en la lista» o usa `/lista-cwl`.\n" +
   "• Para **comprobar** si estás tú, escribe «¿estoy apuntado?».\n" +
   "• Para **salir**, escribe «me desapunto» (o usa `/desapuntar`).";
@@ -197,7 +197,7 @@ async function doStatus(id) {
   const yes = list && (await cwl.isSignedUp(db, list.season, id));
   return yes
     ? "✅ Sí, estás apuntado a la CWL. Consulta la lista con `/lista-cwl`."
-    : "❌ No estás apuntado. Escribe «me apunto» o usa `/apuntar`.";
+    : "❌ No estás apuntado. Escribe «participo» o usa `/apuntar`.";
 }
 
 // --- Slash commands ---
@@ -481,7 +481,7 @@ async function handleDm(msg) {
   );
   if (thOk) lines.push(`• Rol de **TH${player.townHallLevel}** asignado.`);
   if (linked) lines.push("• **Vinculado** con tu cuenta del clan para la CWL. 🎯");
-  lines.push("-# Cuando haya Liga de Clanes, apúntate escribiendo «me apunto».");
+  lines.push("-# Cuando haya Liga de Clanes, entra escribiendo «participo».");
   await msg.reply(lines.join("\n")).catch(() => {});
 }
 
