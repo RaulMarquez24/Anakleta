@@ -17,6 +17,7 @@ const ITEMS: Item[] = [
   { key: "welcome_channel_id", label: "Bienvenida", hint: "Saludo a quien entra si tiene los MD cerrados (#general).", kind: "channel" },
   { key: "discord_channel_id", label: "Avisos de guerra", hint: "Recordatorios de guerra (botón y cron).", kind: "channel" },
   { key: "clan_card_channel_id", label: "Tarjeta del clan", hint: "Embed con escudo, nivel, liga… que se actualiza solo.", kind: "channel" },
+  { key: "announcements_channel_id", label: "Anuncios", hint: "Canal por defecto del compositor de anuncios.", kind: "channel" },
   { key: "cwl_role_id", label: "Rol CWL", hint: "Se asigna al inscribirse y se retira al terminar la liga.", kind: "role" },
   { key: "clan_role_id", label: "Rol del clan", hint: "A quién etiquetan los avisos (@Clan).", kind: "role" },
 ];

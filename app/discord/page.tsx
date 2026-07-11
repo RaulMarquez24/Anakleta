@@ -5,6 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { DiscordComposer } from "@/components/DiscordComposer";
 import { SettingsChannels } from "@/components/SettingsChannels";
 import { PublishClanCard } from "@/components/PublishClanCard";
+import { AnnounceComposer } from "@/components/AnnounceComposer";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,7 @@ const SETTING_KEYS = [
   "cwl_role_id",
   "clan_role_id",
   "clan_card_channel_id",
+  "announcements_channel_id",
 ];
 
 export default async function DiscordPage() {
@@ -41,6 +43,10 @@ export default async function DiscordPage() {
 
       <div className="mb-4">
         <PublishClanCard />
+      </div>
+
+      <div className="mb-4">
+        <AnnounceComposer channels={channels} defaultChannelId={current["announcements_channel_id"] || null} />
       </div>
 
       <p className="mb-4 text-sm text-ink-soft">

@@ -149,6 +149,41 @@ export async function sendClanMessage(
   }
 }
 
+// Publica un mensaje rico: contenido (para menciones), embed y botones a la vez.
+// Se usa para los anuncios (embed + botón "Abrir" + aviso @everyone/@Clan).
+export async function postRichMessage(
+  channelId: string,
+  opts: {
+    content?: string;
+    embed?: Record<string, unknown>;
+    components?: unknown[];
+    everyone?: boolean;
+    roles?: string[];
+  } = {},
+): Promise<boolean> {
+  const ch = channelId || CHANNEL;
+  if (!TOKEN || !ch) return false;
+  try {
+    const res = await fetch(`${API}/channels/${ch}/messages`, {
+      method: "POST",
+      headers: { Authorization: `Bot ${TOKEN}`, "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({
+        content: opts.content || undefined,
+        embeds: opts.embed ? [opts.embed] : undefined,
+        components: opts.components ?? [],
+        allowed_mentions: {
+          parse: opts.everyone ? ["everyone"] : [],
+          roles: (opts.roles ?? []).slice(0, 100),
+        },
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 // Publica un mensaje "plano" (sin etiquetar a nadie) y devuelve su id, o null.
 // Se usa para el mensaje fijo de la lista de CWL, que luego se edita.
 export async function postChannelMessage(
