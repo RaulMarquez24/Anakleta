@@ -1,10 +1,12 @@
 import { getCronRuns, type CronRun } from "@/lib/cron-log";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { AppShell } from "@/components/AppShell";
+import { CronsPanel } from "@/components/CronsPanel";
 
 export const dynamic = "force-dynamic";
 
 const JOB: Record<string, { label: string; icon: string }> = {
+  snapshot: { label: "Sincronización", icon: "🔄" },
   "th-roles": { label: "Roles de TH", icon: "🏰" },
   "cwl-cron": { label: "CWL (inscripciones)", icon: "🏆" },
   "war-reminder": { label: "Aviso de guerra", icon: "⚔️" },
@@ -20,9 +22,11 @@ function fmt(iso: string): string {
   }
 }
 
-// Resumen de una línea según el tipo de tarea.
 function summarize(run: CronRun): string {
   const s = (run.summary ?? {}) as Record<string, unknown>;
+  if (run.job === "snapshot") {
+    return `${s.members_captured ?? "—"} miembros · ${s.members_deactivated ?? 0} bajas${s.mode === "full" ? " · completa" : ""}`;
+  }
   if (run.job === "th-roles") {
     const c = (s.counts ?? {}) as Record<string, number>;
     return `${c.updated ?? 0} actualizados · ${c.noChange ?? 0} sin cambio · ${c.notInGuild ?? 0} fuera del server${c.permFail ? ` · ${c.permFail} fallos` : ""}`;
@@ -37,23 +41,24 @@ function summarize(run: CronRun): string {
   return "";
 }
 
-// Detalle extra (p. ej. a quién actualizó en roles de TH).
 function details(run: CronRun): string[] {
   const s = (run.summary ?? {}) as Record<string, unknown>;
   if (run.job === "th-roles") return (s.updated as string[] | undefined) ?? [];
   return [];
 }
 
-export default async function RegistroPage() {
+export default async function CronsPage() {
   const user = await getCurrentUser();
   const runs = await getCronRuns(60).catch(() => []);
 
   return (
-    <AppShell email={user?.email} title="Registro de tareas" back="/perfil">
-      <p className="mb-4 text-sm text-ink-soft">
-        Últimas ejecuciones automáticas (roles de TH, inscripciones de CWL, avisos de guerra).
-      </p>
+    <AppShell email={user?.email} title="Tareas y crons" back="/perfil">
+      <p className="mb-3 text-sm text-ink-soft">Lánzalas a mano cuando quieras. Se ejecutan solas por su horario.</p>
+      <CronsPanel />
 
+      <h2 className="mb-2 mt-6 px-1 text-xs font-extrabold uppercase tracking-wide text-ink-soft">
+        Registro de ejecuciones
+      </h2>
       {runs.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-line bg-surface/60 p-6 text-center text-sm text-ink-soft">
           Aún no hay ejecuciones registradas.

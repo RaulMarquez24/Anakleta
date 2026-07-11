@@ -19,7 +19,6 @@ import { getCurrentUser } from "@/lib/supabase/current-user";
 import { AppShell } from "@/components/AppShell";
 import { ThImage } from "@/components/ThImage";
 import { InstallAppCard } from "@/components/InstallAppCard";
-import { SnapshotRunner } from "@/components/SnapshotRunner";
 import { PerfilForm } from "./PerfilForm";
 
 export const dynamic = "force-dynamic";
@@ -137,18 +136,17 @@ export default async function PerfilPage() {
       <SectionHeader icon={UserRound}>Cuenta</SectionHeader>
       <PerfilForm email={user?.email ?? null} linkedTag={linkedTag} linkedName={linkedName} />
 
-      <SectionHeader icon={RefreshCw}>Sincronización</SectionHeader>
-      <SnapshotRunner />
-
-      <SectionHeader icon={History}>Tareas automáticas</SectionHeader>
+      <SectionHeader icon={RefreshCw}>Tareas y crons</SectionHeader>
       <Link
-        href="/registro"
+        href="/crons"
         className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 hover:bg-surface-2/60"
       >
         <History className="h-5 w-5 flex-none text-ink-soft" />
         <div className="min-w-0 flex-1">
-          <p className="font-extrabold text-ink">Registro de tareas</p>
-          <p className="text-xs text-ink-soft">Roles de TH, inscripciones de CWL y avisos de guerra</p>
+          <p className="font-extrabold text-ink">Tareas y crons</p>
+          <p className="text-xs text-ink-soft">
+            Sincronizar con Clash, roles de TH, CWL, avisos… y su registro
+          </p>
         </div>
         <ChevronRight className="h-4 w-4 flex-none text-ink-soft" />
       </Link>
