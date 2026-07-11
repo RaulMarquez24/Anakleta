@@ -2,10 +2,7 @@ import { getGuildMembers, getGuildRoles, getGuildChannels, getDefaultChannelId }
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { createServerClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/AppShell";
-import { DiscordComposer } from "@/components/DiscordComposer";
-import { SettingsChannels } from "@/components/SettingsChannels";
-import { PublishClanCard } from "@/components/PublishClanCard";
-import { AnnounceComposer } from "@/components/AnnounceComposer";
+import { DiscordPanel } from "@/components/DiscordPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -37,26 +34,12 @@ export default async function DiscordPage() {
 
   return (
     <AppShell email={user?.email} title="Avisar por Discord" back="/">
-      <div className="mb-4">
-        <SettingsChannels channels={channels} roles={roles} current={current} />
-      </div>
-
-      <div className="mb-4">
-        <PublishClanCard />
-      </div>
-
-      <div className="mb-4">
-        <AnnounceComposer channels={channels} defaultChannelId={current["announcements_channel_id"] || null} />
-      </div>
-
-      <p className="mb-4 text-sm text-ink-soft">
-        Escribe un mensaje, elige el canal y a quién etiquetar. Se publica al instante.
-      </p>
-      <DiscordComposer
+      <DiscordPanel
         members={members}
         roles={roles}
         channels={channels}
-        defaultChannelId={defaultChannel}
+        defaultChannel={defaultChannel}
+        current={current}
       />
     </AppShell>
   );
