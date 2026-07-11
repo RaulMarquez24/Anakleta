@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Megaphone } from "lucide-react";
+import { useRef, useState } from "react";
+import { Megaphone, ImagePlus, X } from "lucide-react";
 import type { DiscordChannel } from "@/lib/discord";
-import { publishAnnouncement } from "@/app/discord/actions";
 
 const inputCls =
   "w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-gold";
@@ -19,16 +18,64 @@ export function AnnounceComposer({
   const [body, setBody] = useState("");
   const [url, setUrl] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
   const [mention, setMention] = useState<"none" | "everyone" | "clan">("none");
   const [channelId, setChannelId] = useState(defaultChannelId ?? "");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function pickFile(f: File | null) {
+    if (filePreview) URL.revokeObjectURL(filePreview);
+    if (f && !f.type.startsWith("image/")) {
+      setMsg({ ok: false, text: "El archivo debe ser una imagen." });
+      setFile(null);
+      setFilePreview(null);
+      return;
+    }
+    if (f && f.size > 4 * 1024 * 1024) {
+      setMsg({ ok: false, text: "La imagen es demasiado grande (máx. 4 MB)." });
+      setFile(null);
+      setFilePreview(null);
+      return;
+    }
+    if (f) {
+      setMsg(null);
+      setFile(f);
+      setFilePreview(URL.createObjectURL(f));
+    } else {
+      setFile(null);
+      setFilePreview(null);
+    }
+  }
+
+  function clearFile() {
+    if (filePreview) URL.revokeObjectURL(filePreview);
+    setFile(null);
+    setFilePreview(null);
+    if (fileRef.current) fileRef.current.value = "";
+  }
 
   async function publish() {
     if (busy) return;
     setBusy(true);
     setMsg(null);
-    const r = await publishAnnouncement({ title, body, url, imageUrl, mention, channelId });
+    const fd = new FormData();
+    fd.set("title", title);
+    fd.set("body", body);
+    fd.set("url", url);
+    fd.set("imageUrl", imageUrl);
+    fd.set("mention", mention);
+    fd.set("channelId", channelId);
+    if (file) fd.set("image", file);
+    let r: { ok: boolean; error?: string };
+    try {
+      const res = await fetch("/api/announce", { method: "POST", body: fd });
+      r = await res.json();
+    } catch {
+      r = { ok: false, error: "Fallo de red al publicar." };
+    }
     setBusy(false);
     if (r.ok) {
       setMsg({ ok: true, text: "Anuncio publicado." });
@@ -36,12 +83,14 @@ export function AnnounceComposer({
       setBody("");
       setUrl("");
       setImageUrl("");
+      clearFile();
       setMention("none");
     } else {
       setMsg({ ok: false, text: r.error ?? "No se pudo." });
     }
   }
 
+  const preview = filePreview || (imageUrl.trim() ? imageUrl : null);
   const disabled = busy || (!title.trim() && !body.trim()) || !channelId;
 
   return (
@@ -72,20 +121,53 @@ export function AnnounceComposer({
           onChange={(e) => setUrl(e.target.value)}
           placeholder="Enlace opcional (https://…) → aparece como botón «Abrir»"
         />
-        <input
-          className={inputCls}
-          value={imageUrl}
-          onChange={(e) => setImageUrl(e.target.value)}
-          placeholder="Imagen opcional (URL https://…) → se muestra grande"
-        />
-        {imageUrl.trim() && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={imageUrl}
-            alt=""
-            className="max-h-40 w-full rounded-lg border border-line object-cover"
-            onError={(e) => (e.currentTarget.style.display = "none")}
+
+        {/* Imagen: adjuntar archivo (la aloja Discord) o pegar una URL */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="flex flex-none items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 py-2 text-sm font-extrabold text-ink transition hover:bg-line"
+          >
+            <ImagePlus className="h-4 w-4" />
+            Adjuntar imagen
+          </button>
+          <input
+            className={`${inputCls} flex-1`}
+            value={imageUrl}
+            onChange={(e) => setImageUrl(e.target.value)}
+            placeholder="…o pega una URL de imagen"
+            disabled={!!file}
           />
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
+          />
+        </div>
+
+        {preview && (
+          <div className="relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={preview}
+              alt=""
+              className="max-h-44 w-full rounded-lg border border-line object-cover"
+              onError={(e) => (e.currentTarget.style.display = "none")}
+            />
+            {file && (
+              <button
+                type="button"
+                onClick={clearFile}
+                aria-label="Quitar imagen"
+                className="absolute right-2 top-2 rounded-full bg-black/60 p-1 text-white hover:bg-black/80"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         )}
 
         <div className="flex flex-wrap items-center gap-2">

@@ -184,6 +184,70 @@ export async function postRichMessage(
   }
 }
 
+// Nombre de fichero seguro y con extensión (Discord referencia attachment://nombre).
+function safeName(name: string): string {
+  const base = (name || "imagen").replace(/[^a-zA-Z0-9._-]/g, "_");
+  return /\.[a-z0-9]+$/i.test(base) ? base : `${base}.png`;
+}
+
+// Publica un anuncio. Si viene `file`, se adjunta a Discord (lo aloja Discord;
+// NO se guarda en nuestro servidor) y el embed lo muestra vía attachment://.
+export async function postAnnouncement(
+  channelId: string,
+  opts: {
+    content?: string;
+    embed?: Record<string, unknown>;
+    components?: unknown[];
+    everyone?: boolean;
+    roles?: string[];
+    file?: File | null;
+  } = {},
+): Promise<boolean> {
+  const ch = channelId || CHANNEL;
+  if (!TOKEN || !ch) return false;
+  const allowed_mentions = {
+    parse: opts.everyone ? ["everyone"] : [],
+    roles: (opts.roles ?? []).slice(0, 100),
+  };
+  try {
+    if (opts.file) {
+      const filename = safeName(opts.file.name);
+      const embed = opts.embed ? { ...opts.embed, image: { url: `attachment://${filename}` } } : undefined;
+      const payload = {
+        content: opts.content || undefined,
+        embeds: embed ? [embed] : undefined,
+        components: opts.components ?? [],
+        allowed_mentions,
+        attachments: [{ id: 0, filename }],
+      };
+      const form = new FormData();
+      form.append("payload_json", JSON.stringify(payload));
+      form.append("files[0]", opts.file, filename); // fetch pone el boundary solo
+      const res = await fetch(`${API}/channels/${ch}/messages`, {
+        method: "POST",
+        headers: { Authorization: `Bot ${TOKEN}` },
+        cache: "no-store",
+        body: form,
+      });
+      return res.ok;
+    }
+    const res = await fetch(`${API}/channels/${ch}/messages`, {
+      method: "POST",
+      headers: { Authorization: `Bot ${TOKEN}`, "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({
+        content: opts.content || undefined,
+        embeds: opts.embed ? [opts.embed] : undefined,
+        components: opts.components ?? [],
+        allowed_mentions,
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 // Publica un mensaje "plano" (sin etiquetar a nadie) y devuelve su id, o null.
 // Se usa para el mensaje fijo de la lista de CWL, que luego se edita.
 export async function postChannelMessage(
