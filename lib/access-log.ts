@@ -1,11 +1,13 @@
 import "server-only";
 import { createServerClient } from "@/lib/supabase/server";
 
-// Panel de accesos: SOLO el líder. Se compara con LEADER_EMAIL (env, en Vercel).
-// Si no está configurado, nadie tiene acceso (seguro por defecto).
+// Panel de accesos: SOLO el líder. Se compara con LEADER_EMAIL (env, en Vercel)
+// y, si no está puesta, con el email del líder por defecto (para que funcione sin
+// tocar variables). La env, si existe, manda.
+const DEFAULT_LEADER = "raulmu785@gmail.com";
 export function isLeaderEmail(email: string | null | undefined): boolean {
-  const leader = process.env.LEADER_EMAIL?.trim().toLowerCase();
-  return !!leader && !!email && email.trim().toLowerCase() === leader;
+  const leader = (process.env.LEADER_EMAIL?.trim() || DEFAULT_LEADER).toLowerCase();
+  return !!email && email.trim().toLowerCase() === leader;
 }
 
 const THROTTLE_MS = 15 * 60_000; // no registrar más de 1 acceso por usuario/15 min
