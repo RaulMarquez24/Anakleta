@@ -109,10 +109,19 @@ export default async function MiembrosPage({
             <ul className="divide-y divide-line">
               {list.map((d) => {
                 const stay = daysBetween(d.firstSeenAt, d.lastSeenAt);
+                const ephemeral = stay != null && stay <= EPHEMERAL_DAYS;
                 return (
-                  <li key={d.tag} className="flex items-start gap-3 px-3.5 py-2.5">
+                  <li
+                    key={d.tag}
+                    className={`flex items-start gap-3 px-3.5 py-2.5 ${ephemeral ? "opacity-60" : ""}`}
+                  >
                     <div className="min-w-0 flex-1">
                       <span className="font-bold text-ink">{d.name}</span>
+                      {ephemeral && (
+                        <span className="ml-2 rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">
+                          efímero
+                        </span>
+                      )}
                       <span className="ml-2 text-xs text-ink-soft">
                         {d.role ? (ROLE_LABEL[d.role] ?? d.role) : "—"}
                         {d.townHall != null && <> · TH{d.townHall}</>}
