@@ -22,8 +22,33 @@ const ITEMS: { href: string; label: string; Icon: LucideIcon; match: (p: string)
   { href: "/perfil", label: "Perfil", Icon: UserRound, match: (p) => p.startsWith("/perfil") },
 ];
 
-export function AppNav({ variant }: { variant: "top" | "bottom" }) {
+export function AppNav({ variant }: { variant: "top" | "bottom" | "side" }) {
   const pathname = usePathname();
+
+  if (variant === "side") {
+    return (
+      <nav aria-label="Secciones" className="flex flex-col gap-1">
+        {ITEMS.map((it) => {
+          const active = it.match(pathname);
+          return (
+            <Link
+              key={it.href}
+              href={it.href}
+              aria-current={active ? "page" : undefined}
+              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-extrabold transition ${
+                active
+                  ? "bg-gold text-banner-dark shadow-sm"
+                  : "text-[#f6d9b0] hover:bg-white/10"
+              }`}
+            >
+              <it.Icon className="h-5 w-5" strokeWidth={active ? 2.6 : 2.2} />
+              {it.label}
+            </Link>
+          );
+        })}
+      </nav>
+    );
+  }
 
   if (variant === "bottom") {
     return (
