@@ -72,6 +72,14 @@ body {
   font-family: var(--font-sans);
 }
 
+/* Desplegable nativo legible en oscuro: al estilar el fondo del <select>
+   (bg-transparent), Chrome pinta la lista de opciones en blanco. Forzamos el
+   fondo/color de las opciones para que respeten el tema. */
+select option {
+  background-color: var(--surface);
+  color: var(--ink);
+}
+
 /* Cinta roja del estandarte del logo: firma de las cabeceras de sección. */
 .ribbon-title {
   font-family: var(--font-display);
