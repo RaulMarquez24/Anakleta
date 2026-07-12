@@ -201,8 +201,10 @@ export default async function ClanHomePage({
                 </>
               )}
             </p>
-            {war!.state === "inWar" && war!.pending.length > 0 && (
-              <p className="mt-1 text-xs font-bold text-banner">{war!.pending.length} sin atacar</p>
+            {war!.state === "inWar" && war!.members.filter((m) => m.attacksUsed === 0).length > 0 && (
+              <p className="mt-1 text-xs font-bold text-banner">
+                {war!.members.filter((m) => m.attacksUsed === 0).length} sin atacar
+              </p>
             )}
           </>
         ) : (

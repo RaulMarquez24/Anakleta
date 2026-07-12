@@ -285,7 +285,8 @@ export async function getWarAlert(): Promise<WarAlert | null> {
   const war = await getCurrentWar().catch(() => null);
   if (!war || war.state !== "inWar") return null;
 
-  const pendingCount = war.pending.length;
+  // Solo el ataque OBLIGATORIO (no hizo ninguno). El 2º es ayuda, no se avisa.
+  const pendingCount = war.members.filter((m) => m.attacksUsed === 0).length;
   if (pendingCount === 0) return null;
 
   // Solo avisar si quedan menos de 12h (y la guerra no ha terminado aún).

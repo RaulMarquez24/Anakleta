@@ -12,6 +12,12 @@ export interface UnifiedWarMember {
   stars: number;
   destruction: number;
   attacks?: { stars: number; destruction: number; order: number }[];
+  reachableHelp?: boolean; // (en vivo) el 2º ayudaría: hay base a su alcance sin 3⭐
+}
+export interface OpponentBase {
+  mapPosition: number;
+  townHall: number;
+  starsTaken: number;
 }
 export interface UnifiedWar {
   state: string;
@@ -26,6 +32,7 @@ export interface UnifiedWar {
   startTime: string | null;
   endTime: string | null;
   attacksPerMember: number;
+  warCompleted?: boolean; // (en vivo) todas las bases rivales al 3⭐
 }
 
 // "★★★" según estrellas (0-3), con las que faltan en hueco.
@@ -48,17 +55,28 @@ export function WarDetail({
   clanName,
   inspect,
   notify = false,
+  opponentMembers,
 }: {
   war: UnifiedWar;
   members: UnifiedWarMember[];
   clanName?: string | null;
   inspect?: { href: string; badgeUrl: string | null; name: string | null };
   notify?: boolean; // muestra el botón "Avisar en Discord" (solo guerra en vivo)
+  opponentMembers?: OpponentBase[]; // (en vivo) bases rivales, para "quedan por rematar"
 }) {
   const inWar = war.state === "inWar";
   const prep = war.state === "preparation";
-  const pending = members.filter((m) => m.attacksPending > 0);
   const attacked = members.filter((m) => m.attacksUsed > 0).length;
+
+  // 1er ataque = obligatorio (no lo hizo). El 2º es AYUDA, nunca "negativo".
+  const obligatorio = members.filter((m) => m.attacksUsed === 0);
+  const puedenAyudar = war.warCompleted
+    ? []
+    : members.filter((m) => m.attacksUsed >= 1 && m.attacksPending > 0 && m.reachableHelp);
+  // Bases rivales que faltan por rematar (solo en vivo).
+  const restantes = (opponentMembers ?? [])
+    .filter((o) => o.starsTaken < 3)
+    .sort((a, b) => a.mapPosition - b.mapPosition);
 
   const cs = war.clanStars ?? 0;
   const os = war.opponentStars ?? 0;
@@ -119,36 +137,83 @@ export function WarDetail({
         </div>
       </div>
 
-      {/* Faltan por atacar (resumen rápido; solo mientras hay guerra) */}
-      {(inWar || prep) &&
-        (pending.length === 0 ? (
-          <div className="rounded-2xl border border-grass/40 bg-grass/10 p-4 text-center font-bold text-grass">
-            ✅ Todos han atacado
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-line bg-surface p-4">
-            <div className="mb-2.5 flex items-center gap-2">
-              <span className="rounded-full bg-banner/15 px-2.5 py-0.5 text-xs font-extrabold text-banner">
-                {pending.length}
-              </span>
-              <h2 className="font-extrabold text-ink">Faltan por atacar</h2>
+      {/* Ataques pendientes (solo mientras hay guerra). El 1º es obligatorio; el
+          2º es ayuda opcional y no cuenta como falta. */}
+      {(inWar || prep) && (
+        <>
+          {obligatorio.length === 0 ? (
+            <div className="rounded-2xl border border-grass/40 bg-grass/10 p-4 text-center font-bold text-grass">
+              ✅ Todos han hecho su ataque obligatorio
             </div>
-            <ul className="space-y-2">
-              {pending.map((m) => (
-                <li key={m.tag} className="flex items-center justify-between gap-2">
-                  <span className="min-w-0 truncate font-bold text-ink">
-                    {m.name}{" "}
-                    <span className="text-xs font-semibold text-ink-soft">TH{m.townHall}</span>
-                  </span>
-                  <span className="flex-none text-xs font-extrabold text-banner">
-                    {m.attacksPending} ataque{m.attacksPending > 1 ? "s" : ""}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            {notify && inWar && <NotifyDiscordButton />}
-          </div>
-        ))}
+          ) : (
+            <div className="rounded-2xl border border-line bg-surface p-4">
+              <div className="mb-2.5 flex items-center gap-2">
+                <span className="rounded-full bg-banner/15 px-2.5 py-0.5 text-xs font-extrabold text-banner">
+                  {obligatorio.length}
+                </span>
+                <h2 className="font-extrabold text-ink">
+                  Faltan por atacar{war.isCwl ? "" : " (obligatorio)"}
+                </h2>
+              </div>
+              <ul className="space-y-2">
+                {obligatorio.map((m) => (
+                  <li key={m.tag} className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate font-bold text-ink">
+                      {m.name} <span className="text-xs font-semibold text-ink-soft">TH{m.townHall}</span>
+                    </span>
+                    <span className="flex-none text-xs font-extrabold text-banner">
+                      {war.isCwl ? "sin atacar" : "1er ataque"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {notify && inWar && <NotifyDiscordButton />}
+            </div>
+          )}
+
+          {/* Pueden ayudar con el 2º (opcional, guerra normal) */}
+          {puedenAyudar.length > 0 && (
+            <div className="rounded-2xl border border-gold/40 bg-gold/8 p-4">
+              <div className="mb-1 flex items-center gap-2">
+                <span className="rounded-full bg-gold/25 px-2.5 py-0.5 text-xs font-extrabold text-gold-deep">
+                  {puedenAyudar.length}
+                </span>
+                <h2 className="font-extrabold text-ink">Pueden ayudar con el 2º</h2>
+              </div>
+              <p className="mb-2.5 text-xs text-ink-soft">
+                Opcional: quedan bases a su alcance por rematar. No cuenta como falta.
+              </p>
+              <ul className="space-y-2">
+                {puedenAyudar.map((m) => (
+                  <li key={m.tag} className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate font-bold text-ink">
+                      {m.name} <span className="text-xs font-semibold text-ink-soft">TH{m.townHall}</span>
+                    </span>
+                    <span className="flex-none text-xs font-bold text-gold-deep">2º libre</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Quedan por rematar (bases rivales sin 3⭐) */}
+          {inWar && restantes.length > 0 && (
+            <div className="rounded-2xl border border-line bg-surface p-4">
+              <h2 className="mb-2 font-extrabold text-ink">Quedan por rematar ({restantes.length})</h2>
+              <ul className="flex flex-wrap gap-1.5">
+                {restantes.map((o) => (
+                  <li
+                    key={o.mapPosition}
+                    className="rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink"
+                  >
+                    #{o.mapPosition} · TH{o.townHall} · {o.starsTaken}⭐
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
 
       {/* Inspeccionar el clan rival en tiempo real (no se guarda) */}
       {inspect && (
@@ -185,7 +250,8 @@ export function WarDetail({
             <ul className="divide-y divide-line">
               {members.map((m) => {
                 const nada = m.attacksUsed === 0;
-                const highlight = nada ? "bg-banner/8" : m.attacksPending > 0 ? "bg-gold/10" : "";
+                const canHelp = m.attacksPending > 0 && !!m.reachableHelp && !war.warCompleted;
+                const highlight = nada ? "bg-banner/8" : canHelp ? "bg-gold/10" : "";
                 return (
                   <li key={m.tag} className={`flex items-center gap-3 px-3.5 py-2.5 ${highlight}`}>
                     <span className="w-6 flex-none text-sm font-bold text-ink-soft">{m.mapPosition}</span>
@@ -226,9 +292,10 @@ export function WarDetail({
                         </span>
                       )
                     ) : (
-                      m.attacksPending > 0 && (
+                      canHelp &&
+                      (inWar || prep) && (
                         <span className="rounded-full bg-gold/20 px-2 py-0.5 text-[11px] font-extrabold text-gold-deep">
-                          faltan {m.attacksPending}
+                          puede ayudar
                         </span>
                       )
                     )}

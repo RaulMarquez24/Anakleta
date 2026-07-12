@@ -1,4 +1,4 @@
-import { getCurrentWar, type WarView } from "@/lib/war";
+import { getCurrentWarFresh, type WarView } from "@/lib/war";
 import { getClanName } from "@/lib/dashboard";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { AppShell } from "@/components/AppShell";
@@ -16,7 +16,7 @@ const STATE_LABEL: Record<WarView["state"], string> = {
 export default async function WarPage() {
   const [user, war, clanName] = await Promise.all([
     getCurrentUser(),
-    getCurrentWar(),
+    getCurrentWarFresh(), // en vivo: al consultar la guerra, datos al día (sin caché)
     getClanName(),
   ]);
   const showDetail = war.state !== "notInWar" && war.members.length > 0;
@@ -63,8 +63,14 @@ export default async function WarPage() {
             startTime: war.startTime,
             endTime: war.endTime,
             attacksPerMember: war.attacksPerMember,
+            warCompleted: war.warCompleted,
           }}
           members={war.members}
+          opponentMembers={war.opponentMembers.map((o) => ({
+            mapPosition: o.mapPosition,
+            townHall: o.townHall,
+            starsTaken: o.starsTaken,
+          }))}
           clanName={clanName}
           notify={war.state === "inWar"}
           inspect={

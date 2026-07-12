@@ -97,9 +97,9 @@ export default async function GuerrasPage({
                 ⭐ <span className="text-gold-deep">{live.clanStars ?? 0}</span> — {live.opponentStars ?? 0}
               </p>
             </div>
-            {live.state === "inWar" && live.pending.length > 0 ? (
+            {live.state === "inWar" && live.members.filter((m) => m.attacksUsed === 0).length > 0 ? (
               <span className="flex-none rounded-full bg-banner/20 px-3 py-1 text-sm font-extrabold text-banner">
-                {live.pending.length} sin atacar
+                {live.members.filter((m) => m.attacksUsed === 0).length} sin atacar
               </span>
             ) : live.state === "preparation" ? (
               <span className="flex-none rounded-full bg-sky/15 px-3 py-1 text-sm font-extrabold text-sky">

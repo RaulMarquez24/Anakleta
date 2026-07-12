@@ -52,6 +52,9 @@ export interface WarMemberRow {
   attacksPending: number;
   stars: number; // estrellas conseguidas (suma de sus ataques)
   destruction: number; // % sumado de sus ataques
+  // Guerra normal: el 2º ataque es AYUDA. reachableHelp = le queda 2º, la guerra
+  // no está rematada y hay una base sin 3⭐ a su alcance (TH ≤ el suyo + 1).
+  reachableHelp: boolean;
 }
 // Base rival (para inspeccionar al enemigo): posición, TH y estrellas que YA le
 // hemos hecho (su mejor defensa recibida) para saber a quién queda por rematar.
@@ -70,6 +73,7 @@ export interface WarView {
   round: number | null; // ronda de CWL (1-7)
   teamSize: number | null;
   attacksPerMember: number;
+  warCompleted: boolean; // todas las bases rivales al 3⭐ (no hace falta rematar)
   opponentName: string | null;
   opponentTag: string | null;
   opponentLevel: number | null;
@@ -122,18 +126,35 @@ function buildView(
   const them = usIsClan ? raw.opponent : raw.clan;
   const attacksPerMember = raw.attacksPerMember ?? (opts.isCwl ? 1 : 2);
 
+  // Bases rivales que aún no están al 3⭐ (para el 2º ataque = ayuda).
+  const remainingThs = (them?.members ?? [])
+    .filter((m) => (m.bestOpponentAttack?.stars ?? 0) < 3)
+    .map((m) => m.townhallLevel);
+  const warCompleted = remainingThs.length === 0;
+
   const members: WarMemberRow[] = (us?.members ?? [])
     .map((m) => {
       const atks = m.attacks ?? [];
+      const attacksUsed = atks.length;
+      const attacksPending = Math.max(0, attacksPerMember - attacksUsed);
+      // Ayuda con el 2º: solo guerra normal, hizo ya el 1º, la guerra no está
+      // rematada y hay base a su alcance (TH ≤ el suyo + 1; se puede intentar uno arriba).
+      const reachableHelp =
+        !opts.isCwl &&
+        !warCompleted &&
+        attacksUsed >= 1 &&
+        attacksPending > 0 &&
+        remainingThs.some((th) => th <= m.townhallLevel + 1);
       return {
         tag: m.tag,
         name: m.name,
         townHall: m.townhallLevel,
         mapPosition: m.mapPosition,
-        attacksUsed: atks.length,
-        attacksPending: Math.max(0, attacksPerMember - atks.length),
+        attacksUsed,
+        attacksPending,
         stars: atks.reduce((n, a) => n + (a.stars ?? 0), 0),
         destruction: atks.reduce((n, a) => n + (a.destructionPercentage ?? 0), 0),
+        reachableHelp,
       };
     })
     .sort((a, b) => a.mapPosition - b.mapPosition);
@@ -156,6 +177,7 @@ function buildView(
     round: opts.round,
     teamSize: raw.teamSize ?? null,
     attacksPerMember,
+    warCompleted,
     opponentName: them?.name ?? null,
     opponentTag: them?.tag ?? null,
     opponentLevel: them?.clanLevel ?? null,
@@ -255,6 +277,12 @@ async function getCurrentCwlWar(clanTag: string): Promise<WarView | null> {
 export const getCurrentWar = unstable_cache(getCurrentWarImpl, ["current-war"], {
   revalidate: 120,
 });
+
+// Igual que getCurrentWar pero SIN caché: al consultar una guerra concreta hay
+// que ver lo que devuelve Clash en ese instante (nada de esperar a una captura).
+export function getCurrentWarFresh(clanTag?: string): Promise<WarView> {
+  return getCurrentWarImpl(clanTag);
+}
 
 async function getCurrentWarImpl(
   clanTag = process.env.COC_CLAN_TAG ?? "",
@@ -419,6 +447,7 @@ function emptyWar(state: CocCurrentWar["state"], isPrivate: boolean): WarView {
     round: null,
     teamSize: null,
     attacksPerMember: 2,
+    warCompleted: false,
     opponentName: null,
     opponentTag: null,
     opponentLevel: null,

@@ -24,6 +24,9 @@ export async function POST(req: NextRequest) {
 
   const war = await getCurrentWar().catch(() => null);
   if (!war || war.state !== "inWar") return NextResponse.json({ skip: "sin guerra en curso" });
+  // Guerras normales: sin ping automático (no se exige Discord para ellas; el
+  // aviso se hace a mano desde la pantalla de guerra si se quiere). Solo CWL.
+  if (!war.isCwl) return NextResponse.json({ skip: "guerra normal: sin aviso automático" });
   if (war.pending.length === 0) return NextResponse.json({ skip: "nadie pendiente" });
   if (!war.endTime) return NextResponse.json({ skip: "sin hora de fin" });
 
