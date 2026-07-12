@@ -70,6 +70,8 @@ export default async function PerfilPage() {
 
   return (
     <AppShell email={user?.email} title="Perfil">
+      <div className="lg:grid lg:grid-cols-2 lg:gap-6 lg:items-start">
+      <div>
       {/* Mi jugador (si está vinculado y sigue en el clan) */}
       {me ? (
         <div className="overflow-hidden rounded-2xl border border-line bg-surface">
@@ -135,7 +137,9 @@ export default async function PerfilPage() {
 
       <SectionHeader icon={UserRound}>Cuenta</SectionHeader>
       <PerfilForm email={user?.email ?? null} linkedTag={linkedTag} linkedName={linkedName} />
+      </div>
 
+      <div>
       <SectionHeader icon={RefreshCw}>Tareas y crons</SectionHeader>
       <Link
         href="/crons"
@@ -161,6 +165,8 @@ export default async function PerfilPage() {
           Cerrar sesión
         </button>
       </form>
+      </div>
+      </div>
     </AppShell>
   );
 }

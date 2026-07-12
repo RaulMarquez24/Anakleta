@@ -55,7 +55,7 @@ export async function AppShell({
         {/* Cabecera escritorio: título a la izquierda + lupa a la derecha */}
         <header className="sticky top-0 z-20 hidden border-b-2 border-gold/40 bg-gradient-to-b from-banner to-banner-dark shadow-lg sm:block">
           <div
-            className={`relative mx-auto flex max-w-5xl items-center gap-3 px-6 py-3.5 pr-14 ${
+            className={`relative mx-auto flex max-w-6xl items-center gap-3 px-6 py-3.5 pr-14 ${
               back ? "pl-16" : ""
             }`}
           >
@@ -72,7 +72,7 @@ export async function AppShell({
           </div>
         </header>
 
-        <main className="mx-auto max-w-5xl px-4 py-5 sm:px-6 sm:py-7">{children}</main>
+        <main className="mx-auto max-w-6xl px-4 py-5 sm:px-6 sm:py-7">{children}</main>
       </div>
 
       {alert && (

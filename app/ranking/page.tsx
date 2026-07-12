@@ -104,23 +104,35 @@ export default async function RankingPage({
         ))}
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-line bg-surface">
-        <ul className="divide-y divide-line">
-          {ranked.map((m, i) => (
-            <li key={m.tag} className={`flex items-center gap-3 px-3.5 py-2.5 ${i < 3 ? "bg-gold/6" : ""}`}>
-              <span className="w-7 flex-none text-center text-base font-extrabold tabular-nums text-ink-soft">
-                {i < 3 ? MEDAL[i] : i + 1}
-              </span>
-              <Link href={href(m.tag)} className="min-w-0 flex-1">
-                <span className="block truncate font-bold text-ink hover:underline">{m.name}</span>
-                <span className="text-[11px] text-ink-soft">
-                  {m.townHall != null ? `TH${m.townHall}` : "—"}
-                </span>
-              </Link>
-              <div className="flex-none">{valueNode(m, metric)}</div>
-            </li>
-          ))}
-        </ul>
+      {/* En escritorio, dos columnas manteniendo el orden vertical (1..n | resto). */}
+      <div className="grid gap-3 lg:grid-cols-2">
+        {(() => {
+          const half = Math.ceil(ranked.length / 2);
+          const cols = [ranked.slice(0, half), ranked.slice(half)];
+          return cols.map((col, ci) => (
+            <div key={ci} className="overflow-hidden rounded-2xl border border-line bg-surface">
+              <ul className="divide-y divide-line">
+                {col.map((m, j) => {
+                  const i = ci * half + j;
+                  return (
+                    <li key={m.tag} className={`flex items-center gap-3 px-3.5 py-2.5 ${i < 3 ? "bg-gold/6" : ""}`}>
+                      <span className="w-7 flex-none text-center text-base font-extrabold tabular-nums text-ink-soft">
+                        {i < 3 ? MEDAL[i] : i + 1}
+                      </span>
+                      <Link href={href(m.tag)} className="min-w-0 flex-1">
+                        <span className="block truncate font-bold text-ink hover:underline">{m.name}</span>
+                        <span className="text-[11px] text-ink-soft">
+                          {m.townHall != null ? `TH${m.townHall}` : "—"}
+                        </span>
+                      </Link>
+                      <div className="flex-none">{valueNode(m, metric)}</div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ));
+        })()}
       </div>
 
       <p className="mt-3 text-xs text-ink-soft">

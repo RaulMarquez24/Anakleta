@@ -40,12 +40,12 @@ export function SkeletonShell({
 
         {/* Cabecera escritorio */}
         <header className="sticky top-0 z-20 hidden border-b-2 border-gold/40 bg-gradient-to-b from-banner to-banner-dark shadow-lg sm:block">
-          <div className="mx-auto flex max-w-5xl items-center px-6 py-3.5">
+          <div className="mx-auto flex max-w-6xl items-center px-6 py-3.5">
             <div className="h-6 w-40 animate-pulse rounded bg-white/25" />
           </div>
         </header>
 
-        <main className="mx-auto max-w-5xl px-4 py-5 sm:px-6 sm:py-7">{children}</main>
+        <main className="mx-auto max-w-6xl px-4 py-5 sm:px-6 sm:py-7">{children}</main>
       </div>
 
       <AppNav variant="bottom" />

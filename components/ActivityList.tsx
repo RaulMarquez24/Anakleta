@@ -161,7 +161,7 @@ export function ActivityList({
         ))}
       </div>
 
-      <div className="space-y-3">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
         {view.map((m) => {
           const cat = CAT[m.category];
           const susp = m.category === "expulsion" || m.category === "revisar";

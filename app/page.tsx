@@ -170,10 +170,12 @@ export default async function ClanHomePage({
         <p className="mt-3 text-[11px] text-ink-soft">Última captura: {fmtDate(data.latestCapture)}</p>
       </div>
 
+      {/* Guerra + gestión: apilados en móvil, en paralelo en escritorio */}
+      <div className="mb-6 grid gap-4 lg:grid-cols-2 lg:items-start">
       {/* Estado de guerra / CWL */}
       <Link
         href="/guerras"
-        className="mb-4 block rounded-2xl border border-line bg-surface p-4 hover:bg-surface-2/60"
+        className="block rounded-2xl border border-line bg-surface p-4 hover:bg-surface-2/60"
       >
         {inWar ? (
           <>
@@ -214,7 +216,7 @@ export default async function ClanHomePage({
       {/* Gestión rápida (siempre de la semana) */}
       <Link
         href="/actividad"
-        className="mb-6 block rounded-2xl border border-line bg-surface p-4 hover:bg-surface-2/60"
+        className="block rounded-2xl border border-line bg-surface p-4 hover:bg-surface-2/60"
       >
         <div className="mb-2 flex items-center justify-between">
           <p className="font-extrabold text-ink">Gestión de esta semana</p>
@@ -239,11 +241,14 @@ export default async function ClanHomePage({
           </div>
         </div>
       </Link>
+      </div>
 
+      {/* Mensajes + Discord: apilados en móvil, en paralelo en escritorio */}
+      <div className="mb-6 grid gap-4 sm:grid-cols-2">
       {/* Mensajes del clan (reclutamiento / anuncios para copiar al juego) */}
       <Link
         href="/mensajes"
-        className="mb-6 flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 hover:bg-surface-2/60"
+        className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 hover:bg-surface-2/60"
       >
         <span className="text-2xl">✉️</span>
         <span className="min-w-0 flex-1">
@@ -256,7 +261,7 @@ export default async function ClanHomePage({
       {/* Avisar por Discord (mensaje libre etiquetando miembros/rol) */}
       <Link
         href="/discord"
-        className="mb-6 flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 hover:bg-surface-2/60"
+        className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 hover:bg-surface-2/60"
       >
         <span className="text-2xl">🔔</span>
         <span className="min-w-0 flex-1">
@@ -265,6 +270,7 @@ export default async function ClanHomePage({
         </span>
         <span aria-hidden className="text-ink-soft">›</span>
       </Link>
+      </div>
 
       {/* --- Análisis del clan (antes "Stats") --- */}
       <div className="mb-3 flex items-center justify-between gap-2">
@@ -294,8 +300,10 @@ export default async function ClanHomePage({
         <Stat label="Estrellas de guerra" value={`⭐ ${report.clanWarStars}`} sub={`${report.warsInPeriod} guerras`} />
       </div>
 
+      {/* Evolución + destacados: apilados en móvil, en paralelo en escritorio */}
+      <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
       {/* Evolución del clan (nivel de copas en la ventana del periodo) */}
-      <div className="mb-4 rounded-2xl border border-line bg-surface p-4">
+      <div className="rounded-2xl border border-line bg-surface p-4">
         <h3 className="mb-2 flex items-center gap-2 font-extrabold text-gold-deep">
           <span aria-hidden>🏆</span> Copas del clan
         </h3>
@@ -358,6 +366,7 @@ export default async function ClanHomePage({
             )}
           </div>
         </div>
+      </div>
       </div>
     </AppShell>
   );

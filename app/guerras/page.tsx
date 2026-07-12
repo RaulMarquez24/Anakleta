@@ -134,7 +134,8 @@ export default async function GuerrasPage({
           {ligaSeasons.length === 0 ? (
             <Empty>Aún no hay ligas. Abre una inscripción arriba o se crean solas durante la CWL.</Empty>
           ) : (
-            ligaSeasons.map((season) => {
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {ligaSeasons.map((season) => {
               const s = warBySeason.get(season);
               const l = listBySeason.get(season);
               return (
@@ -169,7 +170,8 @@ export default async function GuerrasPage({
                   <span aria-hidden className="text-ink-soft">›</span>
                 </Link>
               );
-            })
+            })}
+            </div>
           )}
         </div>
       ) : wars.length === 0 ? (
