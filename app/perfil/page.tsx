@@ -10,11 +10,13 @@ import {
   MessageCircle,
   History,
   ChevronRight,
+  Eye,
   LogOut,
   type LucideIcon,
 } from "lucide-react";
 import { getMembersOverview } from "@/lib/dashboard";
 import { getMyPlayerTag } from "@/lib/profile";
+import { isLeaderEmail } from "@/lib/access-log";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { AppShell } from "@/components/AppShell";
 import { ThImage } from "@/components/ThImage";
@@ -154,6 +156,20 @@ export default async function PerfilPage() {
         </div>
         <ChevronRight className="h-4 w-4 flex-none text-ink-soft" />
       </Link>
+
+      {isLeaderEmail(user?.email) && (
+        <Link
+          href="/accesos"
+          className="mt-3 flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 hover:bg-surface-2/60"
+        >
+          <Eye className="h-5 w-5 flex-none text-ink-soft" />
+          <div className="min-w-0 flex-1">
+            <p className="font-extrabold text-ink">Accesos a la app</p>
+            <p className="text-xs text-ink-soft">Quién ha entrado y cuándo (solo tú)</p>
+          </div>
+          <ChevronRight className="h-4 w-4 flex-none text-ink-soft" />
+        </Link>
+      )}
 
       <SectionHeader icon={Smartphone}>Aplicación</SectionHeader>
       <InstallAppCard />

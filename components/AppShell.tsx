@@ -6,6 +6,7 @@ import { HeaderSearch } from "@/components/HeaderSearch";
 import { PwaInstall } from "@/components/PwaInstall";
 import { WarAlertBubble } from "@/components/WarAlertBubble";
 import { getWarAlert } from "@/lib/war-history";
+import { recordAccess } from "@/lib/access-log";
 
 // Marco común de las páginas autenticadas.
 // Móvil: ribbon superior centrado + barra inferior (sin cambios).
@@ -21,7 +22,10 @@ export async function AppShell({
   back?: string;
   children: React.ReactNode;
 }) {
-  const alert = await getWarAlert().catch(() => null);
+  const [alert] = await Promise.all([
+    getWarAlert().catch(() => null),
+    recordAccess(email), // registro de acceso (throttled, best-effort)
+  ]);
 
   return (
     <div className="min-h-full pb-20 sm:pb-0">
