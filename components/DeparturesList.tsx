@@ -84,8 +84,8 @@ export function DeparturesList({ departures }: { departures: Departure[] }) {
   return (
     <div>
       {/* Filtros */}
-      <div className="mb-3 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
-        <label className="flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2">
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <label className="flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 sm:flex-1">
           <Search className="h-4 w-4 flex-none text-ink-soft" />
           <input
             value={query}
@@ -97,30 +97,32 @@ export function DeparturesList({ departures }: { departures: Departure[] }) {
             className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-ink outline-none"
           />
         </label>
-        <label className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-2">
-          <span className="text-[11px] font-bold text-ink-soft">Desde</span>
-          <input
-            type="date"
-            value={from}
-            onChange={(e) => {
-              setFrom(e.target.value);
-              reset();
-            }}
-            className="bg-transparent text-sm font-semibold text-ink outline-none"
-          />
-        </label>
-        <label className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-2">
-          <span className="text-[11px] font-bold text-ink-soft">Hasta</span>
-          <input
-            type="date"
-            value={to}
-            onChange={(e) => {
-              setTo(e.target.value);
-              reset();
-            }}
-            className="bg-transparent text-sm font-semibold text-ink outline-none"
-          />
-        </label>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-2">
+          <label className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-2">
+            <span className="flex-none text-[11px] font-bold text-ink-soft">Desde</span>
+            <input
+              type="date"
+              value={from}
+              onChange={(e) => {
+                setFrom(e.target.value);
+                reset();
+              }}
+              className="min-w-0 w-full bg-transparent text-sm font-semibold text-ink outline-none"
+            />
+          </label>
+          <label className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-2">
+            <span className="flex-none text-[11px] font-bold text-ink-soft">Hasta</span>
+            <input
+              type="date"
+              value={to}
+              onChange={(e) => {
+                setTo(e.target.value);
+                reset();
+              }}
+              className="min-w-0 w-full bg-transparent text-sm font-semibold text-ink outline-none"
+            />
+          </label>
+        </div>
       </div>
 
       {/* Toggle efímeros + contador */}

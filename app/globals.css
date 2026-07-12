@@ -4,6 +4,7 @@
    Paleta derivada del logo: oro, madera, hierba, estandarte rojo, cielo.
    Las variables semánticas cambian solas en claro/oscuro (prefers-color-scheme). */
 :root {
+  color-scheme: light; /* controles nativos (select, date) en claro */
   --bg: #fbf5e9; /* pergamino, luz de día */
   --surface: #ffffff;
   --surface-2: #f3e9d2;
@@ -23,6 +24,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
+    color-scheme: dark; /* desplegables/date pickers nativos en oscuro */
     --bg: #1e1710; /* madera casi negra */
     --surface: #2a2016;
     --surface-2: #241a10;
