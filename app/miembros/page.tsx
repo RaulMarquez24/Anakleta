@@ -56,6 +56,15 @@ export default async function MiembrosPage({
     };
   }
 
+  // Los que estuvieron 0-1 días no son "exmiembros" de verdad: gente que se une
+  // y se sale, o a quien se echa al momento. Se ocultan para no ensuciar la lista.
+  const EPHEMERAL_DAYS = 1;
+  const shownDepartures = departures.filter((d) => {
+    const s = daysBetween(d.firstSeenAt, d.lastSeenAt);
+    return s == null || s > EPHEMERAL_DAYS;
+  });
+  const hiddenCount = departures.length - shownDepartures.length;
+
   const tabCls = (active: boolean) =>
     `flex-1 rounded-full px-4 py-1.5 text-center text-sm font-extrabold transition ${
       active ? "bg-gold text-banner-dark" : "bg-surface-2 text-ink-soft hover:bg-line"
@@ -75,16 +84,21 @@ export default async function MiembrosPage({
 
       {tab === "activos" ? (
         <MembersTable members={data.members} myTag={myTag} accountLinks={accountLinks} />
-      ) : departures.length === 0 ? (
+      ) : shownDepartures.length === 0 ? (
         <div className="rounded-2xl border border-line bg-surface p-10 text-center">
           <p className="text-4xl">👋</p>
           <p className="mt-2 font-bold text-ink-soft">Nadie ha abandonado el clan (aún).</p>
+          {hiddenCount > 0 && (
+            <p className="mt-1 text-xs text-ink-soft">
+              ({hiddenCount} efímero{hiddenCount === 1 ? "" : "s"} de 0-1 días ocultos)
+            </p>
+          )}
         </div>
       ) : (
         <>
           <div className="overflow-hidden rounded-2xl border border-line bg-surface">
             <ul className="divide-y divide-line">
-              {departures.map((d) => {
+              {shownDepartures.map((d) => {
                 const stay = daysBetween(d.firstSeenAt, d.lastSeenAt);
                 return (
                   <li key={d.tag} className="flex items-start gap-3 px-3.5 py-2.5">
@@ -117,6 +131,9 @@ export default async function MiembrosPage({
           <p className="mt-3 text-xs text-ink-soft">
             Se registra una baja cuando un tag deja de aparecer en la lista del clan entre capturas (se
             fue o lo expulsaron). La fecha de &ldquo;se fue&rdquo; es la última captura en la que aún estaba.
+            {hiddenCount > 0 && (
+              <> Se ocultan {hiddenCount} que estuvieron solo 0-1 días (entraron y se salieron).</>
+            )}
           </p>
         </>
       )}
