@@ -163,6 +163,6 @@ export async function POST(req: NextRequest) {
 
   const result = { ok: true, season: cand.season, actions };
   // Solo dejamos traza si HIZO algo (evita ruido diario cuando no toca nada).
-  if (actions.length) await logCronRun("cwl-cron", true, result);
+  if (actions.length) await logCronRun("cwl-cron", true, result, req.headers.get("x-actor") || "cron");
   return NextResponse.json(result);
 }

@@ -2,10 +2,23 @@ import "server-only";
 import { createServerClient } from "@/lib/supabase/server";
 
 // Guarda el resultado de una ejecución de cron en cron_runs (traza). Nunca lanza:
-// si el registro falla, no debe tumbar la tarea.
-export async function logCronRun(job: string, ok: boolean, summary: unknown): Promise<void> {
+// si el registro falla, no debe tumbar la tarea. `actor`: "cron" (automático) o
+// el email del colíder que la lanzó a mano.
+export async function logCronRun(
+  job: string,
+  ok: boolean,
+  summary: unknown,
+  actor: string | null = null,
+): Promise<void> {
+  const svc = createServerClient();
   try {
-    const svc = createServerClient();
+    const { error } = await svc.from("cron_runs").insert({ job, ok, summary, actor });
+    if (!error) return;
+  } catch {
+    /* cae al reintento */
+  }
+  // Reintento sin `actor` por si la columna aún no está migrada.
+  try {
     await svc.from("cron_runs").insert({ job, ok, summary });
   } catch (err) {
     console.error("[cron-log]", err);
@@ -17,6 +30,7 @@ export interface CronRun {
   job: string;
   ok: boolean;
   summary: unknown;
+  actor: string | null;
   created_at: string;
 }
 
@@ -51,6 +65,7 @@ export interface CronHistoryItem {
   id: number;
   ok: boolean;
   createdAt: string;
+  actor: string | null; // "cron" (automático) o el email de quien la lanzó
   summary: string;
   details: string[];
 }
@@ -62,9 +77,10 @@ export async function getCronHistory(
   limit = 10,
 ): Promise<{ items: CronHistoryItem[]; hasMore: boolean }> {
   const svc = createServerClient();
+  // select("*") para no romper si la columna `actor` aún no está migrada.
   const { data } = await svc
     .from("cron_runs")
-    .select("id, job, ok, summary, created_at")
+    .select("*")
     .eq("job", job)
     .order("created_at", { ascending: false })
     .range(offset, offset + limit); // pide limit+1 para saber si hay más
@@ -74,6 +90,7 @@ export async function getCronHistory(
     id: r.id,
     ok: r.ok,
     createdAt: r.created_at,
+    actor: r.actor ?? null,
     summary: summarizeRun(r),
     details: runDetails(r),
   }));

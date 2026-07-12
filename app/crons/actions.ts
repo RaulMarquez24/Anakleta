@@ -18,7 +18,11 @@ async function call(path: string): Promise<CronResult> {
   try {
     const res = await fetch(`${BASE}${path}`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${secret}` },
+      headers: {
+        Authorization: `Bearer ${secret}`,
+        // Quién la lanza a mano (va con el secreto, que solo tiene el servidor).
+        "X-Actor": user.email ?? "colíder",
+      },
       cache: "no-store",
     });
     const data = await res.json().catch(() => ({}));

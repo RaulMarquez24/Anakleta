@@ -63,6 +63,6 @@ export async function POST(req: NextRequest) {
     pinged: r.pinged,
     unlinked: r.unlinked,
   };
-  await logCronRun("war-reminder", true, result);
+  await logCronRun("war-reminder", true, result, req.headers.get("x-actor") || "cron");
   return NextResponse.json(result);
 }

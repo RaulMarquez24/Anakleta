@@ -102,6 +102,6 @@ export async function POST(req: NextRequest) {
     noTh,
     permFail,
   };
-  await logCronRun("th-roles", permFail.length === 0, result);
+  await logCronRun("th-roles", permFail.length === 0, result, req.headers.get("x-actor") || "cron");
   return NextResponse.json(result);
 }

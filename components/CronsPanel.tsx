@@ -25,6 +25,12 @@ function fmt(iso: string): string {
   }
 }
 
+// Quién lanzó la ejecución: automático (cron) o el colíder concreto.
+function who(actor: string | null): string {
+  if (!actor || actor === "cron") return "🤖 automático";
+  return `👤 ${actor.split("@")[0]}`;
+}
+
 // Resumen de una línea del resultado devuelto al lanzar a mano.
 function summarize(key: string, r: CronResult): string {
   if (!r.ok && r.error) return `✕ ${r.error}`;
@@ -108,7 +114,10 @@ function TaskHistory({ job, reloadKey }: { job: string; reloadKey: number }) {
             <div key={it.id} className="rounded-lg bg-surface p-2 text-xs">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-semibold text-ink">{fmt(it.createdAt)}</span>
-                {!it.ok && <span className="font-bold text-banner">con fallos</span>}
+                <span className="flex items-center gap-2">
+                  {!it.ok && <span className="font-bold text-banner">con fallos</span>}
+                  <span className="text-[11px] font-bold text-ink-soft">{who(it.actor)}</span>
+                </span>
               </div>
               <p className="mt-0.5 text-ink-soft">{it.summary}</p>
               {it.details.length > 0 && (

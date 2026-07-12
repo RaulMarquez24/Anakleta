@@ -223,7 +223,7 @@ export async function POST(req: NextRequest) {
       members_deactivated: goneTags.length,
       war,
     };
-    await logCronRun("snapshot", true, result);
+    await logCronRun("snapshot", true, result, req.headers.get("x-actor") || "cron");
     return NextResponse.json(result);
   } catch (err) {
     if (err instanceof CocApiError) {
