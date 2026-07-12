@@ -4,6 +4,32 @@ import { getCurrentWar } from "@/lib/war";
 import { discordConfigured } from "@/lib/discord";
 import { sendPendingWarNotice } from "@/lib/war-notify";
 import { getCurrentUser } from "@/lib/supabase/current-user";
+import { createServerClient } from "@/lib/supabase/server";
+
+// Corrige a mano el "2º ataque (ayuda)" de un miembro en una guerra concreta:
+// should=true (sí puede ayudar) / false (no hace falta). Sobreescribe el filtro
+// automático por TH. Se guarda por guerra (war_key = hora de inicio) y lo ven
+// todos los colíderes.
+export async function setWarHelpOverride(
+  warKey: string,
+  tag: string,
+  should: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "No autorizado." };
+  if (!warKey || !tag) return { ok: false, error: "Datos incompletos." };
+  try {
+    const svc = createServerClient();
+    const { error } = await svc.from("war_help_overrides").upsert(
+      { war_key: warKey, tag, should, updated_by: user.email ?? null, updated_at: new Date().toISOString() },
+      { onConflict: "war_key,tag" },
+    );
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
 
 export interface NotifyResult {
   ok: boolean;

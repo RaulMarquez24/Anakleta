@@ -1,4 +1,5 @@
 import { getCurrentWarFresh, type WarView } from "@/lib/war";
+import { getWarHelpOverrides } from "@/lib/war-overrides";
 import { getClanName } from "@/lib/dashboard";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { AppShell } from "@/components/AppShell";
@@ -20,6 +21,9 @@ export default async function WarPage() {
     getClanName(),
   ]);
   const showDetail = war.state !== "notInWar" && war.members.length > 0;
+  // Correcciones manuales del 2º ataque, solo para guerra normal en curso.
+  const warKey = !war.isCwl && war.state === "inWar" ? (war.startTime ?? "") : "";
+  const helpOverrides = warKey ? await getWarHelpOverrides(warKey) : {};
 
   return (
     <AppShell email={user?.email} title="Guerra" back="/guerras">
@@ -72,6 +76,8 @@ export default async function WarPage() {
             starsTaken: o.starsTaken,
           }))}
           clanName={clanName}
+          warKey={warKey || undefined}
+          helpOverrides={helpOverrides}
           notify={war.state === "inWar"}
           inspect={
             war.opponentTag

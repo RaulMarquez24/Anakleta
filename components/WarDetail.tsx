@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { fmtDate } from "@/components/WarBits";
 import { NotifyDiscordButton } from "@/components/NotifyDiscordButton";
+import { HelpToggleList } from "@/components/HelpToggleList";
 
 export interface UnifiedWarMember {
   tag: string;
@@ -56,6 +57,8 @@ export function WarDetail({
   inspect,
   notify = false,
   opponentMembers,
+  warKey,
+  helpOverrides,
 }: {
   war: UnifiedWar;
   members: UnifiedWarMember[];
@@ -63,6 +66,8 @@ export function WarDetail({
   inspect?: { href: string; badgeUrl: string | null; name: string | null };
   notify?: boolean; // muestra el botón "Avisar en Discord" (solo guerra en vivo)
   opponentMembers?: OpponentBase[]; // (en vivo) bases rivales, para "quedan por rematar"
+  warKey?: string; // (en vivo) clave de la guerra para las correcciones del 2º
+  helpOverrides?: Record<string, boolean>; // correcciones manuales del 2º ataque
 }) {
   const inWar = war.state === "inWar";
   const prep = war.state === "preparation";
@@ -70,9 +75,10 @@ export function WarDetail({
 
   // 1er ataque = obligatorio (no lo hizo). El 2º es AYUDA, nunca "negativo".
   const obligatorio = members.filter((m) => m.attacksUsed === 0);
-  const puedenAyudar = war.warCompleted
+  // Miembros con el 2º libre (guerra no rematada): la lista de "pueden ayudar".
+  const segundos = war.warCompleted
     ? []
-    : members.filter((m) => m.attacksUsed >= 1 && m.attacksPending > 0 && m.reachableHelp);
+    : members.filter((m) => m.attacksUsed >= 1 && m.attacksPending > 0);
   // Bases rivales que faltan por rematar (solo en vivo).
   const restantes = (opponentMembers ?? [])
     .filter((o) => o.starsTaken < 3)
@@ -171,29 +177,18 @@ export function WarDetail({
             </div>
           )}
 
-          {/* Pueden ayudar con el 2º (opcional, guerra normal) */}
-          {puedenAyudar.length > 0 && (
-            <div className="rounded-2xl border border-gold/40 bg-gold/8 p-4">
-              <div className="mb-1 flex items-center gap-2">
-                <span className="rounded-full bg-gold/25 px-2.5 py-0.5 text-xs font-extrabold text-gold-deep">
-                  {puedenAyudar.length}
-                </span>
-                <h2 className="font-extrabold text-ink">Pueden ayudar con el 2º</h2>
-              </div>
-              <p className="mb-2.5 text-xs text-ink-soft">
-                Opcional: quedan bases a su alcance por rematar. No cuenta como falta.
-              </p>
-              <ul className="space-y-2">
-                {puedenAyudar.map((m) => (
-                  <li key={m.tag} className="flex items-center justify-between gap-2">
-                    <span className="min-w-0 truncate font-bold text-ink">
-                      {m.name} <span className="text-xs font-semibold text-ink-soft">TH{m.townHall}</span>
-                    </span>
-                    <span className="flex-none text-xs font-bold text-gold-deep">2º libre</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+          {/* Pueden ayudar con el 2º (opcional): sugerido por TH + corrección manual */}
+          {warKey && segundos.length > 0 && (
+            <HelpToggleList
+              warKey={warKey}
+              members={segundos.map((m) => ({
+                tag: m.tag,
+                name: m.name,
+                townHall: m.townHall,
+                reachableHelp: !!m.reachableHelp,
+              }))}
+              initialOverrides={helpOverrides ?? {}}
+            />
           )}
 
           {/* Quedan por rematar (bases rivales sin 3⭐) */}
