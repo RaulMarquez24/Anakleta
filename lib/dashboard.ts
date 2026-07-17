@@ -1,6 +1,19 @@
 import { createServerClient } from "@/lib/supabase/server";
 import { getActiveWarnCounts } from "@/lib/warns";
 
+// Miembros activos como {tag, name} ordenados por nombre (para selectores).
+export async function getMemberOptions(): Promise<{ tag: string; name: string }[]> {
+  try {
+    const supabase = createServerClient();
+    const { data } = await supabase.from("members").select("tag, name").eq("is_active", true);
+    return (data ?? [])
+      .map((m) => ({ tag: m.tag as string, name: m.name as string }))
+      .sort((a, b) => a.name.localeCompare(b.name, "es"));
+  } catch {
+    return [];
+  }
+}
+
 // Las donaciones "cuentan negativo" (leeching) solo si donó poco (< 1000) Y le
 // han dado bastante más de lo que aportó (recibidas − donadas ≥ 1000). Así no
 // penaliza a quien recibió poco, ni a quien dona mucho aunque reciba más.

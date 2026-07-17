@@ -2,7 +2,10 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
+import { addWarn } from "@/app/miembros/actions";
+import { WARN_PRESETS } from "@/lib/warn-presets";
 import type { PlayerWarns } from "@/lib/warns";
 
 const who = (email: string | null) => (email ? email.split("@")[0] : "alguien");
@@ -19,9 +22,35 @@ const STATUS_CHIP: Record<string, string> = {
   resuelto: "bg-grass/15 text-grass",
 };
 
-export function WarnsBrowser({ groups, threshold }: { groups: PlayerWarns[]; threshold: number }) {
+export function WarnsBrowser({
+  groups,
+  threshold,
+  members = [],
+}: {
+  groups: PlayerWarns[];
+  threshold: number;
+  members?: { tag: string; name: string }[];
+}) {
+  const router = useRouter();
   const [q, setQ] = useState("");
   const [mode, setMode] = useState<"vigentes" | "todos">("vigentes");
+  const [addOpen, setAddOpen] = useState(false);
+  const [selTag, setSelTag] = useState("");
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submitAdd() {
+    if (!selTag || !reason.trim() || busy) return;
+    setBusy(true);
+    const r = await addWarn(selTag, reason);
+    setBusy(false);
+    if (r.ok) {
+      setAddOpen(false);
+      setSelTag("");
+      setReason("");
+      router.refresh(); // recarga los grupos con el nuevo warn
+    }
+  }
 
   const view = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -44,6 +73,17 @@ export function WarnsBrowser({ groups, threshold }: { groups: PlayerWarns[]; thr
 
   return (
     <div className="space-y-3">
+      {members.length > 0 && (
+        <div className="flex justify-end">
+          <button
+            onClick={() => setAddOpen(true)}
+            className="rounded-full bg-banner px-4 py-2 text-sm font-extrabold text-white transition hover:brightness-110"
+          >
+            ＋ Poner warn
+          </button>
+        </div>
+      )}
+
       {/* Buscador */}
       <label className="flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2">
         <Search className="h-4 w-4 flex-none text-ink-soft" />
@@ -133,6 +173,67 @@ export function WarnsBrowser({ groups, threshold }: { groups: PlayerWarns[]; thr
               </ul>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Modal: poner warn eligiendo jugador */}
+      {addOpen && (
+        <div
+          onClick={() => setAddOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-2xl border border-line bg-surface p-4 shadow-xl"
+          >
+            <p className="mb-2 font-extrabold text-ink">⚠️ Poner warn</p>
+            <select
+              value={selTag}
+              onChange={(e) => setSelTag(e.target.value)}
+              className="mb-2 w-full rounded-lg border border-line bg-surface-2 px-2.5 py-2 text-sm font-semibold text-ink outline-none focus:border-gold"
+            >
+              <option value="">— elige jugador —</option>
+              {members.map((m) => (
+                <option key={m.tag} value={m.tag}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={2}
+              maxLength={300}
+              placeholder="Motivo del warn…"
+              className="w-full resize-none rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-gold"
+            />
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {WARN_PRESETS.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setReason(p)}
+                  className="rounded-full border border-line bg-surface-2 px-2.5 py-1 text-[11px] font-bold text-ink-soft hover:bg-line"
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setAddOpen(false)}
+                className="rounded-full px-4 py-2 text-sm font-bold text-ink-soft hover:bg-surface-2"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={submitAdd}
+                disabled={busy || !selTag || !reason.trim()}
+                className="rounded-full bg-banner px-4 py-2 text-sm font-extrabold text-white transition hover:brightness-110 disabled:opacity-50"
+              >
+                {busy ? "Guardando…" : "Poner warn"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

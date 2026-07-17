@@ -58,7 +58,7 @@ export default async function MiembrosPage({
         href="/warns"
         className="mb-4 flex items-center gap-2 rounded-2xl border border-line bg-surface px-3.5 py-2.5 text-sm font-extrabold text-ink hover:bg-surface-2/60"
       >
-        ⚠️ Warns del clan
+        Warns del clan
         <span aria-hidden className="ml-auto text-ink-soft">›</span>
       </Link>
 

@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { MoreVertical } from "lucide-react";
 import { addWarn } from "@/app/miembros/actions";
 import { WARN_PRESETS } from "@/lib/warn-presets";
 
-// Acción rápida "poner warn" desde un listado. Va dentro de tarjetas que son
-// <Link>, así que corta la propagación para no navegar al abrir/usar el modal.
+// Menú de acciones (⋮) de una fila del listado. Va dentro de tarjetas <Link>,
+// así que corta la propagación para no navegar. Hoy solo "poner warn".
 export function QuickWarn({ tag, name }: { tag: string; name: string }) {
-  const [open, setOpen] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const [modal, setModal] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -27,32 +29,59 @@ export function QuickWarn({ tag, name }: { tag: string; name: string }) {
       setDone(true);
       setReason("");
       setTimeout(() => {
-        setOpen(false);
+        setModal(false);
         setDone(false);
       }, 1000);
     }
   }
 
   return (
-    <>
+    <span className="relative inline-flex">
       <button
         type="button"
         onClick={(e) => {
           stop(e);
-          setOpen(true);
+          setMenu((m) => !m);
         }}
-        title={`Poner warn a ${name}`}
-        aria-label={`Poner warn a ${name}`}
-        className="flex-none rounded-full border border-line px-2 py-0.5 text-xs font-extrabold text-banner transition hover:bg-banner/10"
+        title="Acciones"
+        aria-label={`Acciones de ${name}`}
+        className="flex-none rounded-full p-1 text-ink-soft transition hover:bg-surface-2"
       >
-        ⚠️
+        <MoreVertical className="h-4 w-4" />
       </button>
 
-      {open && (
+      {/* Menú */}
+      {menu && (
+        <>
+          <span
+            onClick={(e) => {
+              stop(e);
+              setMenu(false);
+            }}
+            className="fixed inset-0 z-40"
+          />
+          <div className="absolute right-0 top-7 z-50 w-44 overflow-hidden rounded-xl border border-line bg-surface shadow-xl">
+            <button
+              type="button"
+              onClick={(e) => {
+                stop(e);
+                setMenu(false);
+                setModal(true);
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-bold text-ink hover:bg-surface-2"
+            >
+              ⚠️ Poner warn
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Modal de warn */}
+      {modal && (
         <div
           onClick={(e) => {
             stop(e);
-            setOpen(false);
+            setModal(false);
           }}
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
         >
@@ -90,7 +119,7 @@ export function QuickWarn({ tag, name }: { tag: string; name: string }) {
                 type="button"
                 onClick={(e) => {
                   stop(e);
-                  setOpen(false);
+                  setModal(false);
                 }}
                 className="rounded-full px-4 py-2 text-sm font-bold text-ink-soft hover:bg-surface-2"
               >
@@ -108,6 +137,6 @@ export function QuickWarn({ tag, name }: { tag: string; name: string }) {
           </div>
         </div>
       )}
-    </>
+    </span>
   );
 }
