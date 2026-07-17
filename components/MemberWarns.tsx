@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { addWarn, resolveWarn } from "@/app/miembros/actions";
+import { WARN_PRESETS } from "@/lib/warn-presets";
 
 export interface WarnItem {
   id: number;
@@ -13,17 +14,6 @@ export interface WarnItem {
   resolution: string | null;
   status: "vigente" | "caducado" | "resuelto";
 }
-
-// Atajos de infracciones comunes (rellenan el motivo).
-const WARN_PRESETS = [
-  "No atacó en guerra",
-  "No dona",
-  "Inactivo",
-  "Falta de respeto / tóxico",
-  "Farmeo / robó espejo",
-  "No sigue instrucciones",
-  "Bajó de liga sin avisar",
-];
 
 const who = (email: string | null) => (email ? email.split("@")[0] : "alguien");
 const shortDate = (iso: string | null) =>

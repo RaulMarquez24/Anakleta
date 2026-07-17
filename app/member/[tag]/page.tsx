@@ -13,6 +13,7 @@ import { ThImage } from "@/components/ThImage";
 import { CopyTag } from "@/components/CopyTag";
 import { MemberNote } from "@/components/MemberNote";
 import { MemberWarns } from "@/components/MemberWarns";
+import { Section } from "@/components/Section";
 import { AccountLinker } from "@/components/AccountLinker";
 import { DiscordLink } from "@/components/DiscordLink";
 import { seasonLabel } from "@/components/WarBits";
@@ -262,48 +263,84 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
         )}
       </div>
 
-      {/* Nota manual del jugador */}
-      <div className="mb-5 rounded-2xl border border-line bg-surface p-4">
-        <p className="text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">Nota</p>
+      {/* Nota / Discord / Warns / Cuentas — plegables (visibles en resumen) */}
+      <Section
+        title="Nota"
+        summary={
+          history.note ? history.note : <span className="text-ink-soft">Sin nota · toca para añadir</span>
+        }
+      >
         <MemberNote
           tag={history.tag}
           initialNote={history.note}
           initialBy={history.noteBy}
           initialAt={history.noteAt}
         />
-      </div>
+      </Section>
 
-      {/* Cuenta de Discord (para etiquetarlo en los avisos) */}
-      <div className="mb-5 rounded-2xl border border-line bg-surface p-4">
-        <p className="text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">Discord</p>
+      <Section
+        title="Discord"
+        summary={
+          history.discordUsername ? (
+            <span className="font-semibold text-[#5865F2]">@{history.discordUsername}</span>
+          ) : (
+            <span className="text-ink-soft">Sin vincular · toca para vincular</span>
+          )
+        }
+      >
         <DiscordLink
           tag={history.tag}
           initialId={history.discordId}
           initialUsername={history.discordUsername}
           members={discordMembers}
         />
-      </div>
+      </Section>
 
-      {/* Warns (amonestaciones por incumplir normas) */}
-      <div className="mb-5 rounded-2xl border border-line bg-surface p-4">
-        <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">
-          ⚠️ Warns
-        </p>
+      <Section
+        title="⚠️ Warns"
+        defaultOpen={warns.vigentes.length > 0}
+        summary={
+          warns.vigentes.length + warns.caducados.length + warns.resueltos.length === 0 ? (
+            <span className="text-ink-soft">Sin warns 👌</span>
+          ) : (
+            <span>
+              {warns.vigentes.length > 0 && (
+                <span className="font-bold text-banner">{warns.vigentes.length} vigentes</span>
+              )}
+              {warns.vigentes.length > 0 && warns.caducados.length + warns.resueltos.length > 0 && " · "}
+              {warns.caducados.length > 0 && (
+                <span className="text-ink-soft">{warns.caducados.length} caducados</span>
+              )}
+              {warns.caducados.length > 0 && warns.resueltos.length > 0 && " · "}
+              {warns.resueltos.length > 0 && (
+                <span className="text-ink-soft">{warns.resueltos.length} resueltos</span>
+              )}
+            </span>
+          )
+        }
+      >
         <MemberWarns tag={history.tag} threshold={warnCfg.threshold} initial={warns} />
-      </div>
+      </Section>
 
-      {/* Cuentas de la persona (principal / secundarias) */}
-      <div className="mb-5 rounded-2xl border border-line bg-surface p-4">
-        <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">
-          Cuentas del jugador
-        </p>
+      <Section
+        title="Cuentas del jugador"
+        summary={
+          history.mainTag ? (
+            <span className="text-magenta">Cuenta secundaria</span>
+          ) : accGroup.length > 1 ? (
+            `${accGroup.length} cuentas vinculadas`
+          ) : (
+            <span className="text-ink-soft">Sin cuentas vinculadas</span>
+          )
+        }
+      >
         <AccountLinker
           tag={history.tag}
           mainTag={history.mainTag}
           group={accGroup}
           candidates={accCandidates}
         />
-      </div>
+      </Section>
 
       {/* Historial de liga (ranked semanal, bajo demanda) */}
       <Link

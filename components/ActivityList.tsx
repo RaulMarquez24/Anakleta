@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Search } from "lucide-react";
 import type { ActivityRow, ActivityCategory, ActivityPeriod } from "@/lib/history";
 
 const CAT: Record<ActivityCategory, { label: string; cls: string }> = {
@@ -74,6 +75,7 @@ export function ActivityList({
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>("todos");
   const [sort, setSort] = useState<Sort>(defaultSort);
+  const [q, setQ] = useState("");
 
   const counts = useMemo(
     () => ({
@@ -108,6 +110,11 @@ export function ActivityList({
     return arr;
   }, [members, filter, sort]);
 
+  const shown = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    return s ? view.filter((m) => `${m.name} ${m.tag}`.toLowerCase().includes(s)) : view;
+  }, [view, q]);
+
   const FILTERS: { key: Filter; label: string; count: number }[] = [
     { key: "todos", label: "Todos", count: members.length },
     { key: "expulsar", label: "Expulsar", count: counts.expulsar },
@@ -117,6 +124,18 @@ export function ActivityList({
 
   return (
     <>
+      {/* Buscador (nombre o tag) */}
+      <label className="mb-3 flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2">
+        <Search className="h-4 w-4 flex-none text-ink-soft" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Buscar por nombre o tag…"
+          className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-ink outline-none"
+        />
+        {q && <span className="flex-none text-[11px] font-bold text-ink-soft">{shown.length}</span>}
+      </label>
+
       {/* Periodo + Orden (desplegables) */}
       <div className="mb-3 grid grid-cols-2 gap-2">
         <label className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2 py-1.5">
@@ -162,7 +181,7 @@ export function ActivityList({
       </div>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
-        {view.map((m) => {
+        {shown.map((m) => {
           const cat = CAT[m.category];
           const susp = m.category === "expulsion" || m.category === "revisar";
           const stale = susp && m.staleDays != null && m.staleDays >= thresholdDays;

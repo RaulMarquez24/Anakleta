@@ -2,8 +2,10 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
+import { Search } from "lucide-react";
 import type { MemberOverviewRow } from "@/lib/dashboard";
 import { ThImage } from "@/components/ThImage";
+import { QuickWarn } from "@/components/QuickWarn";
 
 type SortKey =
   | "rank"
@@ -176,6 +178,7 @@ export function MembersTable({
   };
   const [key, setKey] = useState<SortKey>("rank");
   const [dir, setDir] = useState<"asc" | "desc">("desc");
+  const [q, setQ] = useState("");
 
   const sorted = useMemo(() => {
     const arr = [...members];
@@ -205,8 +208,27 @@ export function MembersTable({
 
   const arrow = (k: SortKey) => (k === key ? (dir === "asc" ? " ▲" : " ▼") : "");
 
+  const filtered = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    return s ? sorted.filter((m) => `${m.name} ${m.tag}`.toLowerCase().includes(s)) : sorted;
+  }, [sorted, q]);
+
   return (
     <>
+      {/* Buscador (nombre o tag) */}
+      <label className="mb-3 flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2">
+        <Search className="h-4 w-4 flex-none text-ink-soft" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Buscar por nombre o tag…"
+          className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-ink outline-none"
+        />
+        {q && (
+          <span className="flex-none text-[11px] font-bold text-ink-soft">{filtered.length}</span>
+        )}
+      </label>
+
       {/* Control de orden en móvil */}
       <div className="mb-3 flex items-center gap-2 sm:hidden">
         <label htmlFor="sort" className="text-xs font-bold text-ink-soft">Ordenar por</label>
@@ -231,7 +253,7 @@ export function MembersTable({
 
       {/* Móvil: tarjetas */}
       <div className="space-y-3 sm:hidden">
-        {sorted.map((m) => {
+        {filtered.map((m) => {
           const rb = roleBadge(m.role);
           const attention = m.donationsNegative;
           return (
@@ -247,7 +269,10 @@ export function MembersTable({
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide ${rb.cls}`}>{rb.label}</span>
                 {m.isNew && <NewBadge />}
                 {m.activeWarns > 0 && <WarnBadge n={m.activeWarns} />}
-                <span className="ml-auto"><WarPref pref={m.warPreference} /></span>
+                <span className="ml-auto flex items-center gap-2">
+                  <WarPref pref={m.warPreference} />
+                  <QuickWarn tag={m.tag} name={m.name} />
+                </span>
               </div>
               {/* Todo inline: liga · TH · nivel */}
               <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
@@ -288,7 +313,7 @@ export function MembersTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-line bg-surface">
-            {sorted.map((m) => {
+            {filtered.map((m) => {
               const rb = roleBadge(m.role);
               return (
                 <tr key={m.tag} className="hover:bg-surface-2/60">
@@ -300,6 +325,7 @@ export function MembersTable({
                     <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${rb.cls}`}>{rb.label}</span>
                     {m.isNew && <span className="ml-1"><NewBadge /></span>}
                     {m.activeWarns > 0 && <span className="ml-1"><WarnBadge n={m.activeWarns} /></span>}
+                    <span className="ml-2"><QuickWarn tag={m.tag} name={m.name} /></span>
                     {m.discordId ? (
                       <span className="ml-2 text-xs" title={`Discord: @${m.discordUsername ?? ""}`}>🎮</span>
                     ) : (

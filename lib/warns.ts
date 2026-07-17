@@ -87,6 +87,65 @@ export async function getMemberWarns(
   }
 }
 
+export interface PlayerWarns {
+  tag: string;
+  name: string;
+  vigentes: number;
+  caducados: number;
+  resueltos: number;
+  warns: Warn[]; // todos, orden desc, con su status
+}
+
+// Todos los warns del clan agrupados por jugador (para la vista de consulta).
+export async function getAllWarnsByMember(): Promise<PlayerWarns[]> {
+  try {
+    const { expiryDays } = await getWarnConfig();
+    const svc = createServerClient();
+    const { data } = await svc
+      .from("warns")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(50000);
+    const rows = data ?? [];
+    const tags = [...new Set(rows.map((r) => r.member_tag as string))];
+    const nameByTag = new Map<string, string>();
+    if (tags.length) {
+      const { data: mem } = await svc.from("members").select("tag, name").in("tag", tags);
+      for (const m of mem ?? []) nameByTag.set(m.tag as string, m.name as string);
+    }
+    const groups = new Map<string, PlayerWarns>();
+    for (const r of rows) {
+      const tag = r.member_tag as string;
+      const active = Boolean(r.active);
+      const createdAt = r.created_at as string;
+      const status = statusOf(active, createdAt, expiryDays);
+      const w: Warn = {
+        id: r.id as number,
+        reason: (r.reason as string) ?? "",
+        active,
+        createdBy: (r.created_by as string | null) ?? null,
+        createdAt,
+        resolvedBy: (r.resolved_by as string | null) ?? null,
+        resolvedAt: (r.resolved_at as string | null) ?? null,
+        resolution: (r.resolution as string | null) ?? null,
+        status,
+      };
+      if (!groups.has(tag))
+        groups.set(tag, { tag, name: nameByTag.get(tag) ?? tag, vigentes: 0, caducados: 0, resueltos: 0, warns: [] });
+      const g = groups.get(tag)!;
+      g.warns.push(w);
+      if (status === "vigente") g.vigentes++;
+      else if (status === "caducado") g.caducados++;
+      else g.resueltos++;
+    }
+    return [...groups.values()].sort(
+      (a, b) => b.vigentes - a.vigentes || b.warns.length - a.warns.length || a.name.localeCompare(b.name, "es"),
+    );
+  } catch {
+    return [];
+  }
+}
+
 // Nº de warns VIGENTES (activos y dentro de plazo) por tag. Para dashboard y actividad.
 export async function getActiveWarnCounts(): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
