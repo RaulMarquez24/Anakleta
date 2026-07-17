@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search } from "lucide-react";
+import { Search, Plus } from "lucide-react";
 import { addWarn } from "@/app/miembros/actions";
 import { WARN_PRESETS } from "@/lib/warn-presets";
 import type { PlayerWarns } from "@/lib/warns";
@@ -73,27 +73,28 @@ export function WarnsBrowser({
 
   return (
     <div className="space-y-3">
-      {members.length > 0 && (
-        <div className="flex justify-end">
+      {/* Buscador + poner warn (inline) */}
+      <div className="flex items-center gap-2">
+        <label className="flex flex-1 items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2">
+          <Search className="h-4 w-4 flex-none text-ink-soft" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar por jugador, tag o motivo…"
+            className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-ink outline-none"
+          />
+        </label>
+        {members.length > 0 && (
           <button
             onClick={() => setAddOpen(true)}
-            className="rounded-full bg-banner px-4 py-2 text-sm font-extrabold text-white transition hover:brightness-110"
+            aria-label="Poner warn"
+            title="Poner warn"
+            className="flex-none rounded-lg bg-banner p-2.5 text-white transition hover:brightness-110"
           >
-            ＋ Poner warn
+            <Plus className="h-5 w-5" strokeWidth={2.6} />
           </button>
-        </div>
-      )}
-
-      {/* Buscador */}
-      <label className="flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2">
-        <Search className="h-4 w-4 flex-none text-ink-soft" />
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por jugador, tag o motivo…"
-          className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-ink outline-none"
-        />
-      </label>
+        )}
+      </div>
 
       {/* Vigentes / Todos */}
       <div className="flex gap-1 rounded-full border border-line bg-surface p-1">
