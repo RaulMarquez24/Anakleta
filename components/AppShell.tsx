@@ -15,11 +15,13 @@ export async function AppShell({
   email,
   title,
   back,
+  headerAction,
   children,
 }: {
   email?: string | null;
   title: string;
   back?: string;
+  headerAction?: React.ReactNode; // acceso rápido a la derecha del header (junto a la lupa)
   children: React.ReactNode;
 }) {
   const [alert] = await Promise.all([
@@ -52,6 +54,9 @@ export async function AppShell({
                 </Link>
               )}
             </div>
+            {headerAction && (
+              <div className="absolute right-12 top-0 bottom-0 flex items-center">{headerAction}</div>
+            )}
             <HeaderSearch />
           </div>
         </header>
@@ -72,6 +77,9 @@ export async function AppShell({
               )}
               <h1 className="ribbon-title truncate text-2xl leading-none">{title}</h1>
             </div>
+            {headerAction && (
+              <div className="absolute right-12 top-0 bottom-0 flex items-center">{headerAction}</div>
+            )}
             <HeaderSearch />
           </div>
         </header>

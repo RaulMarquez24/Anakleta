@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ShieldAlert } from "lucide-react";
 import { getMembersOverview } from "@/lib/dashboard";
 import { getDepartures } from "@/lib/history";
 import { getMyPlayerTag } from "@/lib/profile";
@@ -43,7 +44,20 @@ export default async function MiembrosPage({
     }`;
 
   return (
-    <AppShell email={user?.email} title="Miembros">
+    <AppShell
+      email={user?.email}
+      title="Miembros"
+      headerAction={
+        <Link
+          href="/warns"
+          aria-label="Warns del clan"
+          title="Warns del clan"
+          className="flex-none rounded-full p-1.5 text-white transition hover:bg-white/15"
+        >
+          <ShieldAlert className="h-6 w-6" strokeWidth={2.4} />
+        </Link>
+      }
+    >
       {/* Pestañas Miembros | Exmiembros */}
       <div className="mb-4 flex gap-2">
         <Link href="/miembros" className={tabCls(tab === "activos")}>
@@ -53,14 +67,6 @@ export default async function MiembrosPage({
           📤 Exmiembros
         </Link>
       </div>
-
-      <Link
-        href="/warns"
-        className="mb-4 flex items-center gap-2 rounded-2xl border border-line bg-surface px-3.5 py-2.5 text-sm font-extrabold text-ink hover:bg-surface-2/60"
-      >
-        Warns del clan
-        <span aria-hidden className="ml-auto text-ink-soft">›</span>
-      </Link>
 
       {tab === "activos" ? (
         <MembersTable members={data.members} myTag={myTag} accountLinks={accountLinks} />
