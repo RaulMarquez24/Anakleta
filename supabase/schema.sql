@@ -153,6 +153,21 @@ create table if not exists settings (
   value text
 );
 
+-- Warns (amonestaciones) de miembros. Ver supabase/warns.sql. La caducidad se
+-- calcula en lectura (settings.warns_expiry_days); aquí solo se persiste el warn.
+create table if not exists warns (
+  id          bigint generated always as identity primary key,
+  member_tag  text not null,
+  reason      text not null,
+  active      boolean not null default true,
+  created_by  text,
+  created_at  timestamptz default now(),
+  resolved_by text,
+  resolved_at timestamptz,
+  resolution  text
+);
+create index if not exists warns_member_idx on warns (member_tag, created_at desc);
+
 -- Registro de ejecuciones de los crons (traza; ver supabase/cron_runs.sql).
 create table if not exists cron_runs (
   id         bigint generated always as identity primary key,

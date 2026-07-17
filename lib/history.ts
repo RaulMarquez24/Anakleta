@@ -1,5 +1,6 @@
 import { createServerClient } from "@/lib/supabase/server";
 import { donationsNegative } from "@/lib/dashboard";
+import { getActiveWarnCounts, getWarnConfig } from "@/lib/warns";
 
 const DAY_MS = 86_400_000;
 
@@ -137,6 +138,7 @@ export interface ActivityRow {
   kickScore: number; // mayor = más candidato a echar
   participationScore: number; // mayor = más participativo (candidato a subir)
   flags: string[]; // "faltillas" detectadas (no dona, no guerra, no sube liga, guerra off)
+  activeWarns: number; // warns vigentes (amonestaciones) del miembro
 }
 
 export type ActivityPeriod = "semana" | "mes" | "todo";
@@ -387,6 +389,8 @@ export async function getActivityReport(
     for (const s of warStat.values()) s.missedRounds.sort((a, b) => a - b);
   }
 
+  const [warnCounts, warnCfg] = await Promise.all([getActiveWarnCounts(), getWarnConfig()]);
+
   const rowsOut: ActivityRow[] = active.map((m) => {
     const tag = m.tag as string;
     const role = (m.role as string | null) ?? null;
@@ -460,11 +464,18 @@ export async function getActivityReport(
     if (warsInPeriod > 0 && w.played === 0) flags.push("🚫 No juega guerras");
     if (trophies != null && trophies === 0) flags.push("🎯 Sin competitivo esta semana");
     if (lastWarPref.get(tag) === "out") flags.push("💤 Guerra desactivada");
+    const activeWarns = warnCounts.get(tag) ?? 0;
+    if (activeWarns > 0) flags.push(`⚠️ ${activeWarns} warn${activeWarns === 1 ? "" : "s"}`);
 
     const isStaff = role === "leader" || role === "coLeader";
     let category: ActivityCategory;
     if (isStaff) category = "mando";
-    else if ((staleDays != null && staleDays >= 14) || w.missed >= 3 || flags.length >= 3)
+    else if (
+      (staleDays != null && staleDays >= 14) ||
+      w.missed >= 3 ||
+      flags.length >= 3 ||
+      activeWarns >= warnCfg.threshold
+    )
       category = "expulsion";
     else if (
       (staleDays != null && staleDays >= THRESHOLD_DAYS) ||
@@ -492,7 +503,8 @@ export async function getActivityReport(
         w.missed * 8 +
         (donNeg ? 8 : 0) +
         (staleDays != null && staleDays >= THRESHOLD_DAYS ? 10 : 0) +
-        flags.length * 4;
+        flags.length * 4 +
+        activeWarns * 6;
     }
 
     return {
@@ -525,6 +537,7 @@ export async function getActivityReport(
       // Participación (para ascensos): donaciones + estrellas + ataques, penaliza fallos.
       participationScore: (donations ?? 0) + w.stars * 100 + w.attacks * 50 - w.missed * 300,
       flags,
+      activeWarns,
     };
   });
 

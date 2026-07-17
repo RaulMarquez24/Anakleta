@@ -1,4 +1,5 @@
 import { createServerClient } from "@/lib/supabase/server";
+import { getActiveWarnCounts } from "@/lib/warns";
 
 // Las donaciones "cuentan negativo" (leeching) solo si donó poco (< 1000) Y le
 // han dado bastante más de lo que aportó (recibidas − donadas ≥ 1000). Así no
@@ -59,6 +60,7 @@ export interface MemberOverviewRow {
   mainName: string | null; // nombre de la principal (para el badge)
   discordId: string | null; // cuenta de Discord vinculada
   discordUsername: string | null;
+  activeWarns: number; // warns vigentes (para el badge y el escalado)
 }
 
 export interface DashboardData {
@@ -181,6 +183,8 @@ export async function getMembersOverview(): Promise<DashboardData> {
   const NEW_MS = 7 * 86_400_000;
   const MARGIN_MS = 12 * 3_600_000;
 
+  const warnCounts = await getActiveWarnCounts(); // warns vigentes por tag
+
   const rows: MemberOverviewRow[] = (members ?? []).map((m) => {
     const cur = latestByTag.get(m.tag as string);
     const prev = prevByTag.get(m.tag as string);
@@ -225,6 +229,7 @@ export async function getMembersOverview(): Promise<DashboardData> {
       mainName: m.main_tag ? (nameByTag.get(m.main_tag as string) ?? null) : null,
       discordId: (m.discord_id as string | null) ?? null,
       discordUsername: (m.discord_username as string | null) ?? null,
+      activeWarns: warnCounts.get(m.tag as string) ?? 0,
     };
   });
 

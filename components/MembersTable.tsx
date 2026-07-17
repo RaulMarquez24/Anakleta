@@ -49,6 +49,17 @@ function NewBadge() {
   );
 }
 
+function WarnBadge({ n }: { n: number }) {
+  return (
+    <span
+      className="rounded-full bg-banner/15 px-2 py-0.5 text-[10px] font-extrabold text-banner"
+      title={`${n} warn${n === 1 ? "" : "s"} vigente${n === 1 ? "" : "s"}`}
+    >
+      ⚠️ {n}
+    </span>
+  );
+}
+
 function valueOf(m: MemberOverviewRow, key: SortKey): number | string {
   switch (key) {
     case "rank": return m.leagueTierId ?? -1;
@@ -235,6 +246,7 @@ export function MembersTable({
                 {altOf(m).mainTag && <AltBadge of={altOf(m).mainName} />}
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide ${rb.cls}`}>{rb.label}</span>
                 {m.isNew && <NewBadge />}
+                {m.activeWarns > 0 && <WarnBadge n={m.activeWarns} />}
                 <span className="ml-auto"><WarPref pref={m.warPreference} /></span>
               </div>
               {/* Todo inline: liga · TH · nivel */}
@@ -287,6 +299,7 @@ export function MembersTable({
                     {altOf(m).mainTag && <span className="ml-2"><AltBadge of={altOf(m).mainName} /></span>}
                     <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${rb.cls}`}>{rb.label}</span>
                     {m.isNew && <span className="ml-1"><NewBadge /></span>}
+                    {m.activeWarns > 0 && <span className="ml-1"><WarnBadge n={m.activeWarns} /></span>}
                     {m.discordId ? (
                       <span className="ml-2 text-xs" title={`Discord: @${m.discordUsername ?? ""}`}>🎮</span>
                     ) : (

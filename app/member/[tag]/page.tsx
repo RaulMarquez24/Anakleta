@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getMemberHistory, getActivityReport, type ActivityRow } from "@/lib/history";
 import { getMemberWarLog } from "@/lib/war-history";
+import { getMemberWarns, getWarnConfig } from "@/lib/warns";
 import { getMyPlayerTag } from "@/lib/profile";
 import { getAccountLinks, accountGroup } from "@/lib/accounts";
 import { getGuildMembers } from "@/lib/discord";
@@ -11,6 +12,7 @@ import { LineChart, type ChartPoint } from "@/components/LineChart";
 import { ThImage } from "@/components/ThImage";
 import { CopyTag } from "@/components/CopyTag";
 import { MemberNote } from "@/components/MemberNote";
+import { MemberWarns } from "@/components/MemberWarns";
 import { AccountLinker } from "@/components/AccountLinker";
 import { DiscordLink } from "@/components/DiscordLink";
 import { seasonLabel } from "@/components/WarBits";
@@ -70,14 +72,17 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
 
   const { tag } = await params;
   const decoded = decodeURIComponent(tag);
-  const [history, report, warLog, myTag, accountLinks, discordMembers] = await Promise.all([
-    getMemberHistory(decoded),
-    getActivityReport("todo").catch(() => null),
-    getMemberWarLog(decoded),
-    getMyPlayerTag(),
-    getAccountLinks(),
-    getGuildMembers().catch(() => []),
-  ]);
+  const [history, report, warLog, myTag, accountLinks, discordMembers, warns, warnCfg] =
+    await Promise.all([
+      getMemberHistory(decoded),
+      getActivityReport("todo").catch(() => null),
+      getMemberWarLog(decoded),
+      getMyPlayerTag(),
+      getAccountLinks(),
+      getGuildMembers().catch(() => []),
+      getMemberWarns(decoded),
+      getWarnConfig(),
+    ]);
   if (!history) notFound();
   const { members: accGroup } = accountGroup(accountLinks, decoded);
   const accCandidates = accountLinks.filter((l) => l.tag !== decoded);
@@ -277,6 +282,14 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
           initialUsername={history.discordUsername}
           members={discordMembers}
         />
+      </div>
+
+      {/* Warns (amonestaciones por incumplir normas) */}
+      <div className="mb-5 rounded-2xl border border-line bg-surface p-4">
+        <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-ink-soft">
+          ⚠️ Warns
+        </p>
+        <MemberWarns tag={history.tag} threshold={warnCfg.threshold} initial={warns} />
       </div>
 
       {/* Cuentas de la persona (principal / secundarias) */}

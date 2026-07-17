@@ -94,3 +94,55 @@ export async function setMemberDiscord(
     .eq("tag", tag);
   return { ok: !error };
 }
+
+// --- Warns (amonestaciones por incumplir normas) ---
+
+export interface NewWarn {
+  id: number;
+  reason: string;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+// Amonesta a un miembro. Cualquier colíder; queda registrado quién y cuándo.
+export async function addWarn(tag: string, reason: string): Promise<{ ok: boolean; warn?: NewWarn }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false };
+  const clean = reason.trim().slice(0, 300);
+  if (!tag || !clean) return { ok: false };
+
+  const svc = createServerClient();
+  const { data, error } = await svc
+    .from("warns")
+    .insert({ member_tag: tag, reason: clean, created_by: user.email ?? null })
+    .select("id, reason, created_by, created_at")
+    .single();
+  if (error || !data) return { ok: false };
+  return {
+    ok: true,
+    warn: {
+      id: data.id as number,
+      reason: data.reason as string,
+      createdBy: (data.created_by as string | null) ?? null,
+      createdAt: data.created_at as string,
+    },
+  };
+}
+
+// Resuelve un warn (deja de contar) guardando quién y el desenlace. No borra.
+export async function resolveWarn(
+  id: number,
+  resolution: string,
+): Promise<{ ok: boolean; by?: string | null; at?: string | null }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false };
+  const by = user.email ?? null;
+  const at = new Date().toISOString();
+  const svc = createServerClient();
+  const { error } = await svc
+    .from("warns")
+    .update({ active: false, resolved_by: by, resolved_at: at, resolution: resolution.trim().slice(0, 300) || null })
+    .eq("id", id);
+  if (error) return { ok: false };
+  return { ok: true, by, at };
+}
