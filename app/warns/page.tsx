@@ -15,7 +15,7 @@ export default async function WarnsPage() {
   ]);
 
   return (
-    <AppShell email={user?.email} title="⚠️ Warns del clan" back="/miembros">
+    <AppShell email={user?.email} title="Warns" back="/miembros">
       <p className="mb-4 text-sm text-ink-soft">
         Warns agrupados por jugador. Busca por nombre, tag o motivo; con &ldquo;Todos&rdquo; ves también
         los caducados y resueltos. Umbral para &ldquo;A echar&rdquo;: {cfg.threshold} vigentes; caducan a

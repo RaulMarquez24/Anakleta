@@ -39,7 +39,11 @@ export async function AppShell({
         {/* Cabecera móvil: ribbon centrado */}
         <header className="sticky top-0 z-20 border-b-2 border-gold/40 bg-gradient-to-b from-banner to-banner-dark shadow-lg sm:hidden">
           <div className="relative flex items-center justify-center px-4 py-3">
-            {back && <BackButton fallback={back} />}
+            {back ? (
+              <BackButton fallback={back} />
+            ) : headerAction ? (
+              <div className="absolute left-3 top-0 bottom-0 flex items-center">{headerAction}</div>
+            ) : null}
             <div className="min-w-0 text-center">
               {back ? (
                 <>
@@ -54,9 +58,6 @@ export async function AppShell({
                 </Link>
               )}
             </div>
-            {headerAction && (
-              <div className="absolute right-12 top-0 bottom-0 flex items-center">{headerAction}</div>
-            )}
             <HeaderSearch />
           </div>
         </header>
@@ -69,6 +70,7 @@ export async function AppShell({
             }`}
           >
             {back && <BackButton fallback={back} />}
+            {headerAction}
             <div className="min-w-0">
               {back && (
                 <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#f6d9b0]">
@@ -77,9 +79,6 @@ export async function AppShell({
               )}
               <h1 className="ribbon-title truncate text-2xl leading-none">{title}</h1>
             </div>
-            {headerAction && (
-              <div className="absolute right-12 top-0 bottom-0 flex items-center">{headerAction}</div>
-            )}
             <HeaderSearch />
           </div>
         </header>
