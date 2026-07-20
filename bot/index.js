@@ -722,12 +722,10 @@ function renderLanding() {
   @keyframes pulse{ 0%{box-shadow:0 0 0 0 ${dot}aa} 70%{box-shadow:0 0 0 10px ${dot}00} 100%{box-shadow:0 0 0 0 ${dot}00} }
   .presence{ color:var(--soft); font-size:13px; margin-bottom:18px; }
 
-  .grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:16px; }
-  .stat{ background:rgba(0,0,0,.32); border:1px solid var(--line); border-radius:16px; padding:14px 8px; transition:transform .2s, border-color .2s; }
-  .stat:hover{ transform:translateY(-4px); border-color:var(--gold); }
-  .stat .n{ font-size:24px; font-weight:900; color:var(--gold); }
-  .stat .n span{ font-size:12px; }
-  .stat .l{ font-size:10px; letter-spacing:.6px; color:var(--soft); text-transform:uppercase; font-weight:800; margin-top:2px; }
+  .meta{ display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:center;
+         color:var(--soft); font-size:12px; font-weight:800; margin-bottom:18px; }
+  .meta .sep{ opacity:.4; }
+  .meta b{ color:var(--gold); }
 
   .war{ border-radius:16px; padding:14px; margin-bottom:16px; font-size:14px; font-weight:600;
         background:rgba(0,0,0,.28); border:1px solid var(--line); }
@@ -778,10 +776,11 @@ function renderLanding() {
       <div><span class="status"><span class="pdot"></span> ${statusLabel}</span></div>
       <div class="presence">${esc(lastPresenceText)}</div>
 
-      <div class="grid reveal d1">
-        <div class="stat"><div class="n" id="uptime">—</div><div class="l">Encendido</div></div>
-        <div class="stat"><div class="n"><span data-count="${ping}">0</span><span>ms</span></div><div class="l">Latencia</div></div>
-        <div class="stat"><div class="n" data-count="${guilds}">0</div><div class="l">Servidores</div></div>
+      <div class="meta reveal d1">
+        <span>⏱ <b id="uptime">—</b></span>
+        <span class="sep">·</span>
+        <span>📶 <b>${ping}</b> ms</span>
+        ${guilds > 1 ? `<span class="sep">·</span><span>🌐 <b>${guilds}</b> servidores</span>` : ""}
       </div>
 
       <div class="war ${warTone} reveal d2">${warLine}</div>
@@ -805,10 +804,6 @@ function renderLanding() {
   var el=document.getElementById("uptime");
   function tick(){ el.textContent=fmt(boot); boot++; }
   tick(); setInterval(tick,1000);
-  document.querySelectorAll("[data-count]").forEach(function(n){
-    var end=parseInt(n.getAttribute("data-count"),10)||0, cur=0, step=Math.max(1,Math.round(end/40));
-    var t=setInterval(function(){ cur+=step; if(cur>=end){cur=end; clearInterval(t);} n.textContent=cur; },28);
-  });
 </script>
 </body></html>`;
 }
