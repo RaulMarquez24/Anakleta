@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { Pencil, Eye, Send } from "lucide-react";
 import { saveRulesText, publishRules } from "@/app/normas/actions";
 
 export interface RuleTextView {
@@ -14,11 +15,29 @@ export interface TokenLegend {
   value: number;
 }
 
+const SHORT: Record<string, string> = {
+  rules_general: "Generales",
+  rules_war: "Guerras",
+  rules_cwl: "CWL",
+};
+
 // Sustituye {token} por su valor actual (espejo cliente de applyRuleTokens).
 function resolveTokens(text: string, tokens: Record<string, number>): string {
   return text.replace(/\{([a-z_]+)\}/g, (m, tok: string) =>
     tok in tokens ? String(tokens[tok]) : m,
   );
+}
+
+// Render mínimo de Discord-markdown: **negrita** y *cursiva*, respetando saltos
+// e indentación (el contenedor usa whitespace-pre-wrap).
+function renderMd(text: string): string {
+  const esc = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  return esc
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>");
 }
 
 export function RulesTextEditor({
@@ -35,22 +54,23 @@ export function RulesTextEditor({
   const [values, setValues] = useState<Record<string, string>>(
     Object.fromEntries(blocks.map((b) => [b.key, b.value])),
   );
+  const [active, setActive] = useState<string>(blocks[0]?.key ?? "");
+  const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const refs = useRef<Record<string, HTMLTextAreaElement | null>>({});
-  const lastKey = useRef<string>(blocks[0]?.key ?? "");
+  const taRef = useRef<HTMLTextAreaElement | null>(null);
 
-  // Inserta un token en el punto del cursor del último textarea enfocado.
+  const block = blocks.find((b) => b.key === active) ?? blocks[0];
+  const value = values[active] ?? "";
+  const dirty = value !== (block?.value ?? "");
+
   function insertToken(token: string) {
-    const key = lastKey.current || blocks[0]?.key;
-    if (!key) return;
-    const el = refs.current[key];
-    const cur = values[key] ?? "";
+    const el = taRef.current;
     const tok = `{${token}}`;
-    const start = el ? el.selectionStart : cur.length;
-    const end = el ? el.selectionEnd : cur.length;
-    const next = cur.slice(0, start) + tok + cur.slice(end);
-    setValues((v) => ({ ...v, [key]: next }));
+    const start = el ? el.selectionStart : value.length;
+    const end = el ? el.selectionEnd : value.length;
+    const next = value.slice(0, start) + tok + value.slice(end);
+    setValues((v) => ({ ...v, [active]: next }));
     if (el) {
       const pos = start + tok.length;
       requestAnimationFrame(() => {
@@ -60,107 +80,134 @@ export function RulesTextEditor({
     }
   }
 
-  async function saveAll() {
+  async function saveActive() {
     setBusy("save");
     setMsg(null);
-    const r = await saveRulesText(values);
+    const r = await saveRulesText({ [active]: value });
     setBusy(null);
-    setMsg(r.ok ? { ok: true, text: "Texto guardado." } : { ok: false, text: r.error ?? "Error." });
+    setMsg(r.ok ? { ok: true, text: "Guardado." } : { ok: false, text: r.error ?? "Error." });
+    if (r.ok) setEditing(false);
   }
 
   async function publish(keys?: string[]) {
-    setBusy(keys ? keys[0] : "all");
+    setBusy(keys ? "one" : "all");
     setMsg(null);
-    // Guarda antes de publicar para que salga lo que se ve.
-    await saveRulesText(values);
+    await saveRulesText({ [active]: value }); // guarda lo que ves antes de publicar
     const r = await publishRules(keys);
     setBusy(null);
     setMsg(
       r.ok
-        ? { ok: true, text: `Publicado en Discord (${r.sent} ${r.sent === 1 ? "bloque" : "bloques"}).` }
+        ? { ok: true, text: `Publicado (${r.sent} ${r.sent === 1 ? "bloque" : "bloques"}).` }
         : { ok: false, text: r.error ?? "No se pudo publicar." },
     );
   }
 
-  const hasTokens = legend.length > 0;
-
   return (
-    <div className="space-y-3">
-      {hasTokens && (
-        <div className="rounded-2xl border border-line bg-surface-2/50 p-3 text-xs">
-          <p className="mb-1.5 font-extrabold text-ink">
-            Tokens automáticos <span className="font-semibold text-ink-soft">(se sustituyen por el ajuste actual al publicar)</span>
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {legend.map((l) => (
-              <button
-                key={l.token}
-                type="button"
-                onClick={() => insertToken(l.token)}
-                title={`Insertar ${l.label} (= ${l.value})`}
-                className="rounded-lg bg-surface px-2 py-1 font-bold text-ink transition hover:bg-gold/15"
-              >
-                <code className="text-gold-deep">{`{${l.token}}`}</code> = {l.value}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      {blocks.map((b) => (
-        <div key={b.key} className="rounded-2xl border border-line bg-surface p-4">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="font-extrabold text-ink">{b.title}</p>
+    <div>
+      {/* Pestañas */}
+      <div className="mb-3 grid grid-cols-3 gap-1.5">
+        {blocks.map((b) => (
+          <button
+            key={b.key}
+            onClick={() => {
+              setActive(b.key);
+              setEditing(false);
+              setMsg(null);
+            }}
+            className={`rounded-xl px-2 py-2 text-sm font-extrabold transition ${
+              active === b.key ? "bg-gold text-banner-dark" : "bg-surface-2 text-ink-soft hover:bg-line"
+            }`}
+          >
+            {SHORT[b.key] ?? b.title}
+          </button>
+        ))}
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-line bg-surface">
+        {/* Cabecera del bloque activo */}
+        <div className="flex items-center justify-between gap-2 border-b border-line p-3">
+          <span className="truncate font-extrabold text-ink">{block?.title}</span>
+          <div className="flex flex-none items-center gap-1.5">
             <button
-              onClick={() => publish([b.key])}
+              onClick={() => setEditing((e) => !e)}
+              className="flex items-center gap-1.5 rounded-full bg-surface-2 px-3 py-1.5 text-xs font-extrabold text-ink transition hover:bg-line"
+            >
+              {editing ? <Eye className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+              {editing ? "Ver" : "Editar"}
+            </button>
+            <button
+              onClick={() => publish([active])}
               disabled={!discordReady || busy != null}
               title={discordReady ? "Publicar este bloque en Discord" : "Discord no configurado"}
-              className="flex-none rounded-full bg-surface-2 px-3 py-1 text-xs font-extrabold text-ink transition hover:bg-line disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-full bg-[#5865F2] px-3 py-1.5 text-xs font-extrabold text-white transition hover:brightness-110 disabled:opacity-50"
             >
-              {busy === b.key ? "Publicando…" : "Publicar"}
+              <Send className="h-3.5 w-3.5" />
+              {busy === "one" ? "…" : "Publicar"}
             </button>
           </div>
-          <textarea
-            ref={(el) => {
-              refs.current[b.key] = el;
-            }}
-            value={values[b.key]}
-            onChange={(e) => setValues((v) => ({ ...v, [b.key]: e.target.value }))}
-            onFocus={() => {
-              lastKey.current = b.key;
-            }}
-            rows={10}
-            className="w-full resize-y rounded-xl border border-line bg-surface-2 p-3 text-sm text-ink outline-none focus:border-gold"
-          />
-          <p className="mt-1 text-right text-[11px] font-semibold text-ink-soft">
-            {values[b.key]?.length ?? 0} / 1990 caracteres
-          </p>
-          {/^\{|\{[a-z_]+\}/.test(values[b.key] ?? "") && (
-            <details className="mt-2">
-              <summary className="cursor-pointer text-xs font-bold text-ink-soft">
-                Vista previa (con los ajustes aplicados)
-              </summary>
-              <pre className="mt-1 whitespace-pre-wrap rounded-xl bg-surface-2/60 p-3 text-xs text-ink">
-                {resolveTokens(values[b.key] ?? "", tokens)}
-              </pre>
-            </details>
-          )}
         </div>
-      ))}
 
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          onClick={saveAll}
-          disabled={busy != null}
-          className="rounded-full border border-line bg-surface px-5 py-2 text-sm font-extrabold text-ink transition hover:bg-surface-2 disabled:opacity-50"
-        >
-          {busy === "save" ? "Guardando…" : "Guardar texto"}
-        </button>
+        {editing ? (
+          <div className="p-3">
+            {/* Tokens clicables */}
+            {legend.length > 0 && (
+              <div className="mb-2">
+                <p className="mb-1.5 text-[11px] font-bold text-ink-soft">
+                  Toca para insertar (se sustituye por su valor al publicar):
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {legend.map((l) => (
+                    <button
+                      key={l.token}
+                      type="button"
+                      onClick={() => insertToken(l.token)}
+                      title={`${l.label} = ${l.value}`}
+                      className="rounded-lg bg-surface-2 px-2 py-1 text-[11px] font-bold text-ink transition hover:bg-gold/15"
+                    >
+                      <code className="text-gold-deep">{`{${l.token}}`}</code>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <textarea
+              ref={taRef}
+              value={value}
+              onChange={(e) => setValues((v) => ({ ...v, [active]: e.target.value }))}
+              rows={16}
+              className="w-full resize-y rounded-xl border border-line bg-surface-2 p-3 font-mono text-xs text-ink outline-none focus:border-gold"
+            />
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold text-ink-soft">
+                {value.length} / 1990 caracteres
+              </span>
+              <button
+                onClick={saveActive}
+                disabled={busy != null || !dirty}
+                className="rounded-full bg-gold px-4 py-1.5 text-xs font-extrabold text-banner-dark transition hover:brightness-105 disabled:opacity-50"
+              >
+                {busy === "save" ? "Guardando…" : "Guardar"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* Vista renderizada (markdown, tokens resueltos) */
+          <div
+            className="whitespace-pre-wrap p-4 text-sm leading-relaxed text-ink [&_strong]:text-ink [&_strong]:font-extrabold"
+            dangerouslySetInnerHTML={{ __html: renderMd(resolveTokens(value, tokens)) }}
+          />
+        )}
+      </div>
+
+      {/* Acciones globales */}
+      <div className="mt-3 flex flex-wrap items-center gap-3">
         <button
           onClick={() => publish()}
           disabled={!discordReady || busy != null}
-          title={discordReady ? "Publicar todas las normas en Discord" : "Discord no configurado"}
-          className="rounded-full bg-gold px-5 py-2 text-sm font-extrabold text-banner-dark transition hover:brightness-105 disabled:opacity-50"
+          title={discordReady ? "Publicar las 3 normas en Discord" : "Discord no configurado"}
+          className="flex items-center gap-1.5 rounded-full bg-[#5865F2] px-5 py-2 text-sm font-extrabold text-white transition hover:brightness-110 disabled:opacity-50"
         >
+          <Send className="h-4 w-4" />
           {busy === "all" ? "Publicando…" : "Publicar todo en Discord"}
         </button>
         {msg && (
@@ -170,7 +217,7 @@ export function RulesTextEditor({
         )}
       </div>
       {!discordReady && (
-        <p className="text-xs text-ink-soft">
+        <p className="mt-2 text-xs text-ink-soft">
           Para publicar, configura el bot y el canal de reglas o de anuncios en el panel de Discord.
         </p>
       )}
