@@ -88,6 +88,14 @@ export function WarDetail({
   const prep = war.state === "preparation";
   const attacked = members.filter((m) => m.attacksUsed > 0).length;
 
+  // Guerras anteriores a esta función no guardaron el objetivo/espejo (no se
+  // puede reconstruir: Clash no devuelve guerras normales ya terminadas).
+  const anyAttacks = members.some((m) => (m.attacks?.length ?? 0) > 0);
+  const anyTargetDetail = members.some((m) =>
+    m.attacks?.some((a) => a.defenderPosition != null || a.isMirror != null),
+  );
+  const missingDetail = anyAttacks && !anyTargetDetail;
+
   // 1er ataque = obligatorio (no lo hizo). El 2º es AYUDA, nunca "negativo".
   const obligatorio = members.filter((m) => m.attacksUsed === 0);
   // Miembros con el 2º libre (guerra no rematada): la lista de "pueden ayudar".
@@ -256,6 +264,12 @@ export function WarDetail({
               {attacked}/{members.length} atacaron
             </span>
           </h2>
+          {missingDetail && (
+            <p className="mb-2 rounded-xl border border-line bg-surface-2/50 px-3 py-2 text-xs text-ink-soft">
+              Guerra anterior al registro de objetivo y espejo: se ve quién atacó y su
+              resultado, pero no a qué base ni si respetó el espejo.
+            </p>
+          )}
           <div className="overflow-hidden rounded-2xl border border-line bg-surface">
             <ul className="divide-y divide-line">
               {members.map((m) => {
