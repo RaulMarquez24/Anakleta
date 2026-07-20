@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getMemberHistory, getActivityReport, type ActivityRow } from "@/lib/history";
-import { getMemberWarLog } from "@/lib/war-history";
+import { donationsNegative } from "@/lib/dashboard";
+import { getMemberWarLog, getMemberMirrorStats } from "@/lib/war-history";
+import { getMemberCapital, summarizeCapital } from "@/lib/capital";
+import { PlayerSeasonSummary } from "@/components/PlayerSeasonSummary";
 import { getMemberWarns, getWarnConfig } from "@/lib/warns";
 import { getMyPlayerTag } from "@/lib/profile";
 import { getAccountLinks, accountGroup } from "@/lib/accounts";
@@ -74,7 +77,7 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
 
   const { tag } = await params;
   const decoded = decodeURIComponent(tag);
-  const [history, report, warLog, myTag, accountLinks, discordMembers, warns, warnCfg] =
+  const [history, report, warLog, myTag, accountLinks, discordMembers, warns, warnCfg, mirror] =
     await Promise.all([
       getMemberHistory(decoded),
       getActivityReport("todo").catch(() => null),
@@ -84,8 +87,20 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
       getGuildMembers().catch(() => []),
       getMemberWarns(decoded),
       getWarnConfig(),
+      getMemberMirrorStats(decoded).catch(() => null),
     ]);
   if (!history) notFound();
+
+  // Resumen de temporada: capital (desde su alta), donaciones (última captura =
+  // temporada actual) y guerra (del informe de actividad).
+  const capitalWeeks = await getMemberCapital(
+    decoded,
+    history.firstSeenAt ? new Date(history.firstSeenAt).getTime() : null,
+  ).catch(() => []);
+  const capital = summarizeCapital(capitalWeeks);
+  const lastSnap = history.snapshots[history.snapshots.length - 1];
+  const donDone = lastSnap?.donations ?? null;
+  const donRecv = lastSnap?.donationsReceived ?? null;
   const { members: accGroup } = accountGroup(accountLinks, decoded);
   const accCandidates = accountLinks.filter((l) => l.tag !== decoded);
   const isMe = myTag != null && myTag === decoded;
@@ -382,6 +397,46 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
         </Stat>
         <Stat label="Visto desde (aprox.)">{fmtDate(history.firstSeenAt)}</Stat>
       </div>
+
+      {/* Resumen de cumplimiento (guerra, espejo, donaciones, capital) */}
+      {(() => {
+        const issues: string[] = [];
+        if ((row?.warMissed ?? 0) > 0) issues.push(`${row!.warMissed} sin atacar`);
+        if ((mirror?.stolen ?? 0) > 0) issues.push(`${mirror!.stolen} robó espejo`);
+        if (donationsNegative(donDone, donRecv)) issues.push("balance bajo");
+        const capMissed = capital.weekends - capital.participated;
+        if (capMissed > 0) issues.push(`${capMissed} findes sin capital`);
+        const summary =
+          issues.length > 0 ? (
+            <span className="text-banner">⚠️ {issues.join(" · ")}</span>
+          ) : (
+            <span className="text-grass">Sin incidencias</span>
+          );
+        return (
+          <div className="mb-5">
+            <Section title="Cumplimiento (temporada)" summary={summary} defaultOpen={false}>
+              <PlayerSeasonSummary
+                war={{
+                  played: row?.warsPlayed ?? 0,
+                  missed: row?.warMissed ?? 0,
+                  attacks: row?.warAttacks ?? 0,
+                  stars: row?.warStars ?? 0,
+                }}
+                mirror={
+                  mirror ?? { attacks: 0, mirror: 0, cleanup: 0, late: 0, stolen: 0, offmirror: 0 }
+                }
+                donations={{
+                  donations: donDone,
+                  received: donRecv,
+                  ratio: donRecv && donRecv > 0 ? donDone! / donRecv : null,
+                  negative: donationsNegative(donDone, donRecv),
+                }}
+                capital={capital}
+              />
+            </Section>
+          </div>
+        );
+      })()}
 
       {/* Historial de guerra por temporada */}
       {warLog.seasons.length > 0 && (

@@ -225,6 +225,28 @@ create unique index if not exists cwl_signups_season_discord_idx
 create index if not exists cwl_signups_season_order_idx
   on cwl_signups (season, created_at);
 
+-- Asaltos de Capital (Clan Capital Raids), un registro por fin de semana.
+create table if not exists capital_raids (
+  id          bigint generated always as identity primary key,
+  start_time  timestamptz unique,
+  end_time    timestamptz,
+  state       text,
+  total_loot  int,
+  captured_at timestamptz default now()
+);
+create table if not exists capital_raid_members (
+  id           bigint generated always as identity primary key,
+  raid_id      bigint references capital_raids(id) on delete cascade,
+  tag          text,
+  name         text,
+  attacks      int,
+  attack_limit int,
+  bonus_limit  int,
+  looted       int
+);
+create index if not exists capital_raid_members_raid_idx on capital_raid_members (raid_id);
+create index if not exists capital_raid_members_tag_idx on capital_raid_members (tag);
+
 -- Privilegios: con "expose new tables" desactivado, las tablas nuevas no reciben
 -- GRANTs automáticos. Concedemos acceso SOLO a service_role (el rol del servidor,
 -- usado por la SECRET KEY). NO se concede a anon/authenticated: los datos quedan

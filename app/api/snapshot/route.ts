@@ -4,6 +4,7 @@ import type { CocClan, CocPlayer } from "@/lib/coc-types";
 import { createServerClient } from "@/lib/supabase/server";
 import { createAuthServerClient } from "@/lib/supabase/auth-server";
 import { captureWar, type WarCaptureResult } from "@/lib/war-capture";
+import { captureCapitalRaids } from "@/lib/capital";
 import { upsertClanCard } from "@/lib/clan-card";
 import { logCronRun } from "@/lib/cron-log";
 
@@ -229,11 +230,18 @@ export async function POST(req: NextRequest) {
     // Grabación de la guerra actual / CWL: SOLO en modo completo (el refresco
     // rápido no toca la guerra). Resiliente: si falla, no tumba la captura.
     let war: WarCaptureResult | { error: string } | null = null;
+    let capitalRaids: number | { error: string } | null = null;
     if (mode === "full") {
       try {
         war = await captureWar(supabase, capturedAt);
       } catch (e) {
         war = { error: String(e) };
+      }
+      // Asaltos de capital (findes). Resiliente: si falla, no tumba la captura.
+      try {
+        capitalRaids = await captureCapitalRaids(supabase);
+      } catch (e) {
+        capitalRaids = { error: String(e) };
       }
     }
 
@@ -247,6 +255,7 @@ export async function POST(req: NextRequest) {
       members_deactivated: goneTags.length,
       returnees: returnees.length,
       war,
+      capital_raids: capitalRaids,
     };
     await logCronRun("snapshot", true, result, req.headers.get("x-actor") || "cron");
     return NextResponse.json(result);

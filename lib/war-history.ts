@@ -404,6 +404,97 @@ export async function getMemberWarLog(
   return { wars, seasons };
 }
 
+// Desglose de espejo/remate/robo de un miembro en sus últimas guerras. Clasifica
+// cada ataque suyo con el contexto de la guerra (orden global + ventana de 5h).
+export interface MirrorStats {
+  attacks: number;
+  mirror: number;
+  cleanup: number;
+  late: number;
+  stolen: number;
+  offmirror: number;
+}
+const EMPTY_MIRROR: MirrorStats = {
+  attacks: 0,
+  mirror: 0,
+  cleanup: 0,
+  late: 0,
+  stolen: 0,
+  offmirror: 0,
+};
+
+export async function getMemberMirrorStats(tag: string, limit = 20): Promise<MirrorStats> {
+  const supabase = createServerClient();
+  const { data: wm } = await supabase
+    .from("war_members")
+    .select("war_id")
+    .eq("tag", tag)
+    .limit(2000);
+  if (!wm || wm.length === 0) return { ...EMPTY_MIRROR };
+
+  const ids = [...new Set(wm.map((m) => m.war_id as number))];
+  const { data: warRows } = await supabase
+    .from("wars")
+    .select("id, is_cwl, end_time, start_time")
+    .in("id", ids)
+    .order("start_time", { ascending: false })
+    .limit(limit);
+  if (!warRows || warRows.length === 0) return { ...EMPTY_MIRROR };
+  const warIds = warRows.map((w) => w.id as number);
+  const warMeta = new Map(warRows.map((w) => [w.id as number, w]));
+
+  const { data: atks } = await supabase
+    .from("war_attacks")
+    .select("war_id, attacker_tag, defender_tag, attack_order, is_mirror, defender_position, first_seen_at")
+    .in("war_id", warIds)
+    .limit(20000);
+
+  const byWar = new Map<number, Record<string, unknown>[]>();
+  for (const a of atks ?? []) {
+    const w = a.war_id as number;
+    if (!byWar.has(w)) byWar.set(w, []);
+    byWar.get(w)!.push(a);
+  }
+
+  const stats: MirrorStats = { ...EMPTY_MIRROR };
+  for (const [wid, list] of byWar) {
+    const meta = warMeta.get(wid);
+    if (!meta) continue;
+    const isCwl = Boolean(meta.is_cwl);
+    const endMs = meta.end_time ? Date.parse(meta.end_time as string) : null;
+    const firstOrder = new Map<string, number>();
+    for (const a of list) {
+      const dt = a.defender_tag as string | null;
+      if (!dt) continue;
+      const o = (a.attack_order as number | null) ?? 0;
+      const prev = firstOrder.get(dt);
+      if (prev == null || o < prev) firstOrder.set(dt, o);
+    }
+    for (const a of list) {
+      if ((a.attacker_tag as string) !== tag) continue;
+      const dt = a.defender_tag as string | null;
+      const order = (a.attack_order as number | null) ?? 0;
+      const seen = a.first_seen_at ? Date.parse(a.first_seen_at as string) : null;
+      const st = classifyAttackStatus({
+        isMirror: (a.is_mirror as boolean | null) ?? null,
+        defenderPosition: (a.defender_position as number | null) ?? null,
+        fresh: !!dt && firstOrder.get(dt) === order,
+        isCwl,
+        endMs,
+        seenMs: seen,
+      });
+      if (!st) continue;
+      stats.attacks++;
+      if (st === "mirror") stats.mirror++;
+      else if (st === "cleanup") stats.cleanup++;
+      else if (st === "late") stats.late++;
+      else if (st === "stolen") stats.stolen++;
+      else if (st === "offmirror") stats.offmirror++;
+    }
+  }
+  return stats;
+}
+
 // Detalle de una guerra: cabecera + alineación de nuestro clan.
 export async function getWarDetail(
   id: number,
