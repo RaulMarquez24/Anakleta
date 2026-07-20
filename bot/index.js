@@ -14,6 +14,7 @@ import {
   MessageFlags,
   ActionRowBuilder,
   StringSelectMenuBuilder,
+  ActivityType,
 } from "discord.js";
 import { createClient } from "@supabase/supabase-js";
 import { classifyIntent } from "./match.js";
@@ -209,9 +210,42 @@ const COMMANDS = [
   { name: "help", description: "Cómo funciona la inscripción a la CWL" },
 ];
 
+// --- Estado dinámico (lo que se ve bajo el nombre del bot) ---
+// En guerra: "⚔️ En guerra vs X". Preparación: "🛡️ Preparando guerra".
+// Si no: "👀 Añakleta · N/50". Se refresca solo cada pocos minutos.
+async function updatePresence(c) {
+  try {
+    const [war, clan] = await Promise.all([
+      coc.getCurrentWar().catch(() => null),
+      coc.getClan().catch(() => null),
+    ]);
+    let text;
+    if (war?.state === "inWar" && war.opponent?.name) {
+      const cs = war.clan?.stars ?? 0;
+      const os = war.opponent?.stars ?? 0;
+      text = `⚔️ Guerra vs ${war.opponent.name} (${cs}-${os})`;
+    } else if (war?.state === "preparation") {
+      text = `🛡️ Preparando la guerra`;
+    } else if (clan?.members != null) {
+      text = `👀 ${clan.name ?? "Añakleta"} · ${clan.members}/50`;
+    } else {
+      text = `👀 Vigilando el clan`;
+    }
+    c.user.setPresence({
+      status: "online",
+      activities: [{ name: text, type: ActivityType.Custom, state: text }],
+    });
+  } catch (err) {
+    console.error("[presence]", err?.message ?? err);
+  }
+}
+
 client.once(Events.ClientReady, async (c) => {
   console.log(`Bot conectado como ${c.user.tag} — ${BOT_VERSION}`);
   console.log(`DISCORD_GUILD_ID=${DISCORD_GUILD_ID ?? "(sin definir)"}`);
+  // Estado dinámico: ahora y cada 5 minutos.
+  updatePresence(c);
+  setInterval(() => updatePresence(c), 5 * 60_000);
   try {
     const set = DISCORD_GUILD_ID
       ? await c.application.commands.set(COMMANDS, DISCORD_GUILD_ID) // instantáneo
