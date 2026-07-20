@@ -247,15 +247,15 @@ client.once(Events.ClientReady, async (c) => {
   updatePresence(c);
   setInterval(() => updatePresence(c), 5 * 60_000);
   try {
-    const set = DISCORD_GUILD_ID
-      ? await c.application.commands.set(COMMANDS, DISCORD_GUILD_ID) // instantáneo
-      : await c.application.commands.set(COMMANDS); // global (tarda ~1h en propagar)
+    // Registro GLOBAL: así los comandos salen en el perfil del bot ("Comandos")
+    // y en todos los servidores. La 1ª vez tarda ~1h en propagarse.
+    // Si antes se registraron por servidor, se limpian para no duplicarlos.
+    if (DISCORD_GUILD_ID) {
+      await c.application.commands.set([], DISCORD_GUILD_ID).catch(() => {});
+    }
+    const set = await c.application.commands.set(COMMANDS);
     const names = set.map((cmd) => `/${cmd.name}`).join(", ");
-    console.log(
-      DISCORD_GUILD_ID
-        ? `Slash commands registrados en el servidor ${DISCORD_GUILD_ID}: ${names}`
-        : `Slash commands registrados globalmente (tardan ~1h): ${names}`,
-    );
+    console.log(`Slash commands registrados globalmente (tardan ~1h la 1ª vez): ${names}`);
   } catch (err) {
     console.error("No se pudieron registrar los slash commands:", err);
   }
