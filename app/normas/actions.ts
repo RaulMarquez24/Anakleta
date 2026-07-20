@@ -5,14 +5,14 @@ import { getCurrentUser } from "@/lib/supabase/current-user";
 import { createServerClient } from "@/lib/supabase/server";
 import { sendClanMessage, discordConfigured } from "@/lib/discord";
 import {
-  RULE_FIELDS,
+  ALL_RULE_FIELDS,
   RULE_TEXT_BLOCKS,
   getRulesText,
-  getRulesConfig,
+  getAllTokenValues,
   applyRuleTokens,
 } from "@/lib/rules";
 
-const FIELD_BY_KEY = new Map(RULE_FIELDS.map((f) => [f.key, f]));
+const FIELD_BY_KEY = new Map(ALL_RULE_FIELDS.map((f) => [f.key, f]));
 const TEXT_KEYS = new Set(RULE_TEXT_BLOCKS.map((b) => b.key));
 
 // Guarda los valores de las normas (settings). Solo claves de RULE_FIELDS, con
@@ -92,7 +92,7 @@ export async function publishRules(
       error: "Configura el canal de reglas o de anuncios en el panel de Discord.",
     };
 
-  const [text, cfg] = await Promise.all([getRulesText(), getRulesConfig()]);
+  const [text, tokens] = await Promise.all([getRulesText(), getAllTokenValues()]);
   const keys =
     blockKeys && blockKeys.length > 0
       ? RULE_TEXT_BLOCKS.filter((b) => blockKeys.includes(b.key))
@@ -101,7 +101,7 @@ export async function publishRules(
   let sent = 0;
   for (const b of keys) {
     // Sustituye los tokens ({horas_robo_espejo}, …) por los valores configurados.
-    const content = applyRuleTokens((text[b.key] ?? b.default).trim(), cfg);
+    const content = applyRuleTokens((text[b.key] ?? b.default).trim(), tokens);
     if (!content) continue;
     const ok = await sendClanMessage(content.slice(0, 1990), {}, channelId);
     if (!ok) return { ok: false, sent, error: `No se pudo publicar «${b.title}».` };

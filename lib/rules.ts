@@ -24,7 +24,8 @@ export const RULES_DEFAULTS: RulesConfig = {
 // Metadatos para pintar el panel de edición (label, ayuda y límites).
 export interface RuleField {
   key: string; // clave en `settings`
-  prop: keyof RulesConfig;
+  prop?: keyof RulesConfig; // presente si el valor lo USA la app (no solo el texto)
+  default?: number; // default para valores que no están en RulesConfig (solo texto)
   token: string; // token para el texto de las normas: {token} → valor
   label: string;
   help: string;
@@ -95,15 +96,104 @@ export const RULE_FIELDS: RuleField[] = [
   },
 ];
 
-// Sustituye los tokens {…} del texto por los valores de la config. Así el texto
-// de las normas refleja automáticamente los ajustes (p. ej. la ventana de robo).
-export function ruleTokenValues(cfg: RulesConfig): Record<string, number> {
+// Valores de las normas que SOLO aparecen en el texto (no cambian la lógica de
+// la app). También son tokens editables desde el panel.
+export const RULE_TEXT_FIELDS: RuleField[] = [
+  {
+    key: "absence_notice_days",
+    token: "dias_avisar_ausencia",
+    default: 5,
+    label: "Ausencia: avisar a partir de",
+    help: "Días de inactividad tras los que la norma pide avisar. Solo texto.",
+    min: 1,
+    max: 30,
+    unit: "días",
+  },
+  {
+    key: "clan_games_min",
+    token: "min_puntos_juegos",
+    default: 500,
+    label: "Juegos del Clan: mínimo",
+    help: "Puntos mínimos exigidos en los Juegos del Clan. Solo texto.",
+    min: 0,
+    max: 5000,
+    unit: "puntos",
+  },
+  {
+    key: "war_attacks_required",
+    token: "ataques_obligatorios",
+    default: 2,
+    label: "Guerra: ataques obligatorios",
+    help: "Ataques que debe usar quien entra en guerra normal. Solo texto.",
+    min: 1,
+    max: 2,
+    unit: "ataques",
+  },
+  {
+    key: "cwl_accounts",
+    token: "cuentas_cwl",
+    default: 1,
+    label: "CWL: cuentas por persona",
+    help: "Nº de cuentas con las que se puede participar en CWL. Solo texto.",
+    min: 1,
+    max: 3,
+    unit: "cuentas",
+  },
+  {
+    key: "founding_year",
+    token: "anio_fundacion",
+    default: 2022,
+    label: "Año de fundación",
+    help: "Aparece en la cabecera de las normas. Solo texto.",
+    min: 2000,
+    max: 2100,
+    unit: "año",
+  },
+];
+
+// Todos los campos numéricos editables (app + solo-texto).
+export const ALL_RULE_FIELDS: RuleField[] = [...RULE_FIELDS, ...RULE_TEXT_FIELDS];
+
+// Lee los valores solo-texto desde settings (con default y clamp).
+export async function getRuleTextValues(): Promise<Record<string, number>> {
   const out: Record<string, number> = {};
-  for (const f of RULE_FIELDS) out[f.token] = cfg[f.prop];
+  for (const f of RULE_TEXT_FIELDS) out[f.token] = f.default ?? 0;
+  try {
+    const svc = createServerClient();
+    const { data } = await svc
+      .from("settings")
+      .select("key, value")
+      .in(
+        "key",
+        RULE_TEXT_FIELDS.map((f) => f.key),
+      );
+    const byKey = new Map((data ?? []).map((r) => [r.key as string, r.value as string | null]));
+    for (const f of RULE_TEXT_FIELDS) {
+      const n = Number(byKey.get(f.key));
+      if (Number.isFinite(n)) out[f.token] = clamp(n, f.min, f.max);
+    }
+  } catch {
+    /* defaults */
+  }
   return out;
 }
-export function applyRuleTokens(text: string, cfg: RulesConfig): string {
-  const values = ruleTokenValues(cfg);
+
+// Tokens que provienen de la config de la app (RulesConfig).
+export function ruleTokenValues(cfg: RulesConfig): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const f of RULE_FIELDS) if (f.prop) out[f.token] = cfg[f.prop];
+  return out;
+}
+
+// TODOS los tokens (app + solo-texto) con su valor actual.
+export async function getAllTokenValues(): Promise<Record<string, number>> {
+  const [cfg, txt] = await Promise.all([getRulesConfig(), getRuleTextValues()]);
+  return { ...ruleTokenValues(cfg), ...txt };
+}
+
+// Sustituye los tokens {…} del texto por los valores dados. Así el texto de las
+// normas refleja automáticamente los ajustes.
+export function applyRuleTokens(text: string, values: Record<string, number>): string {
   return text.replace(/\{([a-z_]+)\}/g, (m, tok: string) =>
     tok in values ? String(values[tok]) : m,
   );
@@ -154,11 +244,11 @@ export const RULE_TEXT_BLOCKS: RuleTextBlock[] = [
     key: "rules_general",
     title: "Normas generales",
     default: `📜 **NORMAS DEL CLAN AÑAKLETA**
-✨ *Fuerza y Unión desde 2022*
+✨ *Fuerza y Unión desde {anio_fundacion}*
 
 ⚔️ **1. Participación activa**
 • Conéctate con regularidad.
-• Si vas a estar inactivo más de **5 días**, avísalo en el canal correspondiente.
+• Si vas a estar inactivo más de **{dias_avisar_ausencia} días**, avísalo en el canal correspondiente.
 
 🏹 **2. Donaciones justas**
 • Mantén un **buen balance** entre lo que das y recibes.
@@ -166,7 +256,7 @@ export const RULE_TEXT_BLOCKS: RuleTextBlock[] = [
 
 🛡️ **3. Clan Capital y eventos**
 • Participa cada fin de semana en los **Asaltos de Capital**.
-• Consigue mínimo **500 puntos** en los Juegos del Clan (salvo excepciones).
+• Consigue mínimo **{min_puntos_juegos} puntos** en los Juegos del Clan (salvo excepciones).
 • Súmate a los **eventos temporales** del juego.
 
 💬 **4. Respeto y buen ambiente**
@@ -179,7 +269,7 @@ export const RULE_TEXT_BLOCKS: RuleTextBlock[] = [
 • Evita bases **denigrantes** (extremadamente débiles para tu nivel).
 
 ❌ **6. Expulsiones**
-Será expulsado quien: esté +5 días inactivo sin aviso · no ataque en guerra sin motivo · done mal repetidamente · falte al respeto.
+Será expulsado quien: esté +{dias_avisar_ausencia} días inactivo sin aviso · no ataque en guerra sin motivo · done mal repetidamente · falte al respeto.
 
 👑 **7. Ascensos**
 • **Veterano:** actividad constante + buen desempeño + buenas donaciones + actitud positiva.
@@ -196,7 +286,7 @@ Será expulsado quien: esté +5 días inactivo sin aviso · no ataque en guerra 
 • Si estás en verde y entras, **debes cumplir sí o sí**. Si no puedes, ponte en rojo.
 
 🎯 **2. Reglas de ataque**
-• Si entras, **2 ataques obligatorios**.
+• Si entras, **{ataques_obligatorios} ataques obligatorios**.
 • Por defecto (salvo indicación de un líder):
   • **1er ataque:** a tu **espejo** (tu misma posición).
   • **2º ataque:** rematar una base ya atacada, o esperar a las **últimas {horas_robo_espejo} horas** si no hay objetivo asignado.
@@ -218,7 +308,7 @@ Incumplir supone quedar excluido de próximas guerras y, si se repite, posible e
 • Solicita participar por Discord días antes (se avisará en el clan).
 • Se hace **preselección**: si no puedes atacar todos los días, avisa con tiempo.
 • Si entras, **se espera que ataques todos los días**.
-• Solo con **una cuenta**, salvo que queden huecos.
+• Solo con **{cuentas_cwl} cuenta(s)**, salvo que queden huecos.
 
 🎯 **2. Reglas de ataque**
 • Ataca al **objetivo asignado**; si no hay, a tu **espejo**.
