@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentWar } from "@/lib/war";
+import { captureWar } from "@/lib/war-capture";
 import { discordConfigured } from "@/lib/discord";
 import { sendPendingWarNotice } from "@/lib/war-notify";
 import { createServerClient } from "@/lib/supabase/server";
@@ -20,10 +21,24 @@ export async function POST(req: NextRequest) {
   if (req.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
-  if (!discordConfigured) return NextResponse.json({ skip: "discord no configurado" });
+
+  // Captura de guerra HORARIA (no solo cada 6h del snapshot). El detalle por
+  // ataque (objetivo/espejo/duración) solo existe mientras /currentwar devuelve
+  // la guerra; capturar cada hora garantiza guardarla completa antes de que el
+  // clan arranque la siguiente. Independiente de los avisos de Discord y
+  // resiliente: si falla, no rompe el recordatorio.
+  let capture: unknown = null;
+  try {
+    capture = await captureWar(createServerClient(), new Date().toISOString());
+  } catch (e) {
+    capture = { error: String(e) };
+  }
+
+  if (!discordConfigured) return NextResponse.json({ capture, skip: "discord no configurado" });
 
   const war = await getCurrentWar().catch(() => null);
-  if (!war || war.state !== "inWar") return NextResponse.json({ skip: "sin guerra en curso" });
+  if (!war || war.state !== "inWar")
+    return NextResponse.json({ capture, skip: "sin guerra en curso" });
   // Guerras normales: sin ping automático (no se exige Discord para ellas; el
   // aviso se hace a mano desde la pantalla de guerra si se quiere). Solo CWL.
   if (!war.isCwl) return NextResponse.json({ skip: "guerra normal: sin aviso automático" });
@@ -65,6 +80,7 @@ export async function POST(req: NextRequest) {
     pending: war.pending.length,
     pinged: r.pinged,
     unlinked: r.unlinked,
+    capture,
   };
   await logCronRun("war-reminder", true, result, req.headers.get("x-actor") || "cron");
   return NextResponse.json(result);

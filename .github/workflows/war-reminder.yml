@@ -1,7 +1,9 @@
 name: Recordatorio de guerra (Discord)
 
-# Cada hora hace POST a /api/war-reminder. El endpoint decide si toca avisar
-# (escalado: ≤6h una vez, luego ≤3/2/1h) y no repite tramos ya avisados.
+# Cada hora hace POST a /api/war-reminder. El endpoint (1) captura la guerra
+# actual en Supabase con todo el detalle por ataque —objetivo, espejo, duración—
+# para no perderla cuando termine antes del snapshot de 6h; y (2) decide si toca
+# avisar en Discord (escalado ≤6h/≤3/2/1h, sin repetir tramos).
 on:
   schedule:
     - cron: "0 * * * *"
