@@ -1,6 +1,7 @@
 import { createServerClient } from "@/lib/supabase/server";
 import { donationsNegative } from "@/lib/dashboard";
 import { getActiveWarnCounts, getWarnConfig } from "@/lib/warns";
+import { classifyAttackStatus } from "@/lib/war";
 
 const DAY_MS = 86_400_000;
 
@@ -172,6 +173,9 @@ export interface ActivityRow {
   warMissed: number; // rondas TERMINADAS alineado sin atacar (periodo)
   missedRounds: number[]; // qué rondas de CWL falló (terminadas)
   warStars: number; // estrellas de guerra del periodo
+  warStolen: number; // robos de espejo (infracción) en el periodo
+  capitalParticipated: number; // findes de capital en los que atacó
+  capitalWeekends: number; // findes de capital registrados en el periodo (clan)
   category: ActivityCategory;
   kickScore: number; // mayor = más candidato a echar
   participationScore: number; // mayor = más participativo (candidato a subir)
@@ -383,15 +387,19 @@ export async function getActivityReport(
   // penaliza (aún queda tiempo).
   const { data: warRows } = await supabase
     .from("wars")
-    .select("id, state, round")
+    .select("id, state, round, end_time, is_cwl")
     .gte("start_time", since);
   const warIds = (warRows ?? []).map((w) => w.id as number);
   const warsInPeriod = warIds.length;
   const warState = new Map<number, string>();
   const warRound = new Map<number, number | null>();
+  const warEndMs = new Map<number, number | null>();
+  const warIsCwl = new Map<number, boolean>();
   for (const w of warRows ?? []) {
     warState.set(w.id as number, (w.state as string) ?? "");
     warRound.set(w.id as number, (w.round as number | null) ?? null);
+    warEndMs.set(w.id as number, w.end_time ? Date.parse(w.end_time as string) : null);
+    warIsCwl.set(w.id as number, Boolean(w.is_cwl));
   }
 
   interface WarStat {
@@ -425,6 +433,77 @@ export async function getActivityReport(
       }
     }
     for (const s of warStat.values()) s.missedRounds.sort((a, b) => a - b);
+  }
+
+  // Robos de espejo (infracción) por miembro en las guerras del periodo. Se
+  // clasifica cada ataque con el contexto de su guerra (orden global + ventana 5h).
+  const stolenByTag = new Map<string, number>();
+  if (warIds.length > 0) {
+    const { data: atks } = await supabase
+      .from("war_attacks")
+      .select("war_id, attacker_tag, defender_tag, attack_order, is_mirror, defender_position, first_seen_at")
+      .in("war_id", warIds)
+      .limit(50000);
+    const byWar = new Map<number, Record<string, unknown>[]>();
+    for (const a of atks ?? []) {
+      const w = a.war_id as number;
+      if (!byWar.has(w)) byWar.set(w, []);
+      byWar.get(w)!.push(a);
+    }
+    for (const [wid, list] of byWar) {
+      const firstOrder = new Map<string, number>();
+      for (const a of list) {
+        const dt = a.defender_tag as string | null;
+        if (!dt) continue;
+        const o = (a.attack_order as number | null) ?? 0;
+        const prev = firstOrder.get(dt);
+        if (prev == null || o < prev) firstOrder.set(dt, o);
+      }
+      for (const a of list) {
+        const dt = a.defender_tag as string | null;
+        const order = (a.attack_order as number | null) ?? 0;
+        const st = classifyAttackStatus({
+          isMirror: (a.is_mirror as boolean | null) ?? null,
+          defenderPosition: (a.defender_position as number | null) ?? null,
+          fresh: !!dt && firstOrder.get(dt) === order,
+          isCwl: warIsCwl.get(wid) ?? false,
+          endMs: warEndMs.get(wid) ?? null,
+          seenMs: a.first_seen_at ? Date.parse(a.first_seen_at as string) : null,
+        });
+        if (st === "stolen") {
+          const tag = a.attacker_tag as string;
+          stolenByTag.set(tag, (stolenByTag.get(tag) ?? 0) + 1);
+        }
+      }
+    }
+  }
+
+  // Participación en asaltos de capital durante el periodo (findes registrados).
+  const capitalParticipated = new Map<string, number>();
+  let capitalWeekends = 0;
+  {
+    const { data: raids } = await supabase
+      .from("capital_raids")
+      .select("id")
+      .gte("start_time", since);
+    const raidIds = (raids ?? []).map((r) => r.id as number);
+    capitalWeekends = raidIds.length;
+    if (raidIds.length > 0) {
+      const { data: crm } = await supabase
+        .from("capital_raid_members")
+        .select("raid_id, tag, attacks")
+        .in("raid_id", raidIds)
+        .limit(50000);
+      const seen = new Set<string>(); // tag+raid, por si hubiera duplicados
+      for (const r of crm ?? []) {
+        const tag = r.tag as string;
+        const key = `${tag}-${r.raid_id}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (((r.attacks as number | null) ?? 0) > 0)
+          capitalParticipated.set(tag, (capitalParticipated.get(tag) ?? 0) + 1);
+      }
+    }
   }
 
   const [warnCounts, warnCfg] = await Promise.all([getActiveWarnCounts(), getWarnConfig()]);
@@ -502,6 +581,10 @@ export async function getActivityReport(
     if (warsInPeriod > 0 && w.played === 0) flags.push("🚫 No juega guerras");
     if (trophies != null && trophies === 0) flags.push("🎯 Sin competitivo esta semana");
     if (lastWarPref.get(tag) === "out") flags.push("💤 Guerra desactivada");
+    const warStolen = stolenByTag.get(tag) ?? 0;
+    if (warStolen > 0) flags.push(`🎯 ${warStolen} robó espejo`);
+    const capPart = capitalParticipated.get(tag) ?? 0;
+    if (capitalWeekends > 0 && capPart === 0 && !isNew) flags.push("🏛️ Sin capital");
     const activeWarns = warnCounts.get(tag) ?? 0;
     if (activeWarns > 0) flags.push(`⚠️ ${activeWarns} warn${activeWarns === 1 ? "" : "s"}`);
 
@@ -539,6 +622,7 @@ export async function getActivityReport(
       kickScore =
         Math.min(staleDays ?? 0, 30) +
         w.missed * 8 +
+        warStolen * 5 +
         (donNeg ? 8 : 0) +
         (staleDays != null && staleDays >= THRESHOLD_DAYS ? 10 : 0) +
         flags.length * 4 +
@@ -570,6 +654,9 @@ export async function getActivityReport(
       warMissed: w.missed,
       missedRounds: w.missedRounds,
       warStars: w.stars,
+      warStolen,
+      capitalParticipated: capPart,
+      capitalWeekends,
       category,
       kickScore,
       // Participación (para ascensos): donaciones + estrellas + ataques, penaliza fallos.

@@ -53,6 +53,37 @@ function ago(days: number | null, capped: boolean): string {
   return `${d}d sin actividad${capped ? "+" : ""}`;
 }
 
+// Tono de un flag según su gravedad (para colorear los chips).
+function flagTone(f: string): string {
+  if (/robó|No juega|No dona|warn/i.test(f)) return "bg-banner/12 text-banner";
+  if (/capital|desactivada|competitivo/i.test(f)) return "bg-gold/15 text-gold-deep";
+  return "bg-surface-2 text-ink-soft";
+}
+
+// Celda de "vital": etiqueta pequeña + valor, con color de estado opcional.
+function Vital({
+  label,
+  tone = "ok",
+  children,
+}: {
+  label: string;
+  tone?: "ok" | "warn" | "bad" | "good";
+  children: React.ReactNode;
+}) {
+  const valCls = {
+    ok: "text-ink",
+    good: "text-grass",
+    warn: "text-gold-deep",
+    bad: "text-banner",
+  }[tone];
+  return (
+    <div className="rounded-xl bg-surface-2/60 px-2.5 py-1.5">
+      <p className="text-[9px] font-extrabold uppercase tracking-wide text-ink-soft">{label}</p>
+      <p className={`mt-0.5 text-xs font-extrabold ${valCls}`}>{children}</p>
+    </div>
+  );
+}
+
 const PERIODS: { key: ActivityPeriod; label: string }[] = [
   { key: "semana", label: "Semana" },
   { key: "mes", label: "Mes" },
@@ -100,7 +131,10 @@ export function ActivityList({
         case "inactivo":
           return (b.staleDays ?? -1) - (a.staleDays ?? -1);
         case "guerra":
-          return b.warMissed - a.warMissed || (b.staleDays ?? -1) - (a.staleDays ?? -1);
+          return (
+            b.warMissed + b.warStolen - (a.warMissed + a.warStolen) ||
+            (b.staleDays ?? -1) - (a.staleDays ?? -1)
+          );
         case "nombre":
           return a.name.localeCompare(b.name, "es");
         default:
@@ -186,21 +220,34 @@ export function ActivityList({
           const susp = m.category === "expulsion" || m.category === "revisar";
           const stale = susp && m.staleDays != null && m.staleDays >= thresholdDays;
           const roundsAttacked = Math.min(m.warAttacks, m.warsPlayed);
-          const warPct = m.warsPlayed > 0 ? roundsAttacked / m.warsPlayed : 0;
+          const warTone =
+            m.warStolen > 0 || m.warMissed > 0
+              ? "bad"
+              : m.warsPlayed > 0 && roundsAttacked === m.warsPlayed
+                ? "good"
+                : "ok";
+          const capMissed = m.capitalWeekends - m.capitalParticipated;
+          const actTone =
+            m.staleDays == null ? "ok" : stale ? "bad" : m.staleDays < 1 ? "good" : "ok";
+          const edge =
+            m.category === "expulsion"
+              ? "border-l-4 border-l-banner"
+              : m.category === "revisar"
+                ? "border-l-4 border-l-gold"
+                : m.category === "destacado"
+                  ? "border-l-4 border-l-grass"
+                  : "";
           return (
             <Link
               key={m.tag}
               href={`/member/${encodeURIComponent(m.tag)}`}
-              className={`block rounded-2xl border border-line bg-surface p-3.5 shadow-sm ${
-                m.category === "expulsion"
-                  ? "border-l-4 border-l-banner"
-                  : m.category === "destacado"
-                    ? "border-l-4 border-l-grass"
-                    : ""
-              }`}
+              className={`block rounded-2xl border border-line bg-surface p-3.5 shadow-sm transition hover:bg-surface-2/40 ${edge}`}
             >
-              {/* Nombre + estado */}
-              <div className="mb-1.5 flex items-center gap-2">
+              {/* Cabecera: TH + nombre + estado */}
+              <div className="mb-2 flex items-center gap-2">
+                <span className="flex-none rounded-lg bg-sky/15 px-1.5 py-0.5 text-[11px] font-extrabold text-sky">
+                  TH{m.townHall ?? "—"}
+                </span>
                 <span className="truncate font-extrabold text-ink">{m.name}</span>
                 {m.isNew && (
                   <span className="flex-none rounded-full bg-grass/20 px-2 py-0.5 text-[10px] font-extrabold uppercase text-grass">
@@ -212,65 +259,62 @@ export function ActivityList({
                 </span>
               </div>
 
-              {/* Nivel: rango + TH + rol + actividad */}
-              <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+              {/* Rango + liga-vs-TH */}
+              <div className="mb-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                 <span className="inline-flex items-center gap-1 font-bold text-ink">
                   {m.leagueTierIcon && (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={m.leagueTierIcon} alt="" width={18} height={18} className="h-[18px] w-[18px]" loading="lazy" />
+                    <img src={m.leagueTierIcon} alt="" width={16} height={16} className="h-4 w-4" loading="lazy" />
                   )}
                   {shortTier(m.leagueTierName)}
                 </span>
-                <span className="rounded bg-sky/15 px-1.5 py-0.5 font-bold text-sky">TH{m.townHall ?? "—"}</span>
                 {m.leagueVsTh && (
                   <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${LEAGUE_VS[m.leagueVsTh].cls}`}>
                     {LEAGUE_VS[m.leagueVsTh].label}
                   </span>
                 )}
-                <span className={`ml-auto font-bold ${stale ? "text-banner" : "text-ink-soft"}`}>
-                  {ago(m.staleDays, m.capped)}
-                </span>
               </div>
 
-              {/* Métricas */}
-              <div className="mb-2 flex flex-wrap gap-1.5 text-xs font-bold">
-                <span className={`rounded-lg px-2 py-1 ${m.donationNegative ? "bg-banner/12 text-banner" : "bg-surface-2 text-ink"}`}>
-                  🎁 {m.donations ?? "—"}
-                  {m.donationsTrend === "up" && <span className="text-grass"> ↑</span>}
-                  {m.donationsTrend === "down" && <span className="text-banner"> ↓</span>}
-                  {" · "}📥 {m.donationsReceived ?? "—"} · ratio {m.ratio == null ? "—" : m.ratio.toFixed(2)}
-                </span>
-                {warsInPeriod > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-surface-2 px-2 py-1 text-ink">
-                    ⚔️ atacó {roundsAttacked}/{m.warsPlayed}
-                    <span aria-hidden className="inline-block h-1.5 w-10 overflow-hidden rounded-full bg-line">
-                      <span
-                        className={`block h-full rounded-full ${warPct >= 1 ? "bg-grass" : warPct > 0 ? "bg-gold" : "bg-banner"}`}
-                        style={{ width: `${Math.round(warPct * 100)}%` }}
-                      />
-                    </span>
-                    · ⭐ {m.warStars}
-                  </span>
-                )}
+              {/* Vitales: guerra · donaciones · capital · actividad */}
+              <div className="mb-2 grid grid-cols-2 gap-1.5">
+                <Vital label="Guerra" tone={warsInPeriod > 0 ? warTone : "ok"}>
+                  {warsInPeriod > 0 ? (
+                    <>
+                      {roundsAttacked}/{m.warsPlayed} · ⭐{m.warStars}
+                      {m.warStolen > 0 && (
+                        <span className="text-banner"> · {m.warStolen} robó</span>
+                      )}
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </Vital>
+                <Vital label="Donaciones" tone={m.donationNegative ? "bad" : "ok"}>
+                  🎁{m.donations ?? "—"}
+                  {m.donationsTrend === "up" && <span className="text-grass">↑</span>}
+                  {m.donationsTrend === "down" && <span className="text-banner">↓</span>}
+                  {" · "}📥{m.donationsReceived ?? "—"}
+                </Vital>
+                <Vital
+                  label="Capital"
+                  tone={m.capitalWeekends === 0 ? "ok" : capMissed > 0 ? "warn" : "good"}
+                >
+                  {m.capitalWeekends > 0 ? `${m.capitalParticipated}/${m.capitalWeekends} findes` : "—"}
+                </Vital>
+                <Vital label="Actividad" tone={actTone}>
+                  {ago(m.staleDays, m.capped)}
+                </Vital>
               </div>
 
               {/* Faltillas */}
               {m.flags.length > 0 && (
-                <div className="mb-2 flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-1.5">
                   {m.flags.map((f) => (
-                    <span key={f} className="rounded-lg bg-banner/12 px-2 py-1 text-[11px] font-bold text-banner">
+                    <span key={f} className={`rounded-lg px-2 py-1 text-[11px] font-bold ${flagTone(f)}`}>
                       {f}
                     </span>
                   ))}
                 </div>
-              )}
-
-              {/* Señales recientes (discreto): qué se movió, sin hora (el snapshot
-                  es cada 6h; la recencia real la da "activo hoy / Nd" de arriba). */}
-              {m.recent.length > 0 && (
-                <p className="text-[11px] text-ink-soft/80">
-                  {m.recent.slice(0, 5).map((s) => `${s.icon} ${s.label}`).join("  ·  ")}
-                </p>
               )}
             </Link>
           );
