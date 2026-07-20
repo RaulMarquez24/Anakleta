@@ -278,11 +278,10 @@ export const RULE_TEXT_BLOCKS: RuleTextBlock[] = [
 
 ⚔️ **1. Participación activa**
 • Conéctate con regularidad.
-• Si vas a estar inactivo más de **{dias_avisar_ausencia} días**, avísalo en el canal correspondiente.
+• Si vas a estar inactivo más de **{dias_avisar_ausencia} días**, avísalo por Discord o por el chat del clan.
 
 🏹 **2. Donaciones justas**
 • Mantén un **buen balance** entre lo que das y recibes.
-• Respeta las tropas solicitadas: ¡no dones lo que no te piden!
 
 🛡️ **3. Clan Capital y eventos**
 • Participa cada fin de semana en los **Asaltos de Capital**.
@@ -295,15 +294,17 @@ export const RULE_TEXT_BLOCKS: RuleTextBlock[] = [
 • Si hay algún problema, contacta con un líder o colíder.
 
 🚧 **5. Bases balanceadas**
-• Mantén tu aldea **equilibrada**: no subas Ayuntamiento si defensas, héroes o tropas están muy atrasadas.
+• Mantén tu aldea **equilibrada**: no subas Ayuntamiento si defensas, muros, héroes o tropas están muy atrasadas.
 • Evita bases **denigrantes** (extremadamente débiles para tu nivel).
 
 ❌ **6. Expulsiones**
-Será expulsado quien: esté +{dias_avisar_ausencia} días inactivo sin aviso · no ataque en guerra sin motivo · done mal repetidamente · falte al respeto.
+Será expulsado quien: esté +{dias_avisar_ausencia} días inactivo sin aviso · no ataque en guerra sin motivo · falte al respeto.
 
 👑 **7. Ascensos**
 • **Veterano:** actividad constante + buen desempeño + buenas donaciones + actitud positiva.
-• **Colíder:** jugador de total confianza, estratégico y comunicativo.`,
+• **Colíder:** jugador de total confianza, estratégico y comunicativo.
+
+🔁 Reacciona con ✅ para confirmar que leíste las normas.`,
   },
   {
     key: "rules_war",
@@ -312,8 +313,8 @@ Será expulsado quien: esté +{dias_avisar_ausencia} días inactivo sin aviso ·
 
 📌 **1. Participación**
 • Para participar, **vota en la encuesta** del chat del clan.
-• Ajusta tu **disponibilidad de guerra** dentro del juego (verde = disponible).
-• Si estás en verde y entras, **debes cumplir sí o sí**. Si no puedes, ponte en rojo.
+• Ajusta tu **disponibilidad de guerra** dentro del juego.
+• Si estás en **verde**, estás disponible y **puedes ser incluido** si faltan jugadores. Si entras, **debes cumplir sí o sí**. Si no puedes atacar, **ponte en rojo**.
 
 🎯 **2. Reglas de ataque**
 • Si entras, **{ataques_obligatorios} ataques obligatorios**.
@@ -327,7 +328,13 @@ Será expulsado quien: esté +{dias_avisar_ausencia} días inactivo sin aviso ·
 • Evita ataques improvisados: revisa repeticiones y pide consejo.
 
 🚫 **4. Sanciones**
-Incumplir supone quedar excluido de próximas guerras y, si se repite, posible expulsión.`,
+• Incumplir supone quedar excluido de próximas guerras y, si se repite, posible expulsión.
+
+💬 **5. Comunicación**
+• Coordina dudas o avisos en el chat del clan.
+• Respeta siempre las decisiones de líderes y colíderes.
+
+🔁 Reacciona con ✅ para confirmar que leíste las normas.`,
   },
   {
     key: "rules_cwl",
@@ -338,10 +345,10 @@ Incumplir supone quedar excluido de próximas guerras y, si se repite, posible e
 • Solicita participar por Discord días antes (se avisará en el clan).
 • Se hace **preselección**: si no puedes atacar todos los días, avisa con tiempo.
 • Si entras, **se espera que ataques todos los días**.
-• Solo con **{cuentas_cwl} cuenta(s)**, salvo que queden huecos.
+• Solo podrás participar con **{cuentas_cwl} cuenta**, a menos que queden huecos libres.
 
 🎯 **2. Reglas de ataque**
-• Ataca al **objetivo asignado**; si no hay, a tu **espejo**.
+• Ataca al **objetivo asignado**; si no hay, a tu **espejo** (ej.: eres la posición 12 → atacas al 12).
 • Puedes cambiar objetivo con un compañero si ambos estáis de acuerdo.
 • Consulta con un líder si no sabes a quién atacar.
 
@@ -350,13 +357,41 @@ Incumplir supone quedar excluido de próximas guerras y, si se repite, posible e
 • Usa ejércitos adecuados a tu nivel y al rival.
 
 🚫 **4. Sanciones**
-No atacar sin avisar puede dejarte fuera de futuras CWL y, si se repite, provocar la expulsión.
+• No atacar sin avisar puede dejarte fuera de futuras CWL y, si se repite, provocar la expulsión.
 
-💬 Es **obligatorio tener Discord** para participar en la CWL.`,
+💬 **5. Comunicación**
+• Todo se coordina por el canal #ligas-cwl.
+• Es **obligatorio tener Discord** para participar en la CWL.
+
+🔁 Reacciona con ✅ para confirmar que leíste las normas.`,
   },
 ];
 
 export type RulesText = Record<string, string>;
+
+// Siembra en la BD los bloques que aún no existan, con su texto por defecto. Así
+// el texto vive en `settings` y cualquier edición posterior queda persistida y
+// se refleja siempre. Idempotente: solo escribe los que falten.
+export async function ensureRulesSeeded(): Promise<void> {
+  try {
+    const svc = createServerClient();
+    const { data } = await svc
+      .from("settings")
+      .select("key")
+      .in(
+        "key",
+        RULE_TEXT_BLOCKS.map((b) => b.key),
+      );
+    const have = new Set((data ?? []).map((r) => r.key as string));
+    const missing = RULE_TEXT_BLOCKS.filter((b) => !have.has(b.key)).map((b) => ({
+      key: b.key,
+      value: b.default,
+    }));
+    if (missing.length > 0) await svc.from("settings").upsert(missing, { onConflict: "key" });
+  } catch {
+    /* si falla, se seguirán usando los defaults en memoria */
+  }
+}
 
 export async function getRulesText(): Promise<RulesText> {
   const out: RulesText = {};

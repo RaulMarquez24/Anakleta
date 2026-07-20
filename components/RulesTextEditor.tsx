@@ -8,6 +8,7 @@ export interface RuleTextView {
   key: string;
   title: string;
   value: string;
+  def: string; // texto por defecto (para "Restablecer")
 }
 export interface TokenLegend {
   token: string;
@@ -37,7 +38,12 @@ function renderMd(text: string): string {
     .replace(/>/g, "&gt;");
   return esc
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>");
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    // Mención de canal de Discord: <#id> → chip #canal (en Discord se enlaza solo).
+    .replace(
+      /&lt;#(\d+)&gt;/g,
+      '<span class="rounded bg-sky/15 px-1 font-bold text-sky">#canal</span>',
+    );
 }
 
 export function RulesTextEditor({
@@ -177,17 +183,29 @@ export function RulesTextEditor({
               rows={16}
               className="w-full resize-y rounded-xl border border-line bg-surface-2 p-3 font-mono text-xs text-ink outline-none focus:border-gold"
             />
+            <p className="mt-1 text-[11px] text-ink-soft">
+              Formato Discord: <code>**negrita**</code>, <code>*cursiva*</code>. Menciona un canal
+              con <code>{"<#IDdelCanal>"}</code> (clic derecho en el canal → Copiar ID).
+            </p>
             <div className="mt-2 flex items-center justify-between gap-2">
-              <span className="text-[11px] font-semibold text-ink-soft">
-                {value.length} / 1990 caracteres
-              </span>
               <button
-                onClick={saveActive}
-                disabled={busy != null || !dirty}
-                className="rounded-full bg-gold px-4 py-1.5 text-xs font-extrabold text-banner-dark transition hover:brightness-105 disabled:opacity-50"
+                onClick={() => setValues((v) => ({ ...v, [active]: block?.def ?? "" }))}
+                className="text-[11px] font-bold text-ink-soft underline-offset-2 hover:underline"
               >
-                {busy === "save" ? "Guardando…" : "Guardar"}
+                Restablecer texto original
               </button>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-semibold text-ink-soft">
+                  {value.length} / 1990
+                </span>
+                <button
+                  onClick={saveActive}
+                  disabled={busy != null || !dirty}
+                  className="rounded-full bg-gold px-4 py-1.5 text-xs font-extrabold text-banner-dark transition hover:brightness-105 disabled:opacity-50"
+                >
+                  {busy === "save" ? "Guardando…" : "Guardar"}
+                </button>
+              </div>
             </div>
           </div>
         ) : (

@@ -1,5 +1,6 @@
 import {
   getRulesText,
+  ensureRulesSeeded,
   getAllTokenValues,
   ALL_RULE_FIELDS,
   RULE_GROUP_ORDER,
@@ -14,6 +15,7 @@ import { RulesTextEditor, type RuleTextView } from "@/components/RulesTextEditor
 export const dynamic = "force-dynamic";
 
 export default async function NormasPage() {
+  await ensureRulesSeeded(); // deja los textos por defecto guardados en la BD
   const [user, text, tokens] = await Promise.all([
     getCurrentUser(),
     getRulesText(),
@@ -43,6 +45,7 @@ export default async function NormasPage() {
     key: b.key,
     title: b.title,
     value: text[b.key] ?? b.default,
+    def: b.default,
   }));
 
   const legend = ALL_RULE_FIELDS.map((f) => ({
