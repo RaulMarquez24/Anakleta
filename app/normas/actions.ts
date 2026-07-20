@@ -105,13 +105,12 @@ export async function publishRules(
       : RULE_TEXT_BLOCKS;
 
   let sent = 0;
-  let first = true;
   for (const b of keys) {
     // Sustituye los tokens ({horas_robo_espejo}, …) por los valores configurados.
     let content = applyRuleTokens((text[b.key] ?? b.default).trim(), tokens);
     if (!content) continue;
-    // @everyone solo en el primer mensaje (no repetir el ping por cada bloque).
-    if (opts?.everyone && first) content = `@everyone\n\n${content}`;
+    // @everyone oculto (spoiler) al final de cada bloque: no se ve pero notifica.
+    if (opts?.everyone) content = `${content}\n\n||@everyone||`;
     const ok = await sendClanMessage(
       content.slice(0, 1990),
       { everyone: !!opts?.everyone },
@@ -119,7 +118,6 @@ export async function publishRules(
     );
     if (!ok) return { ok: false, sent, error: `No se pudo publicar «${b.title}».` };
     sent++;
-    first = false;
   }
   return { ok: true, sent };
 }

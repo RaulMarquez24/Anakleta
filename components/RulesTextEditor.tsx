@@ -275,7 +275,7 @@ export function RulesTextEditor({
         </div>
         {everyone && (
           <p className="mt-2 text-[11px] font-semibold text-gold-deep">
-            Se avisará a @everyone en el primer mensaje.
+            Se avisará a @everyone en todos los mensajes, oculto (spoiler): no se ve pero notifica.
           </p>
         )}
         {!discordReady && (
