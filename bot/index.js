@@ -645,6 +645,26 @@ function renderLanding() {
     : `<div class="logo logo-emoji">🤖</div>`;
   const bannerHtml = botBannerUrl ? `<img class="banner" src="${esc(botBannerUrl)}" alt="Banner Añakleta">` : "";
 
+  // Hero: si hay banner, manda el banner (sin encimar el avatar). Si no, avatar+aro.
+  const heroInner = bannerHtml
+    ? `${bannerHtml}<div class="hero-ov"></div>`
+    : `<div class="hero-ov"></div><div class="ring"></div><div class="logo-wrap">${logoHtml}</div>`;
+
+  // Etiquetas que identifican al clan: labels reales de CoC (con icono) o, si no,
+  // un set por defecto con la esencia del clan.
+  const labels = Array.isArray(c?.labels) ? c.labels.slice(0, 4) : [];
+  const featsHtml = labels.length
+    ? labels
+        .map((l) => {
+          const ic = l.iconUrls?.small || l.iconUrls?.medium || "";
+          return `<div class="feat">${ic ? `<img class="feat-ic" src="${esc(ic)}" alt="">` : "<b>🏷️</b>"}${esc(l.name ?? "")}</div>`;
+        })
+        .join("")
+    : `<div class="feat"><b>📅</b>Desde 2022</div>` +
+      `<div class="feat"><b>⚔️</b>Guerras</div>` +
+      `<div class="feat"><b>🤝</b>Comunidad</div>` +
+      `<div class="feat"><b>🇪🇸</b>Hispano</div>`;
+
   return `<!doctype html>
 <html lang="es"><head>
 <meta charset="utf-8">
@@ -675,7 +695,8 @@ function renderLanding() {
   .hero{ position:relative; height:180px; background:linear-gradient(160deg,#4a86c7,#7fb0dd 40%,#2b3d1e); overflow:hidden; }
   .banner{ width:100%; height:100%; object-fit:cover; display:block; animation:kb 22s ease-in-out infinite alternate; }
   @keyframes kb{ 0%{ transform:scale(1) } 100%{ transform:scale(1.08) } }
-  .hero-ov{ position:absolute; inset:0; background:linear-gradient(180deg,rgba(0,0,0,.05),rgba(22,18,11,.96)); }
+  .hero-ov{ position:absolute; inset:0; background:linear-gradient(180deg,rgba(0,0,0,0) 45%,rgba(22,18,11,1) 100%); }
+  .hero.tall{ height:210px; }
   .ring{ position:absolute; left:50%; bottom:-44px; width:116px; height:116px; transform:translateX(-50%);
          border-radius:50%; border:2px dashed rgba(245,196,81,.5); animation:spin 12s linear infinite; z-index:1; }
   @keyframes spin{ to{ transform:translateX(-50%) rotate(360deg) } }
@@ -686,6 +707,7 @@ function renderLanding() {
   @keyframes bob{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-6px) } }
 
   .body{ padding:62px 24px 24px; text-align:center; }
+  .body.flush{ padding-top:24px; }
   h1{ margin:0; font-size:42px; font-weight:900; letter-spacing:2px; line-height:1;
       background:linear-gradient(90deg,#f7d97a,#f5c451,#fff2c8,#f5c451,#e0a53a); background-size:200% auto;
       -webkit-background-clip:text; background-clip:text; color:transparent; animation:shimmer 4s linear infinite;
@@ -731,27 +753,25 @@ function renderLanding() {
   .btn.gold{ background:linear-gradient(180deg,var(--gold),var(--gold2)); color:#3a2410; box-shadow:0 8px 20px rgba(245,196,81,.25); }
   .btn.disc{ background:var(--disc); color:#fff; box-shadow:0 8px 20px rgba(88,101,242,.3); }
 
-  .feats{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+  .feats{ display:grid; grid-template-columns:repeat(auto-fit,minmax(84px,1fr)); gap:8px; }
   .feat{ background:rgba(0,0,0,.28); border:1px solid var(--line); border-radius:14px; padding:10px 6px; font-size:10px; font-weight:800; color:var(--soft); text-transform:uppercase; letter-spacing:.4px; }
   .feat b{ display:block; font-size:20px; margin-bottom:3px; }
+  .feat-ic{ width:28px; height:28px; display:block; margin:0 auto 4px; border-radius:6px; }
 
   .foot{ text-align:center; color:var(--soft); font-size:11px; margin-top:16px; }
 
   .reveal{ animation:pop .6s ease both; }
   .d1{ animation-delay:.05s } .d2{ animation-delay:.15s } .d3{ animation-delay:.25s } .d4{ animation-delay:.35s } .d5{ animation-delay:.45s }
   @keyframes pop{ from{ opacity:0; transform:translateY(14px) } to{ opacity:1; transform:none } }
-  @media (max-width:460px){ .feats{ grid-template-columns:repeat(2,1fr) } h1{ font-size:34px } }
+  @media (max-width:460px){ h1{ font-size:34px } }
 </style></head>
 <body>
   <div class="sky"><span>⚔️</span><span>🛡️</span><span>⭐</span><span>👑</span><span>🏆</span><span>🔥</span></div>
   <div class="card">
-    <div class="hero">
-      ${bannerHtml}
-      <div class="hero-ov"></div>
-      <div class="ring"></div>
-      <div class="logo-wrap">${logoHtml}</div>
+    <div class="hero${bannerHtml ? " tall" : ""}">
+      ${heroInner}
     </div>
-    <div class="body">
+    <div class="body${bannerHtml ? " flush" : ""}">
       <h1>AÑAKLETA</h1>
       <div class="sub">BOT DE DISCORD · TU ALIADO 24/7</div>
 
@@ -773,12 +793,7 @@ function renderLanding() {
         ${INVITE_URL ? `<a class="btn disc" href="${esc(INVITE_URL)}">💬 Entrar al Discord</a>` : ""}
       </div>
 
-      <div class="feats reveal d5">
-        <div class="feat"><b>🛡️</b>Bienvenidas</div>
-        <div class="feat"><b>⚔️</b>Guerras</div>
-        <div class="feat"><b>🏆</b>Ranking</div>
-        <div class="feat"><b>📅</b>Eventos</div>
-      </div>
+      <div class="feats reveal d5">${featsHtml}</div>
 
       <div class="foot">Hecho con ⚔️ para el clan · ${botTag}</div>
     </div>
