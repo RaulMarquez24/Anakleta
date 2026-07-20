@@ -1,5 +1,6 @@
 import { createServerClient } from "@/lib/supabase/server";
 import { getCurrentWar, classifyAttackStatus, type MirrorStatus } from "@/lib/war";
+import { getRulesConfig, stealWindowMs } from "@/lib/rules";
 
 export interface WarSummary {
   id: number;
@@ -456,6 +457,7 @@ export async function getMemberMirrorStats(tag: string, limit = 20): Promise<Mir
     byWar.get(w)!.push(a);
   }
 
+  const window = stealWindowMs((await getRulesConfig()).stealWindowHours);
   const stats: MirrorStats = { ...EMPTY_MIRROR };
   for (const [wid, list] of byWar) {
     const meta = warMeta.get(wid);
@@ -482,6 +484,7 @@ export async function getMemberMirrorStats(tag: string, limit = 20): Promise<Mir
         isCwl,
         endMs,
         seenMs: seen,
+        stealWindowMs: window,
       });
       if (!st) continue;
       stats.attacks++;
@@ -536,6 +539,7 @@ export async function getWarDetail(
   const endTimeIso = (wr.end_time as string | null) ?? null;
   const endMs = endTimeIso ? Date.parse(endTimeIso) : NaN;
   const endMsOrNull = Number.isNaN(endMs) ? null : endMs;
+  const window = stealWindowMs((await getRulesConfig()).stealWindowHours);
 
   // Agrupa los ataques individuales por atacante (nuestro miembro).
   const attacksByTag = new Map<string, WarAttackDetail[]>();
@@ -557,6 +561,7 @@ export async function getWarDetail(
       isCwl,
       endMs: endMsOrNull,
       seenMs: Number.isNaN(seenMs as number) ? null : seenMs,
+      stealWindowMs: window,
     });
     const stolenFrom =
       mirrorStatus === "stolen" && defenderPosition != null

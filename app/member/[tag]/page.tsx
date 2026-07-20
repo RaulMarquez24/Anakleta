@@ -4,6 +4,7 @@ import { getMemberHistory, getActivityReport, type ActivityRow } from "@/lib/his
 import { donationsNegative } from "@/lib/dashboard";
 import { getMemberWarLog, getMemberMirrorStats } from "@/lib/war-history";
 import { getMemberCapital, summarizeCapital } from "@/lib/capital";
+import { getRulesConfig } from "@/lib/rules";
 import { PlayerSeasonSummary } from "@/components/PlayerSeasonSummary";
 import { getMemberWarns, getWarnConfig } from "@/lib/warns";
 import { getMyPlayerTag } from "@/lib/profile";
@@ -98,9 +99,11 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
     history.firstSeenAt ? new Date(history.firstSeenAt).getTime() : null,
   ).catch(() => []);
   const capital = summarizeCapital(capitalWeeks);
+  const rules = await getRulesConfig();
   const lastSnap = history.snapshots[history.snapshots.length - 1];
   const donDone = lastSnap?.donations ?? null;
   const donRecv = lastSnap?.donationsReceived ?? null;
+  const donNeg = donationsNegative(donDone, donRecv, rules.donationMin, rules.donationGap);
   const { members: accGroup } = accountGroup(accountLinks, decoded);
   const accCandidates = accountLinks.filter((l) => l.tag !== decoded);
   const isMe = myTag != null && myTag === decoded;
@@ -403,7 +406,7 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
         const issues: string[] = [];
         if ((row?.warMissed ?? 0) > 0) issues.push(`${row!.warMissed} sin atacar`);
         if ((mirror?.stolen ?? 0) > 0) issues.push(`${mirror!.stolen} robó espejo`);
-        if (donationsNegative(donDone, donRecv)) issues.push("balance bajo");
+        if (donNeg) issues.push("balance bajo");
         const capMissed = capital.weekends - capital.participated;
         if (capMissed > 0) issues.push(`${capMissed} findes sin capital`);
         const summary =
@@ -429,7 +432,7 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
                   donations: donDone,
                   received: donRecv,
                   ratio: donRecv && donRecv > 0 ? donDone! / donRecv : null,
-                  negative: donationsNegative(donDone, donRecv),
+                  negative: donNeg,
                 }}
                 capital={capital}
               />

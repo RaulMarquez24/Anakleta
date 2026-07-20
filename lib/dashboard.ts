@@ -20,9 +20,11 @@ export async function getMemberOptions(): Promise<{ tag: string; name: string }[
 export function donationsNegative(
   donations: number | null,
   received: number | null,
+  min = 1000,
+  gap = 1000,
 ): boolean {
   if (donations == null || received == null) return false;
-  return donations < 1000 && received - donations >= 1000;
+  return donations < min && received - donations >= gap;
 }
 
 interface SnapRow {

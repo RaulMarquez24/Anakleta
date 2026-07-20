@@ -2,6 +2,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import { donationsNegative } from "@/lib/dashboard";
 import { getActiveWarnCounts, getWarnConfig } from "@/lib/warns";
 import { classifyAttackStatus } from "@/lib/war";
+import { getRulesConfig, stealWindowMs } from "@/lib/rules";
 
 const DAY_MS = 86_400_000;
 
@@ -256,7 +257,6 @@ export async function getDepartures(): Promise<Departure[]> {
   }));
 }
 
-const THRESHOLD_DAYS = 7; // a partir de aquí, candidato a limpiar
 
 // Contadores que, si SUBEN entre dos capturas, prueban que la persona estuvo
 // online: donar, atacar en multi (attackWins), estrellas de guerra, aporte a la
@@ -284,6 +284,9 @@ export async function getActivityReport(
   const supabase = createServerClient();
   const now = Date.now();
   const since = new Date(periodStartMs(period)).toISOString();
+  const rules = await getRulesConfig();
+  const thresholdDays = rules.inactivityDays; // días de inactividad → "revisar"
+  const stealWinMs = stealWindowMs(rules.stealWindowHours);
 
   const { data: members } = await supabase
     .from("members")
@@ -469,6 +472,7 @@ export async function getActivityReport(
           isCwl: warIsCwl.get(wid) ?? false,
           endMs: warEndMs.get(wid) ?? null,
           seenMs: a.first_seen_at ? Date.parse(a.first_seen_at as string) : null,
+          stealWindowMs: stealWinMs,
         });
         if (st === "stolen") {
           const tag = a.attacker_tag as string;
@@ -548,7 +552,7 @@ export async function getActivityReport(
     const donations = snapRows.length > 0 ? donationsPeriod : null;
     const received = snapRows.length > 0 ? receivedPeriod : null;
     const ratio = received && received > 0 ? donations! / received : null;
-    const donNeg = donationsNegative(donations, received);
+    const donNeg = donationsNegative(donations, received, rules.donationMin, rules.donationGap);
     // Copas actuales (ranked). Se resetea cada lunes: 0 = sin competitivo esta semana.
     const trophies = lastTrophies.get(tag) ?? null;
 
@@ -599,7 +603,7 @@ export async function getActivityReport(
     )
       category = "expulsion";
     else if (
-      (staleDays != null && staleDays >= THRESHOLD_DAYS) ||
+      (staleDays != null && staleDays >= thresholdDays) ||
       w.missed >= 1 ||
       donNeg ||
       flags.length >= 2
@@ -624,7 +628,7 @@ export async function getActivityReport(
         w.missed * 8 +
         warStolen * 5 +
         (donNeg ? 8 : 0) +
-        (staleDays != null && staleDays >= THRESHOLD_DAYS ? 10 : 0) +
+        (staleDays != null && staleDays >= thresholdDays ? 10 : 0) +
         flags.length * 4 +
         activeWarns * 6;
     }
@@ -674,7 +678,7 @@ export async function getActivityReport(
   return {
     period,
     periodLabel: PERIOD_LABEL[period],
-    thresholdDays: THRESHOLD_DAYS,
+    thresholdDays: thresholdDays,
     warsInPeriod,
     clanDonations,
     clanWarStars,

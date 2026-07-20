@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { cocFetch, encodeTag, CocApiError } from "@/lib/coc";
+import { getRulesConfig, stealWindowMs } from "@/lib/rules";
 
 // --- Tipos del subset de guerra que usamos (vale para /currentwar y CWL) ---
 interface CocWarAttack {
@@ -68,15 +69,16 @@ export function classifyAttackStatus(p: {
   isCwl: boolean;
   endMs: number | null;
   seenMs: number | null;
+  stealWindowMs?: number; // ventana final permitida (default 5h); configurable en /normas
 }): MirrorStatus | null {
   if (p.defenderPosition == null || p.isMirror == null) return null; // sin datos
   if (p.isMirror) return "mirror";
   if (!p.fresh) return "cleanup"; // remate: la base ya estaba atacada
   if (p.isCwl) return "offmirror"; // CWL: no se juzga (objetivo asignable)
   // Guerra normal, base fresca ajena: infracción solo si con certeza fue con
-  // >5h restantes; si cae (o pudo caer) en las últimas 5h, permitido.
-  const beforeWindow =
-    p.endMs != null && p.seenMs != null && p.seenMs < p.endMs - STEAL_WINDOW_MS;
+  // más de la ventana restante; si cae (o pudo caer) dentro de ella, permitido.
+  const window = p.stealWindowMs ?? STEAL_WINDOW_MS;
+  const beforeWindow = p.endMs != null && p.seenMs != null && p.seenMs < p.endMs - window;
   return beforeWindow ? "stolen" : "late";
 }
 export interface AttackView {
@@ -209,7 +211,7 @@ function firstOrderByDefenderMap(
 // opponent, así que elegimos "nosotros" por el tag.
 function buildView(
   raw: CocCurrentWar,
-  opts: { isCwl: boolean; round: number | null; clanTag: string },
+  opts: { isCwl: boolean; round: number | null; clanTag: string; stealWindowMs?: number },
 ): WarView {
   const usIsClan = !opts.isCwl || tagEq(raw.clan?.tag, opts.clanTag);
   const us = usIsClan ? raw.clan : raw.opponent;
@@ -270,6 +272,7 @@ function buildView(
               isCwl: opts.isCwl,
               endMs: endMsOrNull,
               seenMs: nowMs,
+              stealWindowMs: opts.stealWindowMs,
             });
             if (v.mirrorStatus === "stolen" && v.defenderPosition != null) {
               v.stolenFrom = nameByPosition.get(v.defenderPosition) ?? null;
@@ -394,7 +397,13 @@ async function getCurrentCwlWar(clanTag: string): Promise<WarView | null> {
       new Date(b.raw.startTime ?? 0).getTime() - new Date(a.raw.startTime ?? 0).getTime(),
   );
   const chosen = ours[0];
-  return buildView(chosen.raw, { isCwl: true, round: chosen.round, clanTag });
+  const rules = await getRulesConfig();
+  return buildView(chosen.raw, {
+    isCwl: true,
+    round: chosen.round,
+    clanTag,
+    stealWindowMs: stealWindowMs(rules.stealWindowHours),
+  });
 }
 
 export const getCurrentWar = unstable_cache(getCurrentWarImpl, ["current-war"], {
@@ -421,7 +430,13 @@ async function getCurrentWarImpl(
 
   // Guerra normal en curso.
   if (raw && raw.state !== "notInWar") {
-    return buildView(raw, { isCwl: false, round: null, clanTag });
+    const rules = await getRulesConfig();
+    return buildView(raw, {
+      isCwl: false,
+      round: null,
+      clanTag,
+      stealWindowMs: stealWindowMs(rules.stealWindowHours),
+    });
   }
 
   // Si no hay guerra normal, probar CWL.
