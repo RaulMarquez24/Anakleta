@@ -17,6 +17,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
+      # El bot ahora sirve HTTP (landing + health): la app necesita IP pública
+      # para que <app>.fly.dev resuelva. Idempotente (si ya la tiene, no pasa nada).
+      - name: Asegurar IP pública
+        working-directory: bot
+        run: |
+          flyctl ips allocate-v4 --shared --yes || true
+          flyctl ips allocate-v6 --yes || true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - name: fly deploy
         working-directory: bot
         run: flyctl deploy --remote-only
