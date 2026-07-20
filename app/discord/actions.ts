@@ -16,6 +16,7 @@ const EDITABLE_SETTINGS = new Set([
   "clan_role_id",
   "clan_card_channel_id",
   "announcements_channel_id",
+  "rules_channel_id", // canal donde publicar las normas (si no, usa el de anuncios)
   "warns_threshold", // nº de warns vigentes para saltar a "A echar" (def. 3)
   "warns_expiry_days", // días hasta que un warn caduca (def. 90; 0 = nunca)
 ]);

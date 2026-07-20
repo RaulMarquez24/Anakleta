@@ -120,3 +120,121 @@ export async function getRulesConfig(): Promise<RulesConfig> {
 
 // Ventana de robo de espejo en ms (para classifyAttackStatus).
 export const stealWindowMs = (hours: number) => hours * 3_600_000;
+
+// --- Texto de las normas (editable y publicable en Discord) ---
+export interface RuleTextBlock {
+  key: string; // clave en settings
+  title: string; // encabezado en el panel
+  default: string; // texto por defecto (se puede editar)
+}
+
+export const RULE_TEXT_BLOCKS: RuleTextBlock[] = [
+  {
+    key: "rules_general",
+    title: "Normas generales",
+    default: `📜 **NORMAS DEL CLAN AÑAKLETA**
+✨ *Fuerza y Unión desde 2022*
+
+⚔️ **1. Participación activa**
+• Conéctate con regularidad.
+• Si vas a estar inactivo más de **5 días**, avísalo en el canal correspondiente.
+
+🏹 **2. Donaciones justas**
+• Mantén un **buen balance** entre lo que das y recibes.
+• Respeta las tropas solicitadas: ¡no dones lo que no te piden!
+
+🛡️ **3. Clan Capital y eventos**
+• Participa cada fin de semana en los **Asaltos de Capital**.
+• Consigue mínimo **500 puntos** en los Juegos del Clan (salvo excepciones).
+• Súmate a los **eventos temporales** del juego.
+
+💬 **4. Respeto y buen ambiente**
+• Prohibida cualquier falta de respeto o insulto.
+• Todos los niveles y estilos de juego son bienvenidos.
+• Si hay algún problema, contacta con un líder o colíder.
+
+🚧 **5. Bases balanceadas**
+• Mantén tu aldea **equilibrada**: no subas Ayuntamiento si defensas, héroes o tropas están muy atrasadas.
+• Evita bases **denigrantes** (extremadamente débiles para tu nivel).
+
+❌ **6. Expulsiones**
+Será expulsado quien: esté +5 días inactivo sin aviso · no ataque en guerra sin motivo · done mal repetidamente · falte al respeto.
+
+👑 **7. Ascensos**
+• **Veterano:** actividad constante + buen desempeño + buenas donaciones + actitud positiva.
+• **Colíder:** jugador de total confianza, estratégico y comunicativo.`,
+  },
+  {
+    key: "rules_war",
+    title: "Guerras normales",
+    default: `📢 **NORMAS DE GUERRAS NORMALES** ⚔️
+
+📌 **1. Participación**
+• Para participar, **vota en la encuesta** del chat del clan.
+• Ajusta tu **disponibilidad de guerra** dentro del juego (verde = disponible).
+• Si estás en verde y entras, **debes cumplir sí o sí**. Si no puedes, ponte en rojo.
+
+🎯 **2. Reglas de ataque**
+• Si entras, **2 ataques obligatorios**.
+• Por defecto (salvo indicación de un líder):
+  • **1er ataque:** a tu **espejo** (tu misma posición).
+  • **2º ataque:** rematar una base ya atacada, o esperar a las **últimas 5 horas** si no hay objetivo asignado.
+• Atacar otra base solo con permiso de un líder o acuerdo mutuo confirmado.
+• Ataca siempre con **tropas completas y castillo lleno**.
+
+🛠️ **3. Planificación**
+• Evita ataques improvisados: revisa repeticiones y pide consejo.
+
+🚫 **4. Sanciones**
+Incumplir supone quedar excluido de próximas guerras y, si se repite, posible expulsión.`,
+  },
+  {
+    key: "rules_cwl",
+    title: "Liga de Guerras (CWL)",
+    default: `📢 **NORMAS DE LA CWL** ⚔️
+
+📌 **1. Participación**
+• Solicita participar por Discord días antes (se avisará en el clan).
+• Se hace **preselección**: si no puedes atacar todos los días, avisa con tiempo.
+• Si entras, **se espera que ataques todos los días**.
+• Solo con **una cuenta**, salvo que queden huecos.
+
+🎯 **2. Reglas de ataque**
+• Ataca al **objetivo asignado**; si no hay, a tu **espejo**.
+• Puedes cambiar objetivo con un compañero si ambos estáis de acuerdo.
+• Consulta con un líder si no sabes a quién atacar.
+
+🛠️ **3. Donaciones y ejércitos**
+• Dona **exactamente lo que se pide**.
+• Usa ejércitos adecuados a tu nivel y al rival.
+
+🚫 **4. Sanciones**
+No atacar sin avisar puede dejarte fuera de futuras CWL y, si se repite, provocar la expulsión.
+
+💬 Es **obligatorio tener Discord** para participar en la CWL.`,
+  },
+];
+
+export type RulesText = Record<string, string>;
+
+export async function getRulesText(): Promise<RulesText> {
+  const out: RulesText = {};
+  for (const b of RULE_TEXT_BLOCKS) out[b.key] = b.default;
+  try {
+    const svc = createServerClient();
+    const { data } = await svc
+      .from("settings")
+      .select("key, value")
+      .in(
+        "key",
+        RULE_TEXT_BLOCKS.map((b) => b.key),
+      );
+    for (const r of data ?? []) {
+      const v = (r.value as string | null) ?? "";
+      if (v.trim()) out[r.key as string] = v;
+    }
+  } catch {
+    /* defaults */
+  }
+  return out;
+}

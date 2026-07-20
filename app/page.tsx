@@ -311,6 +311,21 @@ export default async function ClanHomePage({
         </span>
         <span aria-hidden className="text-ink-soft">›</span>
       </Link>
+
+      {/* Normas del clan (texto + publicar en Discord + ajustes) */}
+      <Link
+        href="/normas"
+        className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 hover:bg-surface-2/60"
+      >
+        <span className="text-2xl">📜</span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-extrabold text-ink">Normas del clan</span>
+          <span className="block text-xs text-ink-soft">
+            Editar reglas y publicarlas en Discord · ajustes de aplicación
+          </span>
+        </span>
+        <span aria-hidden className="text-ink-soft">›</span>
+      </Link>
       </div>
 
       {/* --- Análisis del clan (antes "Stats") --- */}
