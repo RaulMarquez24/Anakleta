@@ -1,5 +1,5 @@
 import { createServerClient } from "@/lib/supabase/server";
-import { getCurrentWar } from "@/lib/war";
+import { getCurrentWar, classifyAttackStatus, type MirrorStatus } from "@/lib/war";
 
 export interface WarSummary {
   id: number;
@@ -36,7 +36,7 @@ export interface WarAttackDetail {
   defenderPosition: number | null;
   defenderTh: number | null;
   isMirror: boolean | null;
-  mirrorStatus: "mirror" | "cleanup" | "stolen" | null;
+  mirrorStatus: MirrorStatus | null;
   stolenFrom: string | null;
 }
 export interface WarMemberDetail {
@@ -440,6 +440,11 @@ export async function getWarDetail(
     const pos = m.map_position as number | null;
     if (pos != null) nameByPosition.set(pos, m.name as string);
   }
+  const wr = war as Record<string, unknown>;
+  const isCwl = Boolean(wr.is_cwl);
+  const endTimeIso = (wr.end_time as string | null) ?? null;
+  const endMs = endTimeIso ? Date.parse(endTimeIso) : NaN;
+  const endMsOrNull = Number.isNaN(endMs) ? null : endMs;
 
   // Agrupa los ataques individuales por atacante (nuestro miembro).
   const attacksByTag = new Map<string, WarAttackDetail[]>();
@@ -450,20 +455,22 @@ export async function getWarDetail(
     const defenderPosition = (a.defender_position as number | null) ?? null;
     const isMirror = (a.is_mirror as boolean | null) ?? null;
     const defenderTag = a.defender_tag as string | null;
+    const seenIso = (a.first_seen_at as string | null) ?? null;
+    const seenMs = seenIso ? Date.parse(seenIso) : null;
 
-    // Clasificación (solo si hay datos de posición; las guerras antiguas van null).
-    let mirrorStatus: WarAttackDetail["mirrorStatus"] = null;
-    let stolenFrom: string | null = null;
-    if (defenderPosition != null) {
-      if (isMirror) {
-        mirrorStatus = "mirror";
-      } else if (defenderTag && firstOrderByDefender.get(defenderTag) === order) {
-        mirrorStatus = "stolen";
-        stolenFrom = nameByPosition.get(defenderPosition) ?? null;
-      } else {
-        mirrorStatus = "cleanup";
-      }
-    }
+    // Clasificación con la ventana de 5h (solo si hay datos; guerras antiguas → null).
+    const mirrorStatus: MirrorStatus | null = classifyAttackStatus({
+      isMirror,
+      defenderPosition,
+      fresh: !!defenderTag && firstOrderByDefender.get(defenderTag) === order,
+      isCwl,
+      endMs: endMsOrNull,
+      seenMs: Number.isNaN(seenMs as number) ? null : seenMs,
+    });
+    const stolenFrom =
+      mirrorStatus === "stolen" && defenderPosition != null
+        ? (nameByPosition.get(defenderPosition) ?? null)
+        : null;
 
     attacksByTag.get(tag)!.push({
       stars: (a.stars as number | null) ?? 0,

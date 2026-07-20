@@ -61,6 +61,24 @@ export async function captureWar(
     if (warErr) throw warErr;
     const warId = warRow.id as number;
 
+    // Preserva la hora aprox. (first_seen_at) de los ataques ya vistos: se
+    // reescribe la guerra cada captura, pero un ataque conserva cuándo se
+    // detectó por primera vez (clave = orden global, único en la guerra).
+    let prevSeen = new Map<number, string>();
+    try {
+      const { data: prev } = await supabase
+        .from("war_attacks")
+        .select("attack_order, first_seen_at")
+        .eq("war_id", warId);
+      prevSeen = new Map(
+        (prev ?? [])
+          .filter((p) => p.first_seen_at)
+          .map((p) => [p.attack_order as number, p.first_seen_at as string]),
+      );
+    } catch {
+      /* columna first_seen_at aún no existe: se rellenará al aplicar la migración */
+    }
+
     // Reescribe ataques y alineación de esta guerra.
     await supabase.from("war_attacks").delete().eq("war_id", warId);
     if (rec.attacks.length > 0) {
@@ -78,6 +96,7 @@ export async function captureWar(
           defender_th: a.defenderTh,
           attacker_position: a.attackerPosition,
           is_mirror: a.isMirror,
+          first_seen_at: prevSeen.get(a.order) ?? capturedAt,
         })),
       );
       if (aErr) throw aErr;

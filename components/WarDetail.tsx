@@ -21,7 +21,7 @@ export interface UnifiedWarMember {
     defenderPosition?: number | null;
     defenderTh?: number | null;
     isMirror?: boolean | null;
-    mirrorStatus?: "mirror" | "cleanup" | "stolen" | null;
+    mirrorStatus?: "mirror" | "cleanup" | "late" | "stolen" | "offmirror" | null;
     stolenFrom?: string | null;
   }[];
   reachableHelp?: boolean; // (en vivo) el 2º ayudaría: hay base a su alcance sin 3⭐
@@ -311,6 +311,14 @@ export function WarDetail({
                                 ) : a.mirrorStatus === "cleanup" ? (
                                   <span className="rounded bg-sky/15 px-1.5 py-px text-[10px] font-extrabold text-sky">
                                     remate
+                                  </span>
+                                ) : a.mirrorStatus === "late" ? (
+                                  <span className="rounded bg-surface-2 px-1.5 py-px text-[10px] font-extrabold text-ink-soft">
+                                    libre (últimas 5h)
+                                  </span>
+                                ) : a.mirrorStatus === "offmirror" ? (
+                                  <span className="rounded bg-gold/15 px-1.5 py-px text-[10px] font-extrabold text-gold-deep">
+                                    fuera de espejo
                                   </span>
                                 ) : a.mirrorStatus === "stolen" ? (
                                   <span className="rounded bg-banner/15 px-1.5 py-px text-[10px] font-extrabold text-banner">

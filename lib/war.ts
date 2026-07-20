@@ -46,12 +46,39 @@ interface CocLeagueGroup {
 // --- Estructura normalizada para la vista ---
 // Detalle de un ataque concreto: a quién le pegó, cuánto duró y si respetó el
 // espejo (misma posición que la suya en el mapa).
-// Clasificación del objetivo respecto al espejo:
+// Clasificación del objetivo respecto al espejo (según normas del clan):
 //  - "mirror": atacó su propia posición (su espejo).
 //  - "cleanup": atacó otra base pero YA estaba atacada (remate/limpieza, ok).
-//  - "stolen": atacó una base fresca que no era la suya (le robó el espejo a
-//    otro compañero, el que tiene esa posición).
-export type MirrorStatus = "mirror" | "cleanup" | "stolen";
+//  - "late": base fresca ajena pero dentro de las últimas 5h (permitido).
+//  - "stolen": base fresca ajena con MÁS de 5h restantes → robó el espejo
+//    (infracción). Solo se marca si hay certeza de la hora (nunca en falso).
+//  - "offmirror": en CWL, base ajena (neutro: el objetivo suele asignarlo un
+//    líder, así que no se juzga como robo).
+export type MirrorStatus = "mirror" | "cleanup" | "late" | "stolen" | "offmirror";
+
+// Ventana en la que se permite robar espejo (últimas 5h de guerra normal).
+const STEAL_WINDOW_MS = 5 * 3_600_000;
+
+// Función pura para clasificar un ataque. `fresh` = fue el primer ataque a esa
+// base. `seenMs` = hora aprox. del ataque (detección); `endMs` = fin de guerra.
+export function classifyAttackStatus(p: {
+  isMirror: boolean | null;
+  defenderPosition: number | null;
+  fresh: boolean;
+  isCwl: boolean;
+  endMs: number | null;
+  seenMs: number | null;
+}): MirrorStatus | null {
+  if (p.defenderPosition == null || p.isMirror == null) return null; // sin datos
+  if (p.isMirror) return "mirror";
+  if (!p.fresh) return "cleanup"; // remate: la base ya estaba atacada
+  if (p.isCwl) return "offmirror"; // CWL: no se juzga (objetivo asignable)
+  // Guerra normal, base fresca ajena: infracción solo si con certeza fue con
+  // >5h restantes; si cae (o pudo caer) en las últimas 5h, permitido.
+  const beforeWindow =
+    p.endMs != null && p.seenMs != null && p.seenMs < p.endMs - STEAL_WINDOW_MS;
+  return beforeWindow ? "stolen" : "late";
+}
 export interface AttackView {
   stars: number;
   destruction: number;
@@ -166,32 +193,16 @@ function attackView(
   };
 }
 
-// Clasifica cada ataque en espejo / remate / robó espejo, usando el orden global
-// de TODOS los ataques (para saber si la base ya estaba tocada) y las posiciones
-// de nuestros miembros (para saber a quién pertenecía el espejo robado).
-function classifyMirror(
+// Primer ataque (menor orden) a cada base, para saber si estaba "fresca".
+function firstOrderByDefenderMap(
   attacks: { defenderTag: string; order: number }[],
-  nameByPosition: Map<number, string>,
-) {
-  const firstOrderByDefender = new Map<string, number>();
+): Map<string, number> {
+  const m = new Map<string, number>();
   for (const a of attacks) {
-    const prev = firstOrderByDefender.get(a.defenderTag);
-    if (prev == null || a.order < prev) firstOrderByDefender.set(a.defenderTag, a.order);
+    const prev = m.get(a.defenderTag);
+    if (prev == null || a.order < prev) m.set(a.defenderTag, a.order);
   }
-  return (a: AttackView, defenderTag: string): void => {
-    if (a.defenderPosition == null) return; // sin datos: se deja null
-    if (a.isMirror) {
-      a.mirrorStatus = "mirror";
-      return;
-    }
-    const firstOnBase = firstOrderByDefender.get(defenderTag) === a.order;
-    if (firstOnBase) {
-      a.mirrorStatus = "stolen";
-      a.stolenFrom = nameByPosition.get(a.defenderPosition) ?? null;
-    } else {
-      a.mirrorStatus = "cleanup";
-    }
-  };
+  return m;
 }
 
 // Construye la vista normalizada. En CWL nuestro clan puede venir como clan u
@@ -212,14 +223,19 @@ function buildView(
   const warCompleted = remainingThs.length === 0;
 
   const oppByTag = opponentByTag(them);
-  // Contexto para clasificar espejo/remate/robo: todos los ataques + nuestras
-  // posiciones (para nombrar a quién se le robó el espejo).
+  // Contexto para clasificar espejo/remate/robo: primer ataque a cada base +
+  // nuestras posiciones (para nombrar a quién se le robó el espejo). En vivo no
+  // hay hora por ataque: usamos "ahora" como referencia de las últimas 5h (si
+  // ahora quedan >5h, cualquier robo hecho hasta ahora fue con >5h → infracción).
   const allAttacks = (us?.members ?? []).flatMap((m) =>
     (m.attacks ?? []).map((a) => ({ defenderTag: a.defenderTag, order: a.order ?? 0 })),
   );
+  const firstOrderByDefender = firstOrderByDefenderMap(allAttacks);
   const nameByPosition = new Map<number, string>();
   for (const m of us?.members ?? []) nameByPosition.set(m.mapPosition, m.name);
-  const classify = classifyMirror(allAttacks, nameByPosition);
+  const endMs = raw.endTime ? Date.parse(parseCocTime(raw.endTime) ?? "") : NaN;
+  const endMsOrNull = Number.isNaN(endMs) ? null : endMs;
+  const nowMs = Date.now();
 
   const members: WarMemberRow[] = (us?.members ?? [])
     .map((m) => {
@@ -246,7 +262,18 @@ function buildView(
         attacks: atks
           .map((a) => {
             const v = attackView(a, m, oppByTag);
-            classify(v, a.defenderTag);
+            const fresh = firstOrderByDefender.get(a.defenderTag) === (a.order ?? 0);
+            v.mirrorStatus = classifyAttackStatus({
+              isMirror: v.isMirror,
+              defenderPosition: v.defenderPosition,
+              fresh,
+              isCwl: opts.isCwl,
+              endMs: endMsOrNull,
+              seenMs: nowMs,
+            });
+            if (v.mirrorStatus === "stolen" && v.defenderPosition != null) {
+              v.stolenFrom = nameByPosition.get(v.defenderPosition) ?? null;
+            }
             return v;
           })
           .sort((a, b) => a.order - b.order),

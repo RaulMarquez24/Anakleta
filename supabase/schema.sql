@@ -113,6 +113,7 @@ alter table war_attacks add column if not exists defender_position int;
 alter table war_attacks add column if not exists defender_th       int;
 alter table war_attacks add column if not exists attacker_position int;
 alter table war_attacks add column if not exists is_mirror         boolean;
+alter table war_attacks add column if not exists first_seen_at     timestamptz;
 
 -- Sistema de ligas nuevo (Ranked) + XP + datos por jugador (enriquecimiento).
 -- El leagueTier es el "rango real": su id es creciente y sirve para ordenar.
