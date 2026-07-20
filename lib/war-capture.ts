@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getWarRecords, getWarLog, type WarLogEntry } from "@/lib/war";
+import { createServerClient } from "@/lib/supabase/server";
 
 export interface WarCaptureResult {
   recorded: number; // nº de guerras grabadas/actualizadas
@@ -106,6 +107,33 @@ export async function captureWar(
   const finalizedCount = await finalizeEndedWars(supabase);
 
   return { recorded, cwl, attacks, finalized: finalizedCount };
+}
+
+// Captura al ABRIR la pantalla de guerra: si alguien la consulta, se guarda en
+// ese momento con datos frescos (además de la captura horaria del cron). Con
+// throttle para no machacar la API si se refresca: como mucho 1 vez cada 3 min.
+// Pensada para llamarse desde after() (no bloquea el render).
+const VIEW_CAPTURE_KEY = "war_capture_last";
+const VIEW_CAPTURE_THROTTLE_MS = 3 * 60_000;
+
+export async function captureCurrentWarOnView(): Promise<{ skipped: boolean }> {
+  const supabase = createServerClient();
+  const { data } = await supabase
+    .from("settings")
+    .select("value")
+    .eq("key", VIEW_CAPTURE_KEY)
+    .maybeSingle();
+  const last = data?.value ? Date.parse(data.value as string) : NaN;
+  if (!Number.isNaN(last) && Date.now() - last < VIEW_CAPTURE_THROTTLE_MS) {
+    return { skipped: true };
+  }
+  const now = new Date().toISOString();
+  // Marca antes de capturar: si dos vistas coinciden, solo una captura.
+  await supabase
+    .from("settings")
+    .upsert({ key: VIEW_CAPTURE_KEY, value: now }, { onConflict: "key" });
+  await captureWar(supabase, now);
+  return { skipped: false };
 }
 
 // Fila mínima de una guerra pendiente de finalizar.

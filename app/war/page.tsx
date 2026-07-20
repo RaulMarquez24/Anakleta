@@ -1,4 +1,6 @@
+import { after } from "next/server";
 import { getCurrentWarFresh, type WarView } from "@/lib/war";
+import { captureCurrentWarOnView } from "@/lib/war-capture";
 import { getWarHelpOverrides } from "@/lib/war-overrides";
 import { getClanName } from "@/lib/dashboard";
 import { getCurrentUser } from "@/lib/supabase/current-user";
@@ -21,6 +23,20 @@ export default async function WarPage() {
     getClanName(),
   ]);
   const showDetail = war.state !== "notInWar" && war.members.length > 0;
+
+  // Si alguien abre la guerra, la capturamos en ese momento (tras responder, sin
+  // bloquear el render y con throttle). Así queda registrada con datos frescos
+  // aunque no haya tocado el cron horario todavía.
+  if (war.state !== "notInWar" && !war.isPrivate) {
+    after(async () => {
+      try {
+        await captureCurrentWarOnView();
+      } catch {
+        /* la captura al abrir es best-effort; no afecta a la vista */
+      }
+    });
+  }
+
   // Correcciones manuales del 2º ataque, solo para guerra normal en curso.
   const warKey = !war.isCwl && war.state === "inWar" ? (war.startTime ?? "") : "";
   const helpOverrides = warKey ? await getWarHelpOverrides(warKey) : {};
