@@ -88,17 +88,6 @@ function TierBadge({ m }: { m: MemberOverviewRow }) {
   );
 }
 
-// Ayuntamiento inline (imagen + "TH 18"), mismo estilo que TierBadge (la liga),
-// para que salgan idénticos y apilados. Imagen local /public/th/{n}.webp (1–18).
-function ThInline({ th }: { th: number | null }) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <ThImage th={th} size={22} />
-      <span className="font-semibold text-ink">TH {th ?? "—"}</span>
-    </span>
-  );
-}
-
 function WarPref({ pref }: { pref: string | null }) {
   if (pref === "in")
     return <span className="rounded-md bg-grass/15 px-1.5 py-0.5 text-[11px] font-bold text-grass" title="Entra a guerra">⚔️ Sí</span>;
@@ -124,6 +113,31 @@ function Activity({ m }: { m: MemberOverviewRow }) {
 
 function href(tag: string) {
   return `/member/${encodeURIComponent(tag)}`;
+}
+
+// Celda de "vital": etiqueta pequeña + valor, con color de estado. Mismo estilo
+// que las tarjetas de Actividad, para que Miembros sea coherente.
+function Vital({
+  label,
+  tone = "ok",
+  children,
+}: {
+  label: string;
+  tone?: "ok" | "warn" | "bad" | "good";
+  children: React.ReactNode;
+}) {
+  const valCls = {
+    ok: "text-ink",
+    good: "text-grass",
+    warn: "text-gold-deep",
+    bad: "text-banner",
+  }[tone];
+  return (
+    <div className="rounded-xl bg-surface-2/60 px-2.5 py-1.5">
+      <p className="text-[9px] font-extrabold uppercase tracking-wide text-ink-soft">{label}</p>
+      <p className={`mt-0.5 text-xs font-extrabold ${valCls}`}>{children}</p>
+    </div>
+  );
 }
 
 function DiscordChip({ id, username }: { id: string | null; username: string | null }) {
@@ -251,19 +265,24 @@ export function MembersTable({
         </button>
       </div>
 
-      {/* Móvil: tarjetas */}
+      {/* Móvil: tarjetas (estilo de vitales, coherente con Actividad) */}
       <div className="space-y-3 sm:hidden">
         {filtered.map((m) => {
           const rb = roleBadge(m.role);
           const attention = m.donationsNegative;
+          const active = m.hadChange === true;
           return (
             <Link
               key={m.tag}
               href={href(m.tag)}
-              className={`block rounded-2xl border border-line bg-surface p-3.5 shadow-sm ${attention ? "border-l-4 border-l-banner" : "border-l-4 border-l-gold"}`}
+              className={`block rounded-2xl border border-line bg-surface p-3.5 shadow-sm transition hover:bg-surface-2/40 ${attention ? "border-l-4 border-l-banner" : "border-l-4 border-l-gold"}`}
             >
+              {/* Cabecera: TH + nombre + insignias + guerra/warn */}
               <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="text-base font-extrabold text-ink">{m.name}</span>
+                <span className="flex-none rounded-lg bg-sky/15 px-1.5 py-0.5 text-[11px] font-extrabold text-sky">
+                  TH{m.townHall ?? "—"}
+                </span>
+                <span className="truncate font-extrabold text-ink">{m.name}</span>
                 {myTag === m.tag && <YouBadge />}
                 {altOf(m).mainTag && <AltBadge of={altOf(m).mainName} />}
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide ${rb.cls}`}>{rb.label}</span>
@@ -274,21 +293,33 @@ export function MembersTable({
                   <QuickWarn tag={m.tag} name={m.name} />
                 </span>
               </div>
-              {/* Todo inline: liga · TH · nivel */}
-              <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+
+              {/* Rango + nivel */}
+              <div className="mb-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                 <TierBadge m={m} />
-                <span className="text-ink-soft">·</span>
-                <ThInline th={m.townHall} />
                 <span className="text-ink-soft">· Nv {m.expLevel ?? "—"}</span>
               </div>
-              <div className="mb-2 flex flex-wrap gap-1.5">
-                <span className="rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink">🏆 {m.trophies ?? "—"}</span>
-                <span className="rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink">🎁 {m.donations ?? "—"}{m.donationsDelta != null && m.donationsDelta > 0 && <span className="ml-1 text-grass">+{m.donationsDelta}</span>} · 📥 {m.donationsReceived ?? "—"}</span>
-                <span className={`rounded-lg px-2 py-1 text-xs font-bold ${m.donationsNegative ? "bg-banner/12 text-banner" : "bg-grass/15 text-grass"}`}>Ratio {m.ratio == null ? "—" : m.ratio.toFixed(1)}</span>
-                {m.warStars != null && <span className="rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink">⭐ {m.warStars}</span>}
-                <DiscordChip id={m.discordId} username={m.discordUsername} />
+
+              {/* Vitales: copas · donaciones · estrellas · actividad */}
+              <div className="mb-2 grid grid-cols-2 gap-1.5">
+                <Vital label="Copas">🏆 {m.trophies ?? "—"}</Vital>
+                <Vital label="Donaciones" tone={m.donationsNegative ? "bad" : "ok"}>
+                  🎁{m.donations ?? "—"}
+                  {m.donationsDelta != null && m.donationsDelta > 0 && (
+                    <span className="text-grass">+{m.donationsDelta}</span>
+                  )}
+                  {" · "}📥{m.donationsReceived ?? "—"}
+                  {m.ratio != null && (
+                    <span className="text-ink-soft"> · {m.ratio.toFixed(1)}</span>
+                  )}
+                </Vital>
+                <Vital label="Estrellas guerra">⭐ {m.warStars ?? "—"}</Vital>
+                <Vital label="Actividad" tone={active ? "good" : "ok"}>
+                  {m.hadChange == null ? "Sin dato" : active ? "Activo" : "Sin cambios"}
+                </Vital>
               </div>
-              <Activity m={m} />
+
+              <DiscordChip id={m.discordId} username={m.discordUsername} />
             </Link>
           );
         })}
