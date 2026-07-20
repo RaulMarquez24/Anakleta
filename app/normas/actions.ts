@@ -78,13 +78,33 @@ async function getSetting(key: string): Promise<string | null> {
 // Publica en Discord los bloques de normas indicados (uno por mensaje). Usa el
 // canal elegido (y lo recuerda como rules_channel_id); si no, el de reglas o el
 // de anuncios. Con `everyone`, avisa a @everyone en el primer mensaje.
+// Espera entre publicaciones para que Discord no agrupe los mensajes (agrupa los
+// del mismo autor con menos de ~7 min de diferencia).
+const PUBLISH_COOLDOWN_MS = 7 * 60_000;
+
 export async function publishRules(
   blockKeys?: string[],
   opts?: { channelId?: string; everyone?: boolean },
-): Promise<{ ok: boolean; sent?: number; error?: string }> {
+): Promise<{ ok: boolean; sent?: number; error?: string; publishedAt?: string; waitSeconds?: number }> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "No autorizado." };
   if (!discordConfigured) return { ok: false, error: "Discord no está configurado." };
+
+  // Cooldown: no dejar publicar otra si no han pasado 7 min desde la última.
+  const lastIso = await getSetting("rules_last_published_at");
+  const lastMs = lastIso ? Date.parse(lastIso) : NaN;
+  if (Number.isFinite(lastMs)) {
+    const elapsed = Date.now() - lastMs;
+    if (elapsed < PUBLISH_COOLDOWN_MS) {
+      const waitSeconds = Math.ceil((PUBLISH_COOLDOWN_MS - elapsed) / 1000);
+      const mins = Math.ceil(waitSeconds / 60);
+      return {
+        ok: false,
+        waitSeconds,
+        error: `Espera ~${mins} min para que salga como mensaje nuevo (Discord agrupa los seguidos).`,
+      };
+    }
+  }
 
   const chosen = opts?.channelId?.trim();
   const channelId =
@@ -104,18 +124,12 @@ export async function publishRules(
       ? RULE_TEXT_BLOCKS.filter((b) => blockKeys.includes(b.key))
       : RULE_TEXT_BLOCKS;
 
-  // Separador entre bloques (Discord agrupa los mensajes seguidos del mismo
-  // autor; esta línea los deja visualmente diferenciados).
-  const DIVIDER = "━━━━━━━━━━━━━━━━━━━━";
-
   let sent = 0;
   for (const b of keys) {
     // Sustituye los tokens ({horas_robo_espejo}, …) por los valores configurados.
     let content = applyRuleTokens((text[b.key] ?? b.default).trim(), tokens);
     if (!content) continue;
-    // Separador al inicio de los bloques 2º y 3º (no en el primero).
-    if (sent > 0) content = `${DIVIDER}\n\n${content}`;
-    // @everyone oculto (spoiler) al final de cada bloque: no se ve pero notifica.
+    // @everyone oculto (spoiler) al final del bloque: no se ve pero notifica.
     if (opts?.everyone) content = `${content}\n\n||@everyone||`;
     const ok = await sendClanMessage(
       content.slice(0, 1990),
@@ -125,5 +139,12 @@ export async function publishRules(
     if (!ok) return { ok: false, sent, error: `No se pudo publicar «${b.title}».` };
     sent++;
   }
-  return { ok: true, sent };
+
+  // Marca la hora de publicación para el cooldown de 7 min.
+  const publishedAt = new Date().toISOString();
+  await svc
+    .from("settings")
+    .upsert({ key: "rules_last_published_at", value: publishedAt }, { onConflict: "key" });
+
+  return { ok: true, sent, publishedAt };
 }

@@ -29,10 +29,11 @@ export default async function NormasPage() {
   const { data: chSetting } = await svc
     .from("settings")
     .select("key, value")
-    .in("key", ["rules_channel_id", "announcements_channel_id"]);
+    .in("key", ["rules_channel_id", "announcements_channel_id", "rules_last_published_at"]);
   const chMap = new Map((chSetting ?? []).map((r) => [r.key as string, r.value as string | null]));
   const defaultChannel =
     (chMap.get("rules_channel_id") || chMap.get("announcements_channel_id")) ?? null;
+  const lastPublishedAt = chMap.get("rules_last_published_at") ?? null;
 
   // Todos los valores en un único panel, ordenados por grupo temático.
   const ordered = [...ALL_RULE_FIELDS].sort((a, b) => {
@@ -82,6 +83,7 @@ export default async function NormasPage() {
         legend={legend}
         channels={channels}
         defaultChannel={defaultChannel}
+        lastPublishedAt={lastPublishedAt}
       />
 
       {/* Configuración de valores (unificada) */}

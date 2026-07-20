@@ -1,8 +1,14 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Pencil, Eye, Send } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Pencil, Eye, Send, Clock } from "lucide-react";
 import { saveRulesText, publishRules } from "@/app/normas/actions";
+
+const COOLDOWN_MS = 7 * 60_000;
+function mmss(ms: number): string {
+  const s = Math.ceil(ms / 1000);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
 
 export interface RuleTextView {
   key: string;
@@ -58,6 +64,7 @@ export function RulesTextEditor({
   legend,
   channels,
   defaultChannel,
+  lastPublishedAt,
 }: {
   blocks: RuleTextView[];
   discordReady: boolean;
@@ -65,6 +72,7 @@ export function RulesTextEditor({
   legend: TokenLegend[];
   channels: ChannelOption[];
   defaultChannel: string | null;
+  lastPublishedAt: string | null;
 }) {
   const [values, setValues] = useState<Record<string, string>>(
     Object.fromEntries(blocks.map((b) => [b.key, b.value])),
@@ -75,7 +83,20 @@ export function RulesTextEditor({
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [channelId, setChannelId] = useState<string>(defaultChannel ?? channels[0]?.id ?? "");
   const [everyone, setEveryone] = useState(false);
+  const [lastPub, setLastPub] = useState<number | null>(
+    lastPublishedAt ? Date.parse(lastPublishedAt) : null,
+  );
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
   const taRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const remaining = lastPub ? Math.max(0, COOLDOWN_MS - (nowMs - lastPub)) : 0;
+
+  // Tic-tac de la cuenta atrás mientras haya cooldown activo.
+  useEffect(() => {
+    if (remaining <= 0) return;
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [remaining]);
 
   const block = blocks.find((b) => b.key === active) ?? blocks[0];
   const value = values[active] ?? "";
@@ -106,17 +127,24 @@ export function RulesTextEditor({
     if (r.ok) setEditing(false);
   }
 
-  async function publish(keys?: string[]) {
-    setBusy(keys ? "one" : "all");
+  async function publish() {
+    setBusy("one");
     setMsg(null);
     await saveRulesText({ [active]: value }); // guarda lo que ves antes de publicar
-    const r = await publishRules(keys, { channelId, everyone });
+    const r = await publishRules([active], { channelId, everyone });
     setBusy(null);
-    setMsg(
-      r.ok
-        ? { ok: true, text: `Publicado (${r.sent} ${r.sent === 1 ? "bloque" : "bloques"}).` }
-        : { ok: false, text: r.error ?? "No se pudo publicar." },
-    );
+    if (r.ok) {
+      setMsg({ ok: true, text: `Publicado «${block?.title}».` });
+      setLastPub(r.publishedAt ? Date.parse(r.publishedAt) : Date.now());
+      setNowMs(Date.now());
+    } else {
+      // Si el servidor devuelve cooldown, sincroniza la cuenta atrás.
+      if (r.waitSeconds != null) {
+        setLastPub(Date.now() - (COOLDOWN_MS - r.waitSeconds * 1000));
+        setNowMs(Date.now());
+      }
+      setMsg({ ok: false, text: r.error ?? "No se pudo publicar." });
+    }
   }
 
   return (
@@ -153,13 +181,28 @@ export function RulesTextEditor({
               {editing ? "Ver" : "Editar"}
             </button>
             <button
-              onClick={() => publish([active])}
-              disabled={!discordReady || busy != null}
-              title={discordReady ? "Publicar este bloque en Discord" : "Discord no configurado"}
+              onClick={() => publish()}
+              disabled={!discordReady || busy != null || !channelId || remaining > 0}
+              title={
+                remaining > 0
+                  ? "Espera a que termine la cuenta atrás"
+                  : discordReady
+                    ? "Publicar este bloque en Discord"
+                    : "Discord no configurado"
+              }
               className="flex items-center gap-1.5 rounded-full bg-[#5865F2] px-3 py-1.5 text-xs font-extrabold text-white transition hover:brightness-110 disabled:opacity-50"
             >
-              <Send className="h-3.5 w-3.5" />
-              {busy === "one" ? "…" : "Publicar"}
+              {remaining > 0 ? (
+                <>
+                  <Clock className="h-3.5 w-3.5" />
+                  {mmss(remaining)}
+                </>
+              ) : (
+                <>
+                  <Send className="h-3.5 w-3.5" />
+                  {busy === "one" ? "…" : "Publicar"}
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -228,7 +271,7 @@ export function RulesTextEditor({
         )}
       </div>
 
-      {/* Acciones globales: dónde publicar + @everyone + publicar todo */}
+      {/* Ajustes de publicación: canal + @everyone (los usa el botón Publicar de cada pestaña) */}
       <div className="mt-3 rounded-2xl border border-line bg-surface p-3">
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex min-w-0 flex-1 items-center gap-2">
@@ -257,25 +300,21 @@ export function RulesTextEditor({
             @everyone
           </label>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <button
-            onClick={() => publish()}
-            disabled={!discordReady || busy != null || !channelId}
-            title={discordReady ? "Publicar las 3 normas en Discord" : "Discord no configurado"}
-            className="flex items-center gap-1.5 rounded-full bg-[#5865F2] px-5 py-2 text-sm font-extrabold text-white transition hover:brightness-110 disabled:opacity-50"
-          >
-            <Send className="h-4 w-4" />
-            {busy === "all" ? "Publicando…" : "Publicar todo en Discord"}
-          </button>
-          {msg && (
-            <span className={`text-sm font-bold ${msg.ok ? "text-grass" : "text-banner"}`}>
-              {msg.text}
-            </span>
+        <p className="mt-2 text-[11px] text-ink-soft">
+          Publica cada norma desde su pestaña con <strong>Publicar</strong>. Tras enviar una, hay que
+          esperar <strong>7 min</strong> para la siguiente (así Discord no las agrupa).
+          {remaining > 0 && (
+            <span className="ml-1 font-bold text-gold-deep">Faltan {mmss(remaining)}.</span>
           )}
-        </div>
+        </p>
         {everyone && (
-          <p className="mt-2 text-[11px] font-semibold text-gold-deep">
-            Se avisará a @everyone en todos los mensajes, oculto (spoiler): no se ve pero notifica.
+          <p className="mt-1 text-[11px] font-semibold text-gold-deep">
+            @everyone se añade oculto (spoiler): no se ve pero notifica.
+          </p>
+        )}
+        {msg && (
+          <p className={`mt-2 text-sm font-bold ${msg.ok ? "text-grass" : "text-banner"}`}>
+            {msg.text}
           </p>
         )}
         {!discordReady && (
