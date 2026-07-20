@@ -128,6 +128,14 @@ export function RulesTextEditor({
   }
 
   async function publish() {
+    // Solo advierte si aún no han pasado los 7 min; no bloquea.
+    if (remaining > 0) {
+      const ok = window.confirm(
+        `Aún faltan ${mmss(remaining)} para que Discord no agrupe los mensajes. ` +
+          `Si publicas ahora, saldrá pegado al anterior. ¿Enviar igualmente?`,
+      );
+      if (!ok) return;
+    }
     setBusy("one");
     setMsg(null);
     await saveRulesText({ [active]: value }); // guarda lo que ves antes de publicar
@@ -138,11 +146,6 @@ export function RulesTextEditor({
       setLastPub(r.publishedAt ? Date.parse(r.publishedAt) : Date.now());
       setNowMs(Date.now());
     } else {
-      // Si el servidor devuelve cooldown, sincroniza la cuenta atrás.
-      if (r.waitSeconds != null) {
-        setLastPub(Date.now() - (COOLDOWN_MS - r.waitSeconds * 1000));
-        setNowMs(Date.now());
-      }
       setMsg({ ok: false, text: r.error ?? "No se pudo publicar." });
     }
   }
@@ -182,27 +185,22 @@ export function RulesTextEditor({
             </button>
             <button
               onClick={() => publish()}
-              disabled={!discordReady || busy != null || !channelId || remaining > 0}
+              disabled={!discordReady || busy != null || !channelId}
               title={
                 remaining > 0
-                  ? "Espera a que termine la cuenta atrás"
+                  ? `Aún faltan ${mmss(remaining)} para no agrupar; puedes enviar igualmente`
                   : discordReady
                     ? "Publicar este bloque en Discord"
                     : "Discord no configurado"
               }
-              className="flex items-center gap-1.5 rounded-full bg-[#5865F2] px-3 py-1.5 text-xs font-extrabold text-white transition hover:brightness-110 disabled:opacity-50"
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-extrabold transition disabled:opacity-50 ${
+                remaining > 0
+                  ? "bg-gold text-banner-dark hover:brightness-105"
+                  : "bg-[#5865F2] text-white hover:brightness-110"
+              }`}
             >
-              {remaining > 0 ? (
-                <>
-                  <Clock className="h-3.5 w-3.5" />
-                  {mmss(remaining)}
-                </>
-              ) : (
-                <>
-                  <Send className="h-3.5 w-3.5" />
-                  {busy === "one" ? "…" : "Publicar"}
-                </>
-              )}
+              {remaining > 0 ? <Clock className="h-3.5 w-3.5" /> : <Send className="h-3.5 w-3.5" />}
+              {busy === "one" ? "…" : remaining > 0 ? `Publicar (${mmss(remaining)})` : "Publicar"}
             </button>
           </div>
         </div>
@@ -301,8 +299,9 @@ export function RulesTextEditor({
           </label>
         </div>
         <p className="mt-2 text-[11px] text-ink-soft">
-          Publica cada norma desde su pestaña con <strong>Publicar</strong>. Tras enviar una, hay que
-          esperar <strong>7 min</strong> para la siguiente (así Discord no las agrupa).
+          Publica cada norma desde su pestaña con <strong>Publicar</strong>. Se recomienda esperar{" "}
+          <strong>7 min</strong> entre una y otra para que Discord no las agrupe; si envías antes, te
+          avisa pero puedes hacerlo igualmente (reinicia el contador).
           {remaining > 0 && (
             <span className="ml-1 font-bold text-gold-deep">Faltan {mmss(remaining)}.</span>
           )}
