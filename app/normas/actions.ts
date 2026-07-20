@@ -104,11 +104,17 @@ export async function publishRules(
       ? RULE_TEXT_BLOCKS.filter((b) => blockKeys.includes(b.key))
       : RULE_TEXT_BLOCKS;
 
+  // Separador entre bloques (Discord agrupa los mensajes seguidos del mismo
+  // autor; esta línea los deja visualmente diferenciados).
+  const DIVIDER = "━━━━━━━━━━━━━━━━━━━━";
+
   let sent = 0;
   for (const b of keys) {
     // Sustituye los tokens ({horas_robo_espejo}, …) por los valores configurados.
     let content = applyRuleTokens((text[b.key] ?? b.default).trim(), tokens);
     if (!content) continue;
+    // Separador al inicio de los bloques 2º y 3º (no en el primero).
+    if (sent > 0) content = `${DIVIDER}\n\n${content}`;
     // @everyone oculto (spoiler) al final de cada bloque: no se ve pero notifica.
     if (opts?.everyone) content = `${content}\n\n||@everyone||`;
     const ok = await sendClanMessage(
