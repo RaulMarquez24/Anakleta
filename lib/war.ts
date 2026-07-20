@@ -46,6 +46,12 @@ interface CocLeagueGroup {
 // --- Estructura normalizada para la vista ---
 // Detalle de un ataque concreto: a quién le pegó, cuánto duró y si respetó el
 // espejo (misma posición que la suya en el mapa).
+// Clasificación del objetivo respecto al espejo:
+//  - "mirror": atacó su propia posición (su espejo).
+//  - "cleanup": atacó otra base pero YA estaba atacada (remate/limpieza, ok).
+//  - "stolen": atacó una base fresca que no era la suya (le robó el espejo a
+//    otro compañero, el que tiene esa posición).
+export type MirrorStatus = "mirror" | "cleanup" | "stolen";
 export interface AttackView {
   stars: number;
   destruction: number;
@@ -55,6 +61,8 @@ export interface AttackView {
   defenderPosition: number | null;
   defenderTh: number | null;
   isMirror: boolean; // atacó a su espejo (misma posición)
+  mirrorStatus: MirrorStatus | null; // null si no hay datos (guerra antigua)
+  stolenFrom: string | null; // a quién le robó el espejo (si "stolen")
 }
 export interface WarMemberRow {
   tag: string;
@@ -153,6 +161,36 @@ function attackView(
     defenderPosition,
     defenderTh: d?.townhallLevel ?? null,
     isMirror: defenderPosition != null && defenderPosition === attacker.mapPosition,
+    mirrorStatus: null, // lo fija classifyMirror() con el contexto de la guerra
+    stolenFrom: null,
+  };
+}
+
+// Clasifica cada ataque en espejo / remate / robó espejo, usando el orden global
+// de TODOS los ataques (para saber si la base ya estaba tocada) y las posiciones
+// de nuestros miembros (para saber a quién pertenecía el espejo robado).
+function classifyMirror(
+  attacks: { defenderTag: string; order: number }[],
+  nameByPosition: Map<number, string>,
+) {
+  const firstOrderByDefender = new Map<string, number>();
+  for (const a of attacks) {
+    const prev = firstOrderByDefender.get(a.defenderTag);
+    if (prev == null || a.order < prev) firstOrderByDefender.set(a.defenderTag, a.order);
+  }
+  return (a: AttackView, defenderTag: string): void => {
+    if (a.defenderPosition == null) return; // sin datos: se deja null
+    if (a.isMirror) {
+      a.mirrorStatus = "mirror";
+      return;
+    }
+    const firstOnBase = firstOrderByDefender.get(defenderTag) === a.order;
+    if (firstOnBase) {
+      a.mirrorStatus = "stolen";
+      a.stolenFrom = nameByPosition.get(a.defenderPosition) ?? null;
+    } else {
+      a.mirrorStatus = "cleanup";
+    }
   };
 }
 
@@ -174,6 +212,15 @@ function buildView(
   const warCompleted = remainingThs.length === 0;
 
   const oppByTag = opponentByTag(them);
+  // Contexto para clasificar espejo/remate/robo: todos los ataques + nuestras
+  // posiciones (para nombrar a quién se le robó el espejo).
+  const allAttacks = (us?.members ?? []).flatMap((m) =>
+    (m.attacks ?? []).map((a) => ({ defenderTag: a.defenderTag, order: a.order ?? 0 })),
+  );
+  const nameByPosition = new Map<number, string>();
+  for (const m of us?.members ?? []) nameByPosition.set(m.mapPosition, m.name);
+  const classify = classifyMirror(allAttacks, nameByPosition);
+
   const members: WarMemberRow[] = (us?.members ?? [])
     .map((m) => {
       const atks = m.attacks ?? [];
@@ -197,7 +244,11 @@ function buildView(
         stars: atks.reduce((n, a) => n + (a.stars ?? 0), 0),
         destruction: atks.reduce((n, a) => n + (a.destructionPercentage ?? 0), 0),
         attacks: atks
-          .map((a) => attackView(a, m, oppByTag))
+          .map((a) => {
+            const v = attackView(a, m, oppByTag);
+            classify(v, a.defenderTag);
+            return v;
+          })
           .sort((a, b) => a.order - b.order),
         reachableHelp,
       };

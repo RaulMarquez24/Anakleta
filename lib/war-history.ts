@@ -36,6 +36,8 @@ export interface WarAttackDetail {
   defenderPosition: number | null;
   defenderTh: number | null;
   isMirror: boolean | null;
+  mirrorStatus: "mirror" | "cleanup" | "stolen" | null;
+  stolenFrom: string | null;
 }
 export interface WarMemberDetail {
   tag: string;
@@ -423,20 +425,57 @@ export async function getWarDetail(
       .order("attack_order", { ascending: true }),
   ]);
 
+  // Contexto para clasificar espejo/remate/robo: primer ataque a cada base (por
+  // orden) y el nombre de nuestro miembro en cada posición (dueño del espejo).
+  const firstOrderByDefender = new Map<string, number>();
+  for (const a of atks ?? []) {
+    const dt = a.defender_tag as string | null;
+    if (!dt) continue;
+    const o = (a.attack_order as number | null) ?? 0;
+    const prev = firstOrderByDefender.get(dt);
+    if (prev == null || o < prev) firstOrderByDefender.set(dt, o);
+  }
+  const nameByPosition = new Map<number, string>();
+  for (const m of members ?? []) {
+    const pos = m.map_position as number | null;
+    if (pos != null) nameByPosition.set(pos, m.name as string);
+  }
+
   // Agrupa los ataques individuales por atacante (nuestro miembro).
   const attacksByTag = new Map<string, WarAttackDetail[]>();
   for (const a of atks ?? []) {
     const tag = a.attacker_tag as string;
     if (!attacksByTag.has(tag)) attacksByTag.set(tag, []);
+    const order = (a.attack_order as number | null) ?? 0;
+    const defenderPosition = (a.defender_position as number | null) ?? null;
+    const isMirror = (a.is_mirror as boolean | null) ?? null;
+    const defenderTag = a.defender_tag as string | null;
+
+    // Clasificación (solo si hay datos de posición; las guerras antiguas van null).
+    let mirrorStatus: WarAttackDetail["mirrorStatus"] = null;
+    let stolenFrom: string | null = null;
+    if (defenderPosition != null) {
+      if (isMirror) {
+        mirrorStatus = "mirror";
+      } else if (defenderTag && firstOrderByDefender.get(defenderTag) === order) {
+        mirrorStatus = "stolen";
+        stolenFrom = nameByPosition.get(defenderPosition) ?? null;
+      } else {
+        mirrorStatus = "cleanup";
+      }
+    }
+
     attacksByTag.get(tag)!.push({
       stars: (a.stars as number | null) ?? 0,
       destruction: Number(a.destruction ?? 0),
-      order: (a.attack_order as number | null) ?? 0,
+      order,
       duration: (a.duration as number | null) ?? null,
       defenderName: (a.defender_name as string | null) ?? null,
-      defenderPosition: (a.defender_position as number | null) ?? null,
+      defenderPosition,
       defenderTh: (a.defender_th as number | null) ?? null,
-      isMirror: (a.is_mirror as boolean | null) ?? null,
+      isMirror,
+      mirrorStatus,
+      stolenFrom,
     });
   }
 
