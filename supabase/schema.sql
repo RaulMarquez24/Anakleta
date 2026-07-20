@@ -130,6 +130,7 @@ alter table wars add column if not exists clan_stars           int;
 alter table wars add column if not exists opponent_stars       int;
 alter table wars add column if not exists clan_destruction     numeric;
 alter table wars add column if not exists opponent_destruction numeric;
+alter table wars add column if not exists finalized            boolean default false;
 
 create table if not exists war_members (
   war_id        bigint references wars(id),

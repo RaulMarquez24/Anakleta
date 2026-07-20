@@ -420,6 +420,9 @@ export async function getWarRecords(
     ];
   }
 
+  // Nota: la reconciliación con el warlog (resultado/estrellas finales oficiales
+  // de guerras normales ya cerradas) vive en getWarLog() + finalizeEndedWars().
+
   // CWL: registrar nuestras guerras de las rondas con datos, saltando las que ya
   // están guardadas como terminadas (no cambian; ahorra ~decenas de llamadas).
   const { season, refs } = await fetchLeagueGroup(clanTag);
@@ -437,6 +440,57 @@ export async function getWarRecords(
         round: x.round,
       }),
     );
+}
+
+// ── Warlog: resultado FINAL oficial de guerras normales ya cerradas ──────────
+// El /currentwar deja de reportar la guerra en cuanto empieza la preparación de
+// la siguiente, así que una guerra capturada a mitad puede quedarse sin datos
+// finales. El warlog público guarda el marcador definitivo de las últimas
+// guerras (solo resumen: estrellas y % del clan y del rival, sin ataques).
+export interface WarLogEntry {
+  result: "win" | "lose" | "tie" | null;
+  endTime: string | null; // ISO
+  teamSize: number | null;
+  clanStars: number | null;
+  opponentStars: number | null;
+  clanDestruction: number | null;
+  opponentDestruction: number | null;
+  opponentName: string | null;
+}
+
+interface CocWarLogRaw {
+  items?: Array<{
+    result?: string | null;
+    endTime?: string;
+    teamSize?: number;
+    clan?: { stars?: number; destructionPercentage?: number };
+    opponent?: { name?: string; tag?: string; stars?: number; destructionPercentage?: number };
+  }>;
+}
+
+// Devuelve las guerras normales del warlog (excluye rondas de CWL, que salen con
+// result=null y opponent.tag="#0"). [] si el warlog es privado o falla.
+export async function getWarLog(
+  clanTag = process.env.COC_CLAN_TAG ?? "",
+): Promise<WarLogEntry[]> {
+  let raw: CocWarLogRaw;
+  try {
+    raw = await cocFetch<CocWarLogRaw>(`/clans/${encodeTag(clanTag)}/warlog?limit=20`);
+  } catch {
+    return [];
+  }
+  return (raw.items ?? [])
+    .filter((e) => e.result != null && e.opponent?.tag !== "#0")
+    .map((e) => ({
+      result: (e.result as WarLogEntry["result"]) ?? null,
+      endTime: parseCocTime(e.endTime),
+      teamSize: e.teamSize ?? null,
+      clanStars: e.clan?.stars ?? null,
+      opponentStars: e.opponent?.stars ?? null,
+      clanDestruction: e.clan?.destructionPercentage ?? null,
+      opponentDestruction: e.opponent?.destructionPercentage ?? null,
+      opponentName: e.opponent?.name ?? null,
+    }));
 }
 
 function emptyWar(state: CocCurrentWar["state"], isPrivate: boolean): WarView {
