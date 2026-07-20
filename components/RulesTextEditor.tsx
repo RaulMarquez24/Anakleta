@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { saveRulesText, publishRules } from "@/app/normas/actions";
 
 export interface RuleTextView {
@@ -37,6 +37,28 @@ export function RulesTextEditor({
   );
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const refs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  const lastKey = useRef<string>(blocks[0]?.key ?? "");
+
+  // Inserta un token en el punto del cursor del último textarea enfocado.
+  function insertToken(token: string) {
+    const key = lastKey.current || blocks[0]?.key;
+    if (!key) return;
+    const el = refs.current[key];
+    const cur = values[key] ?? "";
+    const tok = `{${token}}`;
+    const start = el ? el.selectionStart : cur.length;
+    const end = el ? el.selectionEnd : cur.length;
+    const next = cur.slice(0, start) + tok + cur.slice(end);
+    setValues((v) => ({ ...v, [key]: next }));
+    if (el) {
+      const pos = start + tok.length;
+      requestAnimationFrame(() => {
+        el.focus();
+        el.setSelectionRange(pos, pos);
+      });
+    }
+  }
 
   async function saveAll() {
     setBusy("save");
@@ -71,9 +93,15 @@ export function RulesTextEditor({
           </p>
           <div className="flex flex-wrap gap-1.5">
             {legend.map((l) => (
-              <span key={l.token} className="rounded-lg bg-surface px-2 py-1 font-bold text-ink" title={l.label}>
+              <button
+                key={l.token}
+                type="button"
+                onClick={() => insertToken(l.token)}
+                title={`Insertar ${l.label} (= ${l.value})`}
+                className="rounded-lg bg-surface px-2 py-1 font-bold text-ink transition hover:bg-gold/15"
+              >
                 <code className="text-gold-deep">{`{${l.token}}`}</code> = {l.value}
-              </span>
+              </button>
             ))}
           </div>
         </div>
@@ -92,8 +120,14 @@ export function RulesTextEditor({
             </button>
           </div>
           <textarea
+            ref={(el) => {
+              refs.current[b.key] = el;
+            }}
             value={values[b.key]}
             onChange={(e) => setValues((v) => ({ ...v, [b.key]: e.target.value }))}
+            onFocus={() => {
+              lastKey.current = b.key;
+            }}
             rows={10}
             className="w-full resize-y rounded-xl border border-line bg-surface-2 p-3 text-sm text-ink outline-none focus:border-gold"
           />

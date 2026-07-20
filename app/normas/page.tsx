@@ -1,10 +1,8 @@
 import {
-  getRulesConfig,
   getRulesText,
   getAllTokenValues,
-  RULE_FIELDS,
-  RULE_TEXT_FIELDS,
   ALL_RULE_FIELDS,
+  RULE_GROUP_ORDER,
   RULE_TEXT_BLOCKS,
 } from "@/lib/rules";
 import { discordConfigured } from "@/lib/discord";
@@ -16,25 +14,23 @@ import { RulesTextEditor, type RuleTextView } from "@/components/RulesTextEditor
 export const dynamic = "force-dynamic";
 
 export default async function NormasPage() {
-  const [user, cfg, text, tokens] = await Promise.all([
+  const [user, text, tokens] = await Promise.all([
     getCurrentUser(),
-    getRulesConfig(),
     getRulesText(),
     getAllTokenValues(),
   ]);
 
-  const appFields: RuleFieldView[] = RULE_FIELDS.map((f) => ({
+  // Todos los valores en un único panel, ordenados por grupo temático.
+  const ordered = [...ALL_RULE_FIELDS].sort((a, b) => {
+    const ga = RULE_GROUP_ORDER.indexOf(a.group);
+    const gb = RULE_GROUP_ORDER.indexOf(b.group);
+    return (ga < 0 ? 99 : ga) - (gb < 0 ? 99 : gb);
+  });
+  const fields: RuleFieldView[] = ordered.map((f) => ({
     key: f.key,
-    label: f.label,
-    help: f.help,
-    min: f.min,
-    max: f.max,
-    unit: f.unit,
-    value: f.prop ? cfg[f.prop] : (tokens[f.token] ?? 0),
-  }));
-
-  const textFields: RuleFieldView[] = RULE_TEXT_FIELDS.map((f) => ({
-    key: f.key,
+    group: f.group,
+    token: f.token,
+    affectsApp: f.affectsApp,
     label: f.label,
     help: f.help,
     min: f.min,
@@ -60,9 +56,9 @@ export default async function NormasPage() {
       {/* Texto de las normas + publicación en Discord */}
       <h2 className="mb-1 text-lg font-extrabold text-ink">Reglas del clan</h2>
       <p className="mb-3 text-sm text-ink-soft">
-        Edita el texto de las normas y publícalo en Discord con un clic. Los tokens{" "}
-        <code className="text-gold-deep">{"{…}"}</code> se sustituyen por el valor configurado abajo,
-        así el texto se mantiene solo.
+        Edita las normas y publícalas en Discord. Toca un token{" "}
+        <code className="text-gold-deep">{"{…}"}</code> para insertarlo: se sustituye por su valor
+        configurado, así el texto se mantiene solo.
       </p>
       <RulesTextEditor
         blocks={blocks}
@@ -71,22 +67,13 @@ export default async function NormasPage() {
         legend={legend}
       />
 
-      {/* Valores que aparecen en el texto (solo afectan al texto) */}
+      {/* Configuración de valores (unificada) */}
       <h2 className="mb-1 mt-8 text-lg font-extrabold text-ink">Valores de las normas</h2>
       <p className="mb-3 text-sm text-ink-soft">
-        Números que aparecen en el texto (puntos de Juegos del Clan, ataques obligatorios, días para
-        avisar…). Cambian el texto publicado, no la lógica de la app.
+        Ajusta cada valor con los botones. Se usan en el texto (como tokens) y algunos también
+        controlan cómo la app aplica las normas (robo de espejo, warns, inactividad, donaciones).
       </p>
-      <RulesEditor fields={textFields} />
-
-      {/* Ajustes con los que la app aplica las normas */}
-      <h2 className="mb-1 mt-8 text-lg font-extrabold text-ink">Cómo la app aplica las normas</h2>
-      <p className="mb-3 text-sm text-ink-soft">
-        Estos valores controlan la ventana para robar espejo, el umbral de warns, la inactividad y el
-        balance de donaciones. Afectan a Actividad, a las fichas y al detalle de guerra (y también
-        aparecen como tokens en el texto).
-      </p>
-      <RulesEditor fields={appFields} />
+      <RulesEditor fields={fields} />
     </AppShell>
   );
 }

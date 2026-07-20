@@ -27,17 +27,32 @@ export interface RuleField {
   prop?: keyof RulesConfig; // presente si el valor lo USA la app (no solo el texto)
   default?: number; // default para valores que no están en RulesConfig (solo texto)
   token: string; // token para el texto de las normas: {token} → valor
+  group: string; // agrupación temática en el panel
+  affectsApp?: boolean; // true si además cambia la lógica de la app
   label: string;
   help: string;
   min: number;
   max: number;
   unit: string;
 }
+
+// Orden de los grupos en el panel de normas.
+export const RULE_GROUP_ORDER = [
+  "Guerra",
+  "Warns",
+  "Actividad",
+  "Donaciones",
+  "Capital y eventos",
+  "CWL",
+  "Clan",
+];
 export const RULE_FIELDS: RuleField[] = [
   {
     key: "steal_window_hours",
     prop: "stealWindowHours",
     token: "horas_robo_espejo",
+    group: "Guerra",
+    affectsApp: true,
     label: "Robar espejo: ventana final",
     help: "En guerra normal, atacar una base fresca ajena (robar el espejo) solo cuenta como infracción con MÁS de estas horas restantes. Dentro de esta ventana final está permitido.",
     min: 0,
@@ -48,6 +63,8 @@ export const RULE_FIELDS: RuleField[] = [
     key: "warns_threshold",
     prop: "warnsThreshold",
     token: "umbral_warns",
+    group: "Warns",
+    affectsApp: true,
     label: "Warns para «A echar»",
     help: "Nº de warns vigentes que hacen que un miembro pase a la categoría de expulsión.",
     min: 1,
@@ -58,6 +75,8 @@ export const RULE_FIELDS: RuleField[] = [
     key: "warns_expiry_days",
     prop: "warnsExpiryDays",
     token: "caducidad_warns",
+    group: "Warns",
+    affectsApp: true,
     label: "Caducidad de warns",
     help: "Días hasta que un warn deja de contar. 0 = no caducan nunca.",
     min: 0,
@@ -68,6 +87,8 @@ export const RULE_FIELDS: RuleField[] = [
     key: "inactivity_days",
     prop: "inactivityDays",
     token: "dias_inactividad",
+    group: "Actividad",
+    affectsApp: true,
     label: "Inactividad para revisar",
     help: "Días sin actividad detectada a partir de los cuales un miembro se marca para revisar.",
     min: 1,
@@ -78,6 +99,8 @@ export const RULE_FIELDS: RuleField[] = [
     key: "donation_min",
     prop: "donationMin",
     token: "min_donaciones",
+    group: "Donaciones",
+    affectsApp: true,
     label: "Donaciones: mínimo",
     help: "Si un miembro dona menos de esto Y recibió bastante más, su balance cuenta como negativo.",
     min: 0,
@@ -88,6 +111,8 @@ export const RULE_FIELDS: RuleField[] = [
     key: "donation_gap",
     prop: "donationGap",
     token: "desfase_donaciones",
+    group: "Donaciones",
+    affectsApp: true,
     label: "Donaciones: desfase",
     help: "Diferencia (recibido − donado) que dispara el aviso de «balance bajo».",
     min: 0,
@@ -103,8 +128,9 @@ export const RULE_TEXT_FIELDS: RuleField[] = [
     key: "absence_notice_days",
     token: "dias_avisar_ausencia",
     default: 5,
+    group: "Actividad",
     label: "Ausencia: avisar a partir de",
-    help: "Días de inactividad tras los que la norma pide avisar. Solo texto.",
+    help: "Días de inactividad tras los que la norma pide avisar.",
     min: 1,
     max: 30,
     unit: "días",
@@ -113,8 +139,9 @@ export const RULE_TEXT_FIELDS: RuleField[] = [
     key: "clan_games_min",
     token: "min_puntos_juegos",
     default: 500,
+    group: "Capital y eventos",
     label: "Juegos del Clan: mínimo",
-    help: "Puntos mínimos exigidos en los Juegos del Clan. Solo texto.",
+    help: "Puntos mínimos exigidos en los Juegos del Clan.",
     min: 0,
     max: 5000,
     unit: "puntos",
@@ -123,8 +150,9 @@ export const RULE_TEXT_FIELDS: RuleField[] = [
     key: "war_attacks_required",
     token: "ataques_obligatorios",
     default: 2,
+    group: "Guerra",
     label: "Guerra: ataques obligatorios",
-    help: "Ataques que debe usar quien entra en guerra normal. Solo texto.",
+    help: "Ataques que debe usar quien entra en guerra normal.",
     min: 1,
     max: 2,
     unit: "ataques",
@@ -133,8 +161,9 @@ export const RULE_TEXT_FIELDS: RuleField[] = [
     key: "cwl_accounts",
     token: "cuentas_cwl",
     default: 1,
+    group: "CWL",
     label: "CWL: cuentas por persona",
-    help: "Nº de cuentas con las que se puede participar en CWL. Solo texto.",
+    help: "Nº de cuentas con las que se puede participar en CWL.",
     min: 1,
     max: 3,
     unit: "cuentas",
@@ -143,8 +172,9 @@ export const RULE_TEXT_FIELDS: RuleField[] = [
     key: "founding_year",
     token: "anio_fundacion",
     default: 2022,
+    group: "Clan",
     label: "Año de fundación",
-    help: "Aparece en la cabecera de las normas. Solo texto.",
+    help: "Aparece en la cabecera de las normas.",
     min: 2000,
     max: 2100,
     unit: "año",
