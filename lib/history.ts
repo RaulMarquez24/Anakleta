@@ -18,6 +18,8 @@ export interface MemberHistory {
   mainTag: string | null; // si es secundaria: tag de su cuenta principal
   discordId: string | null; // cuenta de Discord vinculada (para avisos)
   discordUsername: string | null;
+  returnedAt: string | null; // si volvió tras estar de baja
+  returnReviewed: boolean; // si ya se revisó su vuelta
   // Valores más recientes (última captura):
   current: {
     leagueTierName: string | null;
@@ -78,6 +80,8 @@ export async function getMemberHistory(tag: string): Promise<MemberHistory | nul
     mainTag: (member.main_tag as string | null) ?? null,
     discordId: (member.discord_id as string | null) ?? null,
     discordUsername: (member.discord_username as string | null) ?? null,
+    returnedAt: (member.returned_at as string | null) ?? null,
+    returnReviewed: member.return_reviewed !== false, // default true si no está migrado
     current: {
       leagueTierName: (last?.league_tier_name as string | null) ?? null,
       leagueTierIcon: (last?.league_tier_icon as string | null) ?? null,
@@ -97,6 +101,40 @@ export async function getMemberHistory(tag: string): Promise<MemberHistory | nul
       trophies: (s.trophies as number | null) ?? null,
     })),
   };
+}
+
+export interface Returnee {
+  tag: string;
+  name: string;
+  returnedAt: string | null;
+  note: string | null;
+  activeWarns: number;
+}
+
+// Miembros que volvieron tras estar de baja y aún NO se han revisado. Para el
+// aviso del panel (revisar su nota/warns de la etapa anterior).
+export async function getReturnees(): Promise<Returnee[]> {
+  try {
+    const supabase = createServerClient();
+    const { data } = await supabase
+      .from("members")
+      .select("tag, name, returned_at, note")
+      .eq("is_active", true)
+      .eq("return_reviewed", false)
+      .not("returned_at", "is", null)
+      .order("returned_at", { ascending: false });
+    if (!data || data.length === 0) return [];
+    const warnCounts = await getActiveWarnCounts();
+    return data.map((m) => ({
+      tag: m.tag as string,
+      name: m.name as string,
+      returnedAt: (m.returned_at as string | null) ?? null,
+      note: (m.note as string | null) ?? null,
+      activeWarns: warnCounts.get(m.tag as string) ?? 0,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 export interface ActivitySignal {

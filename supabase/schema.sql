@@ -60,6 +60,9 @@ alter table members add column if not exists discord_id       text;
 alter table members add column if not exists discord_username text;
 alter table members add column if not exists discord_by       text;
 alter table members add column if not exists discord_at       timestamptz;
+-- Control de retornados: un tag inactivo que vuelve se marca para revisión.
+alter table members add column if not exists returned_at     timestamptz;
+alter table members add column if not exists return_reviewed boolean default true;
 
 -- Serie temporal: una fila por miembro y captura. El corazón de la app.
 create table if not exists member_snapshots (

@@ -14,6 +14,7 @@ import { CopyTag } from "@/components/CopyTag";
 import { MemberNote } from "@/components/MemberNote";
 import { MemberWarns } from "@/components/MemberWarns";
 import { Section } from "@/components/Section";
+import { ReturneeBanner } from "@/components/ReturneeBanner";
 import { AccountLinker } from "@/components/AccountLinker";
 import { DiscordLink } from "@/components/DiscordLink";
 import { seasonLabel } from "@/components/WarBits";
@@ -112,6 +113,10 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
 
   return (
     <AppShell email={user?.email} title={history.name} back="/miembros">
+      {history.returnedAt && !history.returnReviewed && (
+        <ReturneeBanner tag={history.tag} returnedAt={history.returnedAt} />
+      )}
+
       {/* Hero: identidad + rankings + actividad */}
       <div className="mb-5 overflow-hidden rounded-2xl border border-line bg-surface">
         {/* Liga | TH */}

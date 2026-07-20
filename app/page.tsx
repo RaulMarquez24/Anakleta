@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { getMembersOverview, getClanTrends } from "@/lib/dashboard";
-import { getActivityReport, type ActivityPeriod } from "@/lib/history";
+import { getActivityReport, getReturnees, type ActivityPeriod } from "@/lib/history";
 import { getCurrentWar } from "@/lib/war";
 import { createAuthServerClient } from "@/lib/supabase/auth-server";
 import { AppShell } from "@/components/AppShell";
@@ -69,12 +69,13 @@ export default async function ClanHomePage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [data, week, report, war, trends] = await Promise.all([
+  const [data, week, report, war, trends, returnees] = await Promise.all([
     getMembersOverview(),
     getActivityReport("semana"), // gestión = estado actionable de la semana
     getActivityReport(period), // resumen/tops = periodo elegido
     getCurrentWar().catch(() => null),
     getClanTrends(),
+    getReturnees(),
   ]);
 
   // Gestión: siempre de la semana (a quién hay que atender ahora).
@@ -107,6 +108,44 @@ export default async function ClanHomePage({
 
   return (
     <AppShell email={user?.email} title="Clan">
+      {/* Aviso: jugadores que han vuelto (revisar nota/warns de su etapa anterior) */}
+      {returnees.length > 0 && (
+        <div className="mb-4 rounded-2xl border border-gold/50 bg-gold/12 p-4">
+          <p className="mb-2 flex items-center gap-2 font-extrabold text-ink">
+            <span aria-hidden>👀</span>
+            {returnees.length === 1
+              ? "1 jugador ha vuelto — revísalo"
+              : `${returnees.length} jugadores han vuelto — revísalos`}
+          </p>
+          <ul className="space-y-1">
+            {returnees.slice(0, 6).map((r) => (
+              <li key={r.tag}>
+                <Link
+                  href={`/member/${encodeURIComponent(r.tag)}`}
+                  className="flex items-center gap-2 text-sm hover:underline"
+                >
+                  <span className="font-bold text-ink">{r.name}</span>
+                  {r.activeWarns > 0 && (
+                    <span className="rounded-full bg-banner/15 px-2 py-0.5 text-[10px] font-extrabold text-banner">
+                      ⚠️ {r.activeWarns}
+                    </span>
+                  )}
+                  {r.note && (
+                    <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-bold text-ink-soft">
+                      📝 nota
+                    </span>
+                  )}
+                  <span aria-hidden className="ml-auto text-ink-soft">›</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          {returnees.length > 6 && (
+            <p className="mt-1 text-xs text-ink-soft">y {returnees.length - 6} más…</p>
+          )}
+        </div>
+      )}
+
       {/* Identidad del clan */}
       <div className="mb-4 rounded-2xl border border-line bg-surface p-4">
         <div className="flex items-center gap-3">

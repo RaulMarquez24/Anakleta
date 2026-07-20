@@ -140,6 +140,21 @@ export async function POST(req: NextRequest) {
       /* si falla Discord, la captura sigue */
     }
 
+    // Retornados: tags que YA existían como inactivos y ahora vuelven a estar en
+    // la lista. Se detectan ANTES del upsert (que los pondría activos). Pueden
+    // tener nota/warns de su etapa anterior → se marcan para revisión.
+    const currentTagsArr = clan.memberList.map((m) => m.tag);
+    let returnees: string[] = [];
+    if (currentTagsArr.length > 0) {
+      const { data: existing } = await supabase
+        .from("members")
+        .select("tag, is_active")
+        .in("tag", currentTagsArr);
+      returnees = (existing ?? [])
+        .filter((e) => e.is_active === false)
+        .map((e) => e.tag as string);
+    }
+
     // Upsert de miembros (preserva first_seen_at; refresca last_seen_at/is_active).
     const memberRows = clan.memberList.map((m) => ({
       tag: m.tag,
@@ -153,6 +168,15 @@ export async function POST(req: NextRequest) {
       .from("members")
       .upsert(memberRows, { onConflict: "tag" });
     if (membersErr) throw membersErr;
+
+    // Marca los retornados para revisión (best-effort: columnas quizá sin migrar).
+    if (returnees.length > 0) {
+      const { error: retErr } = await supabase
+        .from("members")
+        .update({ returned_at: capturedAt, return_reviewed: false })
+        .in("tag", returnees);
+      void retErr; // no tumbar la captura si aún no está migrado
+    }
 
     // Bajas: activos que ya no aparecen.
     const currentTags = new Set(clan.memberList.map((m) => m.tag));
@@ -221,6 +245,7 @@ export async function POST(req: NextRequest) {
       members_captured: clan.memberList.length,
       members_enriched: enrichedOk,
       members_deactivated: goneTags.length,
+      returnees: returnees.length,
       war,
     };
     await logCronRun("snapshot", true, result, req.headers.get("x-actor") || "cron");

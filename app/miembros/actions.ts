@@ -95,6 +95,15 @@ export async function setMemberDiscord(
   return { ok: !error };
 }
 
+// Marca como revisada la vuelta de un miembro (quita el aviso de "ha vuelto").
+export async function markReturnReviewed(tag: string): Promise<{ ok: boolean }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false };
+  const svc = createServerClient();
+  const { error } = await svc.from("members").update({ return_reviewed: true }).eq("tag", tag);
+  return { ok: !error };
+}
+
 // --- Warns (amonestaciones por incumplir normas) ---
 
 export interface NewWarn {
