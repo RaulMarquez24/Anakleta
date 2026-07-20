@@ -46,16 +46,25 @@ function renderMd(text: string): string {
     );
 }
 
+export interface ChannelOption {
+  id: string;
+  name: string;
+}
+
 export function RulesTextEditor({
   blocks,
   discordReady,
   tokens,
   legend,
+  channels,
+  defaultChannel,
 }: {
   blocks: RuleTextView[];
   discordReady: boolean;
   tokens: Record<string, number>;
   legend: TokenLegend[];
+  channels: ChannelOption[];
+  defaultChannel: string | null;
 }) {
   const [values, setValues] = useState<Record<string, string>>(
     Object.fromEntries(blocks.map((b) => [b.key, b.value])),
@@ -64,6 +73,8 @@ export function RulesTextEditor({
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [channelId, setChannelId] = useState<string>(defaultChannel ?? channels[0]?.id ?? "");
+  const [everyone, setEveryone] = useState(false);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
 
   const block = blocks.find((b) => b.key === active) ?? blocks[0];
@@ -99,7 +110,7 @@ export function RulesTextEditor({
     setBusy(keys ? "one" : "all");
     setMsg(null);
     await saveRulesText({ [active]: value }); // guarda lo que ves antes de publicar
-    const r = await publishRules(keys);
+    const r = await publishRules(keys, { channelId, everyone });
     setBusy(null);
     setMsg(
       r.ok
@@ -217,28 +228,62 @@ export function RulesTextEditor({
         )}
       </div>
 
-      {/* Acciones globales */}
-      <div className="mt-3 flex flex-wrap items-center gap-3">
-        <button
-          onClick={() => publish()}
-          disabled={!discordReady || busy != null}
-          title={discordReady ? "Publicar las 3 normas en Discord" : "Discord no configurado"}
-          className="flex items-center gap-1.5 rounded-full bg-[#5865F2] px-5 py-2 text-sm font-extrabold text-white transition hover:brightness-110 disabled:opacity-50"
-        >
-          <Send className="h-4 w-4" />
-          {busy === "all" ? "Publicando…" : "Publicar todo en Discord"}
-        </button>
-        {msg && (
-          <span className={`text-sm font-bold ${msg.ok ? "text-grass" : "text-banner"}`}>
-            {msg.text}
-          </span>
+      {/* Acciones globales: dónde publicar + @everyone + publicar todo */}
+      <div className="mt-3 rounded-2xl border border-line bg-surface p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex min-w-0 flex-1 items-center gap-2">
+            <span className="flex-none text-xs font-bold text-ink-soft">Canal</span>
+            <select
+              value={channelId}
+              onChange={(e) => setChannelId(e.target.value)}
+              disabled={!discordReady || channels.length === 0}
+              className="min-w-0 flex-1 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm font-bold text-ink outline-none focus:border-gold disabled:opacity-50"
+            >
+              {channels.length === 0 && <option value="">(sin canales)</option>}
+              {channels.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-none items-center gap-1.5 rounded-lg bg-surface-2 px-2.5 py-1.5 text-sm font-bold text-ink">
+            <input
+              type="checkbox"
+              checked={everyone}
+              onChange={(e) => setEveryone(e.target.checked)}
+              className="h-4 w-4 accent-gold"
+            />
+            @everyone
+          </label>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => publish()}
+            disabled={!discordReady || busy != null || !channelId}
+            title={discordReady ? "Publicar las 3 normas en Discord" : "Discord no configurado"}
+            className="flex items-center gap-1.5 rounded-full bg-[#5865F2] px-5 py-2 text-sm font-extrabold text-white transition hover:brightness-110 disabled:opacity-50"
+          >
+            <Send className="h-4 w-4" />
+            {busy === "all" ? "Publicando…" : "Publicar todo en Discord"}
+          </button>
+          {msg && (
+            <span className={`text-sm font-bold ${msg.ok ? "text-grass" : "text-banner"}`}>
+              {msg.text}
+            </span>
+          )}
+        </div>
+        {everyone && (
+          <p className="mt-2 text-[11px] font-semibold text-gold-deep">
+            Se avisará a @everyone en el primer mensaje.
+          </p>
+        )}
+        {!discordReady && (
+          <p className="mt-2 text-xs text-ink-soft">
+            Para publicar, configura el bot de Discord en el panel de Discord.
+          </p>
         )}
       </div>
-      {!discordReady && (
-        <p className="mt-2 text-xs text-ink-soft">
-          Para publicar, configura el bot y el canal de reglas o de anuncios en el panel de Discord.
-        </p>
-      )}
     </div>
   );
 }

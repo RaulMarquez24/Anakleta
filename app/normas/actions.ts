@@ -75,22 +75,28 @@ async function getSetting(key: string): Promise<string | null> {
   }
 }
 
-// Publica en Discord los bloques de normas indicados (uno por mensaje) en el
-// canal de reglas (rules_channel_id) o, si no, el de anuncios.
+// Publica en Discord los bloques de normas indicados (uno por mensaje). Usa el
+// canal elegido (y lo recuerda como rules_channel_id); si no, el de reglas o el
+// de anuncios. Con `everyone`, avisa a @everyone en el primer mensaje.
 export async function publishRules(
   blockKeys?: string[],
+  opts?: { channelId?: string; everyone?: boolean },
 ): Promise<{ ok: boolean; sent?: number; error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "No autorizado." };
   if (!discordConfigured) return { ok: false, error: "Discord no está configurado." };
 
+  const chosen = opts?.channelId?.trim();
   const channelId =
-    (await getSetting("rules_channel_id")) || (await getSetting("announcements_channel_id"));
+    chosen || (await getSetting("rules_channel_id")) || (await getSetting("announcements_channel_id"));
   if (!channelId)
-    return {
-      ok: false,
-      error: "Configura el canal de reglas o de anuncios en el panel de Discord.",
-    };
+    return { ok: false, error: "Elige el canal donde publicar las normas." };
+
+  const svc = createServerClient();
+  // Recuerda el canal elegido para la próxima vez.
+  if (chosen) {
+    await svc.from("settings").upsert({ key: "rules_channel_id", value: chosen }, { onConflict: "key" });
+  }
 
   const [text, tokens] = await Promise.all([getRulesText(), getAllTokenValues()]);
   const keys =
@@ -99,13 +105,21 @@ export async function publishRules(
       : RULE_TEXT_BLOCKS;
 
   let sent = 0;
+  let first = true;
   for (const b of keys) {
     // Sustituye los tokens ({horas_robo_espejo}, …) por los valores configurados.
-    const content = applyRuleTokens((text[b.key] ?? b.default).trim(), tokens);
+    let content = applyRuleTokens((text[b.key] ?? b.default).trim(), tokens);
     if (!content) continue;
-    const ok = await sendClanMessage(content.slice(0, 1990), {}, channelId);
+    // @everyone solo en el primer mensaje (no repetir el ping por cada bloque).
+    if (opts?.everyone && first) content = `@everyone\n\n${content}`;
+    const ok = await sendClanMessage(
+      content.slice(0, 1990),
+      { everyone: !!opts?.everyone },
+      channelId,
+    );
     if (!ok) return { ok: false, sent, error: `No se pudo publicar «${b.title}».` };
     sent++;
+    first = false;
   }
   return { ok: true, sent };
 }

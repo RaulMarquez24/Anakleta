@@ -6,7 +6,8 @@ import {
   RULE_GROUP_ORDER,
   RULE_TEXT_BLOCKS,
 } from "@/lib/rules";
-import { discordConfigured } from "@/lib/discord";
+import { discordConfigured, getGuildChannels } from "@/lib/discord";
+import { createServerClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { AppShell } from "@/components/AppShell";
 import { RulesEditor, type RuleFieldView } from "@/components/RulesEditor";
@@ -16,11 +17,22 @@ export const dynamic = "force-dynamic";
 
 export default async function NormasPage() {
   await ensureRulesSeeded(); // deja los textos por defecto guardados en la BD
-  const [user, text, tokens] = await Promise.all([
+  const [user, text, tokens, channels] = await Promise.all([
     getCurrentUser(),
     getRulesText(),
     getAllTokenValues(),
+    discordConfigured ? getGuildChannels().catch(() => []) : Promise.resolve([]),
   ]);
+
+  // Canal por defecto para publicar: el guardado de reglas, o el de anuncios.
+  const svc = createServerClient();
+  const { data: chSetting } = await svc
+    .from("settings")
+    .select("key, value")
+    .in("key", ["rules_channel_id", "announcements_channel_id"]);
+  const chMap = new Map((chSetting ?? []).map((r) => [r.key as string, r.value as string | null]));
+  const defaultChannel =
+    (chMap.get("rules_channel_id") || chMap.get("announcements_channel_id")) ?? null;
 
   // Todos los valores en un único panel, ordenados por grupo temático.
   const ordered = [...ALL_RULE_FIELDS].sort((a, b) => {
@@ -68,6 +80,8 @@ export default async function NormasPage() {
         discordReady={discordConfigured}
         tokens={tokens}
         legend={legend}
+        channels={channels}
+        defaultChannel={defaultChannel}
       />
 
       {/* Configuración de valores (unificada) */}
