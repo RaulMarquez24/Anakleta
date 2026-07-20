@@ -16,6 +16,7 @@ import {
   StringSelectMenuBuilder,
   ActivityType,
 } from "discord.js";
+import http from "node:http";
 import { createClient } from "@supabase/supabase-js";
 import { classifyIntent } from "./match.js";
 import * as cwl from "./cwl.js";
@@ -210,6 +211,12 @@ const COMMANDS = [
   { name: "help", description: "Cómo funciona la inscripción a la CWL" },
 ];
 
+// Estado compartido para la landing/health (se rellena en updatePresence).
+const BOOT_MS = Date.now();
+let lastPresenceText = "Arrancando…";
+let lastClan = null;
+let lastWar = null;
+
 // --- Estado dinámico (lo que se ve bajo el nombre del bot) ---
 // En guerra: "⚔️ En guerra vs X". Preparación: "🛡️ Preparando guerra".
 // Si no: "👀 Añakleta · N/50". Se refresca solo cada pocos minutos.
@@ -219,6 +226,8 @@ async function updatePresence(c) {
       coc.getCurrentWar().catch(() => null),
       coc.getClan().catch(() => null),
     ]);
+    if (clan) lastClan = clan;
+    lastWar = war;
     let text;
     if (war?.state === "inWar" && war.opponent?.name) {
       const cs = war.clan?.stars ?? 0;
@@ -231,6 +240,7 @@ async function updatePresence(c) {
     } else {
       text = `👀 Vigilando el clan`;
     }
+    lastPresenceText = text;
     c.user.setPresence({
       status: "online",
       activities: [{ name: text, type: ActivityType.Custom, state: text }],
@@ -543,5 +553,186 @@ async function syncThRole(guild, member, townHall) {
     return false;
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Servidor web: landing del clan + estado del bot (health). Temática CoC.
+// Fly enruta HTTP aquí (ver [http_service] en fly.toml). /health devuelve JSON.
+// ─────────────────────────────────────────────────────────────────────────────
+const WEB_PORT = Number(process.env.PORT) || 8080;
+const CLAN_TAG_CLEAN = (process.env.COC_CLAN_TAG ?? "").replace(/^#/, "").toUpperCase();
+const JOIN_URL = CLAN_TAG_CLEAN
+  ? `https://link.clashofclans.com/es?action=OpenClanProfile&tag=${CLAN_TAG_CLEAN}`
+  : null;
+const INVITE_URL = process.env.DISCORD_INVITE_URL || "https://discord.gg/p4xKrHEVwa";
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"]/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
+  );
+}
+
+function healthJson() {
+  const ready = client.isReady();
+  return {
+    ok: ready,
+    bot: client.user?.tag ?? null,
+    status: ready ? "online" : "connecting",
+    presence: lastPresenceText,
+    uptime_s: Math.floor((Date.now() - BOOT_MS) / 1000),
+    ping_ms: Math.max(0, Math.round(client.ws.ping)),
+    guilds: client.guilds.cache.size,
+    clan: lastClan
+      ? { name: lastClan.name, level: lastClan.clanLevel, members: lastClan.members }
+      : null,
+  };
+}
+
+function renderLanding() {
+  const ready = client.isReady();
+  const botTag = esc(client.user?.tag ?? "Añakleta");
+  const ping = Math.max(0, Math.round(client.ws.ping));
+  const guilds = client.guilds.cache.size;
+  const uptimeS = Math.floor((Date.now() - BOOT_MS) / 1000);
+  const c = lastClan;
+  const w = lastWar;
+
+  const dot = ready ? "#43b581" : "#faa61a";
+  const statusLabel = ready ? "ONLINE" : "CONECTANDO…";
+
+  let warLine = "";
+  if (w?.state === "inWar" && w.opponent?.name) {
+    warLine = `⚔️ En guerra vs <b>${esc(w.opponent.name)}</b> · ${w.clan?.stars ?? 0}–${w.opponent?.stars ?? 0}⭐`;
+  } else if (w?.state === "preparation") {
+    warLine = "🛡️ Preparando la próxima guerra";
+  } else {
+    warLine = "🕊️ Sin guerra ahora mismo";
+  }
+
+  const badge = c?.badgeUrls?.large || c?.badgeUrls?.medium || "";
+  const clanBlock = c
+    ? `
+      <div class="clan">
+        ${badge ? `<img class="badge" src="${esc(badge)}" alt="Escudo" width="88" height="88">` : "🛡️"}
+        <div class="claninfo">
+          <div class="clanname">${esc(c.name ?? "Añakleta")}</div>
+          <div class="tag">#${esc(CLAN_TAG_CLEAN)}</div>
+          <div class="chips">
+            <span class="chip">🏰 Nivel ${c.clanLevel ?? "—"}</span>
+            <span class="chip">👥 ${c.members ?? "—"}/50</span>
+            <span class="chip">🏆 ${(c.clanPoints ?? 0).toLocaleString("es-ES")}</span>
+            ${c.warLeague?.name ? `<span class="chip">⚔️ ${esc(c.warLeague.name)}</span>` : ""}
+            ${c.warWinStreak ? `<span class="chip">🔥 Racha ${c.warWinStreak}</span>` : ""}
+          </div>
+        </div>
+      </div>`
+    : `<div class="clan"><div class="claninfo"><div class="clanname">Añakleta</div><div class="tag">cargando datos del clan…</div></div></div>`;
+
+  return `<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Añakleta · Bot del clan</title>
+<style>
+  :root{ --gold:#f5c451; --gold2:#e0a53a; --green:#6fbf5b; --ink:#f4ece0; --soft:#c9bda8; --line:#3a3327; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; min-height:100vh; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+        color:var(--ink); background:
+          radial-gradient(1200px 500px at 50% -10%, #2b3d1e 0%, transparent 60%),
+          linear-gradient(160deg,#1a2416 0%,#141109 55%,#0f0c07 100%);
+        display:flex; align-items:center; justify-content:center; padding:22px; }
+  .card{ width:100%; max-width:560px; background:rgba(24,20,13,.86); border:1px solid var(--line);
+         border-radius:22px; padding:22px; box-shadow:0 20px 60px rgba(0,0,0,.5); }
+  .top{ display:flex; align-items:center; gap:12px; margin-bottom:6px; }
+  .bot{ font-size:34px; }
+  h1{ margin:0; font-size:30px; letter-spacing:1px; color:var(--gold);
+      text-shadow:0 2px 0 #7a5b12; }
+  .sub{ color:var(--soft); font-weight:700; font-size:13px; letter-spacing:.5px; }
+  .status{ display:inline-flex; align-items:center; gap:8px; margin:14px 0 4px; padding:7px 14px;
+           background:rgba(67,181,129,.12); border:1px solid rgba(67,181,129,.35); border-radius:999px;
+           font-weight:800; font-size:13px; letter-spacing:1px; }
+  .pdot{ width:11px; height:11px; border-radius:50%; background:${dot}; box-shadow:0 0 0 0 ${dot};
+         animation:pulse 1.8s infinite; }
+  @keyframes pulse{ 0%{box-shadow:0 0 0 0 ${dot}88} 70%{box-shadow:0 0 0 9px ${dot}00} 100%{box-shadow:0 0 0 0 ${dot}00} }
+  .presence{ color:var(--soft); font-size:13px; margin:2px 0 14px; }
+  .grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:16px; }
+  .stat{ background:rgba(0,0,0,.28); border:1px solid var(--line); border-radius:14px; padding:12px; text-align:center; }
+  .stat .n{ font-size:20px; font-weight:900; color:var(--gold); }
+  .stat .l{ font-size:10px; letter-spacing:.6px; color:var(--soft); text-transform:uppercase; font-weight:800; }
+  .war{ text-align:center; background:rgba(0,0,0,.22); border:1px dashed var(--line); border-radius:14px;
+        padding:12px; margin-bottom:16px; font-size:14px; }
+  .clan{ display:flex; align-items:center; gap:14px; background:rgba(111,191,91,.08);
+         border:1px solid rgba(111,191,91,.25); border-radius:16px; padding:14px; margin-bottom:16px; }
+  .badge{ border-radius:10px; }
+  .clanname{ font-size:20px; font-weight:900; color:var(--ink); }
+  .tag{ color:var(--soft); font-size:12px; font-weight:700; margin-bottom:6px; }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chip{ background:rgba(0,0,0,.3); border:1px solid var(--line); border-radius:999px; padding:3px 9px;
+         font-size:12px; font-weight:700; color:var(--ink); }
+  .cta{ display:flex; flex-wrap:wrap; gap:10px; }
+  .btn{ flex:1 1 200px; text-align:center; text-decoration:none; font-weight:900; padding:13px 16px;
+        border-radius:14px; font-size:14px; }
+  .btn.gold{ background:linear-gradient(180deg,var(--gold),var(--gold2)); color:#3a2410; }
+  .btn.disc{ background:#5865F2; color:#fff; }
+  .foot{ text-align:center; color:var(--soft); font-size:11px; margin-top:16px; }
+</style></head>
+<body>
+  <div class="card">
+    <div class="top">
+      <div class="bot">🤖</div>
+      <div>
+        <h1>AÑAKLETA</h1>
+        <div class="sub">BOT DE DISCORD · TU ALIADO 24/7</div>
+      </div>
+    </div>
+
+    <div class="status"><span class="pdot"></span> ${statusLabel}</div>
+    <div class="presence">${esc(lastPresenceText)}</div>
+
+    <div class="grid">
+      <div class="stat"><div class="n" id="uptime">—</div><div class="l">Encendido</div></div>
+      <div class="stat"><div class="n">${ping}<span style="font-size:12px">ms</span></div><div class="l">Latencia</div></div>
+      <div class="stat"><div class="n">${guilds}</div><div class="l">Servidores</div></div>
+    </div>
+
+    <div class="war">${warLine}</div>
+
+    ${clanBlock}
+
+    <div class="cta">
+      ${JOIN_URL ? `<a class="btn gold" href="${esc(JOIN_URL)}">⚔️ Unirse al clan</a>` : ""}
+      ${INVITE_URL ? `<a class="btn disc" href="${esc(INVITE_URL)}">💬 Entrar al Discord</a>` : ""}
+    </div>
+
+    <div class="foot">Hecho con ⚔️ para el clan · ${botTag}</div>
+  </div>
+<script>
+  var boot = ${uptimeS};
+  function fmt(s){ var d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60),x=s%60;
+    return (d? d+"d ":"")+(h? h+"h ":"")+(d?"":m+"m ")+(d||h?"":x+"s"); }
+  var el=document.getElementById("uptime");
+  setInterval(function(){ boot++; el.textContent=fmt(boot); },1000);
+  el.textContent=fmt(boot);
+</script>
+</body></html>`;
+}
+
+const web = http.createServer((req, res) => {
+  const path = (req.url || "/").split("?")[0];
+  if (path === "/health" || path === "/healthz") {
+    // 200 mientras el proceso viva (discord.js reconecta solo); el estado real de
+    // Discord va en el JSON. Evita reinicios de Fly por reconexiones puntuales.
+    res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify(healthJson()));
+    return;
+  }
+  if (path === "/" ) {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end(renderLanding());
+    return;
+  }
+  res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+  res.end("No encontrado");
+});
+web.listen(WEB_PORT, () => console.log(`Landing/health en :${WEB_PORT}`));
 
 client.login(DISCORD_BOT_TOKEN);

@@ -4,8 +4,22 @@ primary_region = "cdg"
 
 [build]
 
-# El bot NO sirve HTTP: sin [http_service]. Debe estar siempre encendido, así que
-# no configuramos auto_stop (la máquina se mantiene corriendo para el gateway).
+# El bot sirve una landing + health en HTTP (el gateway de Discord va por WebSocket
+# aparte). La máquina debe estar SIEMPRE encendida para el gateway: sin auto-stop.
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = false
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    method = "get"
+    path = "/health"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "30s"
+
 [[vm]]
   size = "shared-cpu-1x"
   memory = "256mb"
