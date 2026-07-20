@@ -47,21 +47,45 @@ const WAR_COLS =
   "id, is_cwl, season, round, state, team_size, opponent_name, clan_stars, opponent_stars, clan_destruction, opponent_destruction, result, start_time, end_time";
 
 function toSummary(w: Record<string, unknown>): WarSummary {
+  const rawState = (w.state as string | null) ?? null;
+  const endTime = (w.end_time as string | null) ?? null;
+  const clanStars = (w.clan_stars as number | null) ?? null;
+  const opponentStars = (w.opponent_stars as number | null) ?? null;
+  const clanDestruction = (w.clan_destruction as number | null) ?? null;
+  const opponentDestruction = (w.opponent_destruction as number | null) ?? null;
+  let result = (w.result as string | null) ?? null;
+  let state = rawState;
+
+  // Autocuración: una guerra cuya hora de fin ya pasó está TERMINADA aunque la
+  // última captura se quedara en "inWar" (acabó entre capturas y no se re-grabó).
+  // Así no sale "En guerra" ni "faltan por atacar" días después.
+  const ended = rawState === "warEnded" || (endTime != null && new Date(endTime).getTime() < Date.now());
+  if (ended) {
+    state = "warEnded";
+    if (!result) {
+      const a = clanStars ?? 0;
+      const b = opponentStars ?? 0;
+      const ca = clanDestruction ?? 0;
+      const cb = opponentDestruction ?? 0;
+      result = a > b ? "win" : a < b ? "lose" : ca > cb ? "win" : ca < cb ? "lose" : "tie";
+    }
+  }
+
   return {
     id: w.id as number,
     isCwl: Boolean(w.is_cwl),
     season: (w.season as string | null) ?? null,
     round: (w.round as number | null) ?? null,
-    state: (w.state as string | null) ?? null,
+    state,
     teamSize: (w.team_size as number | null) ?? null,
     opponentName: (w.opponent_name as string | null) ?? null,
-    clanStars: (w.clan_stars as number | null) ?? null,
-    opponentStars: (w.opponent_stars as number | null) ?? null,
-    clanDestruction: (w.clan_destruction as number | null) ?? null,
-    opponentDestruction: (w.opponent_destruction as number | null) ?? null,
-    result: (w.result as string | null) ?? null,
+    clanStars,
+    opponentStars,
+    clanDestruction,
+    opponentDestruction,
+    result,
     startTime: (w.start_time as string | null) ?? null,
-    endTime: (w.end_time as string | null) ?? null,
+    endTime,
   };
 }
 
