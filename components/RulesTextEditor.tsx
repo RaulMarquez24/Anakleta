@@ -8,13 +8,29 @@ export interface RuleTextView {
   title: string;
   value: string;
 }
+export interface TokenLegend {
+  token: string;
+  label: string;
+  value: number;
+}
+
+// Sustituye {token} por su valor actual (espejo cliente de applyRuleTokens).
+function resolveTokens(text: string, tokens: Record<string, number>): string {
+  return text.replace(/\{([a-z_]+)\}/g, (m, tok: string) =>
+    tok in tokens ? String(tokens[tok]) : m,
+  );
+}
 
 export function RulesTextEditor({
   blocks,
   discordReady,
+  tokens,
+  legend,
 }: {
   blocks: RuleTextView[];
   discordReady: boolean;
+  tokens: Record<string, number>;
+  legend: TokenLegend[];
 }) {
   const [values, setValues] = useState<Record<string, string>>(
     Object.fromEntries(blocks.map((b) => [b.key, b.value])),
@@ -44,8 +60,24 @@ export function RulesTextEditor({
     );
   }
 
+  const hasTokens = legend.length > 0;
+
   return (
     <div className="space-y-3">
+      {hasTokens && (
+        <div className="rounded-2xl border border-line bg-surface-2/50 p-3 text-xs">
+          <p className="mb-1.5 font-extrabold text-ink">
+            Tokens automáticos <span className="font-semibold text-ink-soft">(se sustituyen por el ajuste actual al publicar)</span>
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {legend.map((l) => (
+              <span key={l.token} className="rounded-lg bg-surface px-2 py-1 font-bold text-ink" title={l.label}>
+                <code className="text-gold-deep">{`{${l.token}}`}</code> = {l.value}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       {blocks.map((b) => (
         <div key={b.key} className="rounded-2xl border border-line bg-surface p-4">
           <div className="mb-2 flex items-center justify-between gap-2">
@@ -68,6 +100,16 @@ export function RulesTextEditor({
           <p className="mt-1 text-right text-[11px] font-semibold text-ink-soft">
             {values[b.key]?.length ?? 0} / 1990 caracteres
           </p>
+          {/^\{|\{[a-z_]+\}/.test(values[b.key] ?? "") && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs font-bold text-ink-soft">
+                Vista previa (con los ajustes aplicados)
+              </summary>
+              <pre className="mt-1 whitespace-pre-wrap rounded-xl bg-surface-2/60 p-3 text-xs text-ink">
+                {resolveTokens(values[b.key] ?? "", tokens)}
+              </pre>
+            </details>
+          )}
         </div>
       ))}
 

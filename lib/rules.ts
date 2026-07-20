@@ -25,6 +25,7 @@ export const RULES_DEFAULTS: RulesConfig = {
 export interface RuleField {
   key: string; // clave en `settings`
   prop: keyof RulesConfig;
+  token: string; // token para el texto de las normas: {token} → valor
   label: string;
   help: string;
   min: number;
@@ -35,6 +36,7 @@ export const RULE_FIELDS: RuleField[] = [
   {
     key: "steal_window_hours",
     prop: "stealWindowHours",
+    token: "horas_robo_espejo",
     label: "Robar espejo: ventana final",
     help: "En guerra normal, atacar una base fresca ajena (robar el espejo) solo cuenta como infracción con MÁS de estas horas restantes. Dentro de esta ventana final está permitido.",
     min: 0,
@@ -44,6 +46,7 @@ export const RULE_FIELDS: RuleField[] = [
   {
     key: "warns_threshold",
     prop: "warnsThreshold",
+    token: "umbral_warns",
     label: "Warns para «A echar»",
     help: "Nº de warns vigentes que hacen que un miembro pase a la categoría de expulsión.",
     min: 1,
@@ -53,6 +56,7 @@ export const RULE_FIELDS: RuleField[] = [
   {
     key: "warns_expiry_days",
     prop: "warnsExpiryDays",
+    token: "caducidad_warns",
     label: "Caducidad de warns",
     help: "Días hasta que un warn deja de contar. 0 = no caducan nunca.",
     min: 0,
@@ -62,6 +66,7 @@ export const RULE_FIELDS: RuleField[] = [
   {
     key: "inactivity_days",
     prop: "inactivityDays",
+    token: "dias_inactividad",
     label: "Inactividad para revisar",
     help: "Días sin actividad detectada a partir de los cuales un miembro se marca para revisar.",
     min: 1,
@@ -71,6 +76,7 @@ export const RULE_FIELDS: RuleField[] = [
   {
     key: "donation_min",
     prop: "donationMin",
+    token: "min_donaciones",
     label: "Donaciones: mínimo",
     help: "Si un miembro dona menos de esto Y recibió bastante más, su balance cuenta como negativo.",
     min: 0,
@@ -80,6 +86,7 @@ export const RULE_FIELDS: RuleField[] = [
   {
     key: "donation_gap",
     prop: "donationGap",
+    token: "desfase_donaciones",
     label: "Donaciones: desfase",
     help: "Diferencia (recibido − donado) que dispara el aviso de «balance bajo».",
     min: 0,
@@ -87,6 +94,20 @@ export const RULE_FIELDS: RuleField[] = [
     unit: "tropas",
   },
 ];
+
+// Sustituye los tokens {…} del texto por los valores de la config. Así el texto
+// de las normas refleja automáticamente los ajustes (p. ej. la ventana de robo).
+export function ruleTokenValues(cfg: RulesConfig): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const f of RULE_FIELDS) out[f.token] = cfg[f.prop];
+  return out;
+}
+export function applyRuleTokens(text: string, cfg: RulesConfig): string {
+  const values = ruleTokenValues(cfg);
+  return text.replace(/\{([a-z_]+)\}/g, (m, tok: string) =>
+    tok in values ? String(values[tok]) : m,
+  );
+}
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
@@ -178,7 +199,7 @@ Será expulsado quien: esté +5 días inactivo sin aviso · no ataque en guerra 
 • Si entras, **2 ataques obligatorios**.
 • Por defecto (salvo indicación de un líder):
   • **1er ataque:** a tu **espejo** (tu misma posición).
-  • **2º ataque:** rematar una base ya atacada, o esperar a las **últimas 5 horas** si no hay objetivo asignado.
+  • **2º ataque:** rematar una base ya atacada, o esperar a las **últimas {horas_robo_espejo} horas** si no hay objetivo asignado.
 • Atacar otra base solo con permiso de un líder o acuerdo mutuo confirmado.
 • Ataca siempre con **tropas completas y castillo lleno**.
 

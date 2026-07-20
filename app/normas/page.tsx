@@ -1,4 +1,10 @@
-import { getRulesConfig, getRulesText, RULE_FIELDS, RULE_TEXT_BLOCKS } from "@/lib/rules";
+import {
+  getRulesConfig,
+  getRulesText,
+  ruleTokenValues,
+  RULE_FIELDS,
+  RULE_TEXT_BLOCKS,
+} from "@/lib/rules";
 import { discordConfigured } from "@/lib/discord";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { AppShell } from "@/components/AppShell";
@@ -30,6 +36,14 @@ export default async function NormasPage() {
     value: text[b.key] ?? b.default,
   }));
 
+  // Tokens disponibles (con su valor actual) para insertar en el texto.
+  const tokens = ruleTokenValues(cfg);
+  const legend = RULE_FIELDS.map((f) => ({
+    token: f.token,
+    label: f.label,
+    value: cfg[f.prop],
+  }));
+
   return (
     <AppShell email={user?.email} title="Normas" back="/">
       {/* Texto de las normas + publicación en Discord */}
@@ -38,7 +52,12 @@ export default async function NormasPage() {
         Edita el texto de las normas y publícalo en Discord con un clic (un mensaje por bloque, en el
         canal de reglas o de anuncios).
       </p>
-      <RulesTextEditor blocks={blocks} discordReady={discordConfigured} />
+      <RulesTextEditor
+        blocks={blocks}
+        discordReady={discordConfigured}
+        tokens={tokens}
+        legend={legend}
+      />
 
       {/* Ajustes con los que la app aplica las normas */}
       <h2 className="mb-1 mt-8 text-lg font-extrabold text-ink">Cómo la app aplica las normas</h2>
