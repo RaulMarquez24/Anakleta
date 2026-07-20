@@ -257,6 +257,7 @@ export async function postAnnouncement(
 export async function postChannelMessage(
   channelId: string,
   content: string,
+  opts?: { everyone?: boolean },
 ): Promise<string | null> {
   if (!TOKEN || !channelId) return null;
   try {
@@ -264,7 +265,10 @@ export async function postChannelMessage(
       method: "POST",
       headers: { Authorization: `Bot ${TOKEN}`, "Content-Type": "application/json" },
       cache: "no-store",
-      body: JSON.stringify({ content, allowed_mentions: { parse: [] } }),
+      body: JSON.stringify({
+        content,
+        allowed_mentions: { parse: opts?.everyone ? ["everyone"] : [] },
+      }),
     });
     if (!res.ok) return null;
     const msg = (await res.json()) as { id?: string };

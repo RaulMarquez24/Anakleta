@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { createServerClient } from "@/lib/supabase/server";
-import { sendClanMessage, discordConfigured } from "@/lib/discord";
+import { postChannelMessage, editChannelMessage, discordConfigured } from "@/lib/discord";
 import {
   ALL_RULE_FIELDS,
   RULE_TEXT_BLOCKS,
@@ -38,6 +38,9 @@ export async function saveRules(
   const { error } = await svc.from("settings").upsert(rows, { onConflict: "key" });
   if (error) return { ok: false, error: error.message };
 
+  // Un valor (token) puede aparecer en cualquier bloque: re-edita los publicados.
+  await syncPublishedRules();
+
   // Afecta a cómo se clasifican ataques y a la actividad.
   revalidatePath("/normas");
   revalidatePath("/actividad");
@@ -61,8 +64,40 @@ export async function saveRulesText(
   const svc = createServerClient();
   const { error } = await svc.from("settings").upsert(rows, { onConflict: "key" });
   if (error) return { ok: false, error: error.message };
+
+  // Re-edita en Discord los bloques que se acaban de cambiar (si están publicados).
+  await syncPublishedRules(rows.map((r) => r.key));
+
   revalidatePath("/normas");
   return { ok: true };
+}
+
+// Re-edita en Discord los mensajes de las normas ya publicadas para reflejar el
+// texto/valores actuales. Solo toca los bloques que tengan mensaje guardado.
+async function syncPublishedRules(blockKeys?: string[]): Promise<void> {
+  if (!discordConfigured) return;
+  const svc = createServerClient();
+  const [text, tokens] = await Promise.all([getRulesText(), getAllTokenValues()]);
+  const keys =
+    blockKeys && blockKeys.length > 0
+      ? RULE_TEXT_BLOCKS.filter((b) => blockKeys.includes(b.key))
+      : RULE_TEXT_BLOCKS;
+  for (const b of keys) {
+    const ref = await getSetting(`rules_msg_${b.key}`);
+    if (!ref) continue;
+    let parsed: { c?: string; m?: string; e?: boolean };
+    try {
+      parsed = JSON.parse(ref);
+    } catch {
+      continue;
+    }
+    if (!parsed.c || !parsed.m) continue;
+    let content = applyRuleTokens((text[b.key] ?? b.default).trim(), tokens);
+    if (parsed.e) content = `${content}\n\n||@everyone||`;
+    const ok = await editChannelMessage(parsed.c, parsed.m, content.slice(0, 1990));
+    // Si el mensaje ya no existe (lo borraron), olvida la referencia.
+    if (!ok) await svc.from("settings").delete().eq("key", `rules_msg_${b.key}`);
+  }
 }
 
 async function getSetting(key: string): Promise<string | null> {
@@ -111,12 +146,18 @@ export async function publishRules(
     if (!content) continue;
     // @everyone oculto (spoiler) al final del bloque: no se ve pero notifica.
     if (opts?.everyone) content = `${content}\n\n||@everyone||`;
-    const ok = await sendClanMessage(
-      content.slice(0, 1990),
-      { everyone: !!opts?.everyone },
-      channelId,
+    const id = await postChannelMessage(channelId, content.slice(0, 1990), {
+      everyone: !!opts?.everyone,
+    });
+    if (!id) return { ok: false, sent, error: `No se pudo publicar «${b.title}».` };
+    // Guarda el mensaje publicado para poder editarlo cuando cambien los valores.
+    await svc.from("settings").upsert(
+      {
+        key: `rules_msg_${b.key}`,
+        value: JSON.stringify({ c: channelId, m: id, e: !!opts?.everyone }),
+      },
+      { onConflict: "key" },
     );
-    if (!ok) return { ok: false, sent, error: `No se pudo publicar «${b.title}».` };
     sent++;
   }
 

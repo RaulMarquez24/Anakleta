@@ -306,6 +306,10 @@ export function RulesTextEditor({
             <span className="ml-1 font-bold text-gold-deep">Faltan {mmss(remaining)}.</span>
           )}
         </p>
+        <p className="mt-1 text-[11px] text-ink-soft">
+          Una vez publicada, si editas el texto o cambias un valor y <strong>guardas</strong>, el
+          mensaje de Discord se <strong>actualiza solo</strong>.
+        </p>
         {everyone && (
           <p className="mt-1 text-[11px] font-semibold text-gold-deep">
             @everyone se añade oculto (spoiler): no se ve pero notifica.
