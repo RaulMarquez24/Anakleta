@@ -106,6 +106,13 @@ create table if not exists war_attacks (
   destruction    numeric,
   attack_order   int
 );
+-- Detalle del objetivo, duración y espejo de cada ataque.
+alter table war_attacks add column if not exists duration          int;
+alter table war_attacks add column if not exists defender_name     text;
+alter table war_attacks add column if not exists defender_position int;
+alter table war_attacks add column if not exists defender_th       int;
+alter table war_attacks add column if not exists attacker_position int;
+alter table war_attacks add column if not exists is_mirror         boolean;
 
 -- Sistema de ligas nuevo (Ranked) + XP + datos por jugador (enriquecimiento).
 -- El leagueTier es el "rango real": su id es creciente y sirve para ordenar.

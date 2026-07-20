@@ -12,7 +12,16 @@ export interface UnifiedWarMember {
   attacksPending: number;
   stars: number;
   destruction: number;
-  attacks?: { stars: number; destruction: number; order: number }[];
+  attacks?: {
+    stars: number;
+    destruction: number;
+    order: number;
+    duration?: number | null;
+    defenderName?: string | null;
+    defenderPosition?: number | null;
+    defenderTh?: number | null;
+    isMirror?: boolean | null;
+  }[];
   reachableHelp?: boolean; // (en vivo) el 2º ayudaría: hay base a su alcance sin 3⭐
 }
 export interface OpponentBase {
@@ -39,6 +48,12 @@ export interface UnifiedWar {
 // "★★★" según estrellas (0-3), con las que faltan en hueco.
 function starGlyphs(n: number): string {
   return "★★★".slice(0, n).padEnd(3, "☆");
+}
+
+// Segundos → "m:ss".
+function fmtDuration(s: number | null | undefined): string | null {
+  if (s == null || s < 0) return null;
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
 function timeLeft(iso: string | null): string | null {
@@ -254,17 +269,40 @@ export function WarDetail({
                       <p className="truncate font-bold text-ink">{m.name}</p>
                       <p className="text-xs text-ink-soft">TH{m.townHall}</p>
                       {m.attacks && m.attacks.length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {m.attacks.map((a, i) => (
-                            <span
-                              key={i}
-                              className="inline-flex items-center gap-1 rounded-md bg-surface-2 px-1.5 py-0.5 text-[11px] font-bold"
-                              title={`Ataque ${a.order}`}
-                            >
-                              <span className="text-gold-deep">{starGlyphs(a.stars)}</span>
-                              <span className="tabular-nums text-ink-soft">{Math.round(a.destruction)}%</span>
-                            </span>
-                          ))}
+                        <div className="mt-1 space-y-1">
+                          {m.attacks.map((a, i) => {
+                            const dur = fmtDuration(a.duration);
+                            return (
+                              <div
+                                key={i}
+                                className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-bold"
+                                title={`Ataque nº ${a.order} de la guerra`}
+                              >
+                                <span className="text-gold-deep">{starGlyphs(a.stars)}</span>
+                                <span className="tabular-nums text-ink-soft">
+                                  {Math.round(a.destruction)}%
+                                </span>
+                                {a.defenderPosition != null && (
+                                  <span className="text-ink-soft">
+                                    → #{a.defenderPosition}
+                                    {a.defenderTh ? ` TH${a.defenderTh}` : ""}
+                                  </span>
+                                )}
+                                {a.isMirror === true ? (
+                                  <span className="rounded bg-grass/15 px-1.5 py-px text-[10px] font-extrabold text-grass">
+                                    espejo
+                                  </span>
+                                ) : a.isMirror === false ? (
+                                  <span className="rounded bg-gold/15 px-1.5 py-px text-[10px] font-extrabold text-gold-deep">
+                                    fuera del espejo
+                                  </span>
+                                ) : null}
+                                {dur && (
+                                  <span className="tabular-nums text-ink-soft/70">⏱ {dur}</span>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>

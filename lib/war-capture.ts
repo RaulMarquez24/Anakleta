@@ -71,6 +71,12 @@ export async function captureWar(
           stars: a.stars,
           destruction: a.destruction,
           attack_order: a.order,
+          duration: a.duration,
+          defender_name: a.defenderName,
+          defender_position: a.defenderPosition,
+          defender_th: a.defenderTh,
+          attacker_position: a.attackerPosition,
+          is_mirror: a.isMirror,
         })),
       );
       if (aErr) throw aErr;

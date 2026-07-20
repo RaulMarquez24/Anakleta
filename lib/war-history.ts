@@ -31,6 +31,11 @@ export interface WarAttackDetail {
   stars: number;
   destruction: number;
   order: number;
+  duration: number | null;
+  defenderName: string | null;
+  defenderPosition: number | null;
+  defenderTh: number | null;
+  isMirror: boolean | null;
 }
 export interface WarMemberDetail {
   tag: string;
@@ -413,7 +418,7 @@ export async function getWarDetail(
       .order("map_position", { ascending: true }),
     supabase
       .from("war_attacks")
-      .select("attacker_tag, stars, destruction, attack_order")
+      .select("*")
       .eq("war_id", id)
       .order("attack_order", { ascending: true }),
   ]);
@@ -427,6 +432,11 @@ export async function getWarDetail(
       stars: (a.stars as number | null) ?? 0,
       destruction: Number(a.destruction ?? 0),
       order: (a.attack_order as number | null) ?? 0,
+      duration: (a.duration as number | null) ?? null,
+      defenderName: (a.defender_name as string | null) ?? null,
+      defenderPosition: (a.defender_position as number | null) ?? null,
+      defenderTh: (a.defender_th as number | null) ?? null,
+      isMirror: (a.is_mirror as boolean | null) ?? null,
     });
   }
 

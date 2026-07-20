@@ -8,6 +8,7 @@ interface CocWarAttack {
   stars: number;
   destructionPercentage: number;
   order: number;
+  duration?: number; // segundos que duró el ataque
 }
 interface CocWarMember {
   tag: string;
@@ -43,6 +44,18 @@ interface CocLeagueGroup {
 }
 
 // --- Estructura normalizada para la vista ---
+// Detalle de un ataque concreto: a quién le pegó, cuánto duró y si respetó el
+// espejo (misma posición que la suya en el mapa).
+export interface AttackView {
+  stars: number;
+  destruction: number;
+  order: number; // orden global del ataque en la guerra
+  duration: number | null; // segundos
+  defenderName: string | null;
+  defenderPosition: number | null;
+  defenderTh: number | null;
+  isMirror: boolean; // atacó a su espejo (misma posición)
+}
 export interface WarMemberRow {
   tag: string;
   name: string;
@@ -52,6 +65,7 @@ export interface WarMemberRow {
   attacksPending: number;
   stars: number; // estrellas conseguidas (suma de sus ataques)
   destruction: number; // % sumado de sus ataques
+  attacks: AttackView[]; // sus ataques (destino, duración, espejo)
   // Guerra normal: el 2º ataque es AYUDA. reachableHelp = le queda 2º, la guerra
   // no está rematada y hay una base sin 3⭐ a su alcance (TH ≤ el suyo + 1).
   reachableHelp: boolean;
@@ -115,6 +129,33 @@ async function mapPool<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R>
   return out;
 }
 
+// Índice de bases rivales por tag, para resolver a quién se atacó.
+function opponentByTag(them?: CocWarSide): Map<string, CocWarMember> {
+  const map = new Map<string, CocWarMember>();
+  for (const o of them?.members ?? []) map.set(o.tag, o);
+  return map;
+}
+
+// Detalle de un ataque: objetivo (nombre/posición/TH), duración y espejo.
+function attackView(
+  a: CocWarAttack,
+  attacker: CocWarMember,
+  oppByTag: Map<string, CocWarMember>,
+): AttackView {
+  const d = oppByTag.get(a.defenderTag);
+  const defenderPosition = d?.mapPosition ?? null;
+  return {
+    stars: a.stars ?? 0,
+    destruction: a.destructionPercentage ?? 0,
+    order: a.order ?? 0,
+    duration: a.duration ?? null,
+    defenderName: d?.name ?? null,
+    defenderPosition,
+    defenderTh: d?.townhallLevel ?? null,
+    isMirror: defenderPosition != null && defenderPosition === attacker.mapPosition,
+  };
+}
+
 // Construye la vista normalizada. En CWL nuestro clan puede venir como clan u
 // opponent, así que elegimos "nosotros" por el tag.
 function buildView(
@@ -132,6 +173,7 @@ function buildView(
     .map((m) => m.townhallLevel);
   const warCompleted = remainingThs.length === 0;
 
+  const oppByTag = opponentByTag(them);
   const members: WarMemberRow[] = (us?.members ?? [])
     .map((m) => {
       const atks = m.attacks ?? [];
@@ -154,6 +196,9 @@ function buildView(
         attacksPending,
         stars: atks.reduce((n, a) => n + (a.stars ?? 0), 0),
         destruction: atks.reduce((n, a) => n + (a.destructionPercentage ?? 0), 0),
+        attacks: atks
+          .map((a) => attackView(a, m, oppByTag))
+          .sort((a, b) => a.order - b.order),
         reachableHelp,
       };
     })
@@ -333,7 +378,19 @@ export interface WarRecord {
   startTime: string | null;
   endTime: string | null;
   result: string | null;
-  attacks: { attackerTag: string; defenderTag: string; stars: number; destruction: number; order: number }[];
+  attacks: {
+    attackerTag: string;
+    defenderTag: string;
+    stars: number;
+    destruction: number;
+    order: number;
+    duration: number | null;
+    defenderName: string | null;
+    defenderPosition: number | null;
+    defenderTh: number | null;
+    attackerPosition: number | null;
+    isMirror: boolean;
+  }[];
   members: WarMemberRecord[]; // alineación de nuestro clan
 }
 
@@ -352,14 +409,24 @@ function toRecord(
     const od = them.destructionPercentage ?? 0;
     result = cs > os ? "win" : cs < os ? "lose" : cd > od ? "win" : cd < od ? "lose" : "tie";
   }
+  const oppByTag = opponentByTag(them);
   const attacks = (us?.members ?? []).flatMap((m) =>
-    (m.attacks ?? []).map((a) => ({
-      attackerTag: a.attackerTag,
-      defenderTag: a.defenderTag,
-      stars: a.stars,
-      destruction: a.destructionPercentage,
-      order: a.order,
-    })),
+    (m.attacks ?? []).map((a) => {
+      const v = attackView(a, m, oppByTag);
+      return {
+        attackerTag: a.attackerTag,
+        defenderTag: a.defenderTag,
+        stars: a.stars,
+        destruction: a.destructionPercentage,
+        order: a.order,
+        duration: v.duration,
+        defenderName: v.defenderName,
+        defenderPosition: v.defenderPosition,
+        defenderTh: v.defenderTh,
+        attackerPosition: m.mapPosition ?? null,
+        isMirror: v.isMirror,
+      };
+    }),
   );
   const members: WarMemberRecord[] = (us?.members ?? []).map((m) => {
     const atks = m.attacks ?? [];
