@@ -114,6 +114,7 @@ alter table war_attacks add column if not exists defender_th       int;
 alter table war_attacks add column if not exists attacker_position int;
 alter table war_attacks add column if not exists is_mirror         boolean;
 alter table war_attacks add column if not exists first_seen_at     timestamptz;
+alter table war_attacks add column if not exists mirror_status     text; -- estado congelado al capturar
 -- Claves únicas: la captura hace upsert idempotente (evita duplicados por
 -- capturas simultáneas).
 create unique index if not exists war_attacks_war_order_uidx on war_attacks (war_id, attack_order);

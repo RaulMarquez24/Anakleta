@@ -444,7 +444,7 @@ export async function getActivityReport(
   if (warIds.length > 0) {
     const { data: atks } = await supabase
       .from("war_attacks")
-      .select("war_id, attacker_tag, defender_tag, attack_order, is_mirror, defender_position, first_seen_at")
+      .select("war_id, attacker_tag, defender_tag, attack_order, is_mirror, defender_position, first_seen_at, mirror_status")
       .in("war_id", warIds)
       .limit(50000);
     const byWar = new Map<number, Record<string, unknown>[]>();
@@ -465,15 +465,17 @@ export async function getActivityReport(
       for (const a of list) {
         const dt = a.defender_tag as string | null;
         const order = (a.attack_order as number | null) ?? 0;
-        const st = classifyAttackStatus({
-          isMirror: (a.is_mirror as boolean | null) ?? null,
-          defenderPosition: (a.defender_position as number | null) ?? null,
-          fresh: !!dt && firstOrder.get(dt) === order,
-          isCwl: warIsCwl.get(wid) ?? false,
-          endMs: warEndMs.get(wid) ?? null,
-          seenMs: a.first_seen_at ? Date.parse(a.first_seen_at as string) : null,
-          stealWindowMs: stealWinMs,
-        });
+        const st =
+          (a.mirror_status as string | null) ??
+          classifyAttackStatus({
+            isMirror: (a.is_mirror as boolean | null) ?? null,
+            defenderPosition: (a.defender_position as number | null) ?? null,
+            fresh: !!dt && firstOrder.get(dt) === order,
+            isCwl: warIsCwl.get(wid) ?? false,
+            endMs: warEndMs.get(wid) ?? null,
+            seenMs: a.first_seen_at ? Date.parse(a.first_seen_at as string) : null,
+            stealWindowMs: stealWinMs,
+          });
         if (st === "stolen") {
           const tag = a.attacker_tag as string;
           stolenByTag.set(tag, (stolenByTag.get(tag) ?? 0) + 1);

@@ -52,11 +52,6 @@ function starGlyphs(n: number): string {
   return "★★★".slice(0, n).padEnd(3, "☆");
 }
 
-// Segundos → "m:ss".
-function fmtDuration(s: number | null | undefined): string | null {
-  if (s == null || s < 0) return null;
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-}
 
 function timeLeft(iso: string | null): string | null {
   if (!iso) return null;
@@ -287,7 +282,6 @@ export function WarDetail({
                       {m.attacks && m.attacks.length > 0 && (
                         <div className="mt-1 space-y-1">
                           {m.attacks.map((a, i) => {
-                            const dur = fmtDuration(a.duration);
                             return (
                               <div
                                 key={i}
@@ -325,9 +319,6 @@ export function WarDetail({
                                     robó espejo{a.stolenFrom ? ` a ${a.stolenFrom}` : ""}
                                   </span>
                                 ) : null}
-                                {dur && (
-                                  <span className="tabular-nums text-ink-soft/70">⏱ {dur}</span>
-                                )}
                               </div>
                             );
                           })}

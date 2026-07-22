@@ -446,7 +446,7 @@ export async function getMemberMirrorStats(tag: string, limit = 20): Promise<Mir
 
   const { data: atks } = await supabase
     .from("war_attacks")
-    .select("war_id, attacker_tag, defender_tag, attack_order, is_mirror, defender_position, first_seen_at")
+    .select("war_id, attacker_tag, defender_tag, attack_order, is_mirror, defender_position, first_seen_at, mirror_status")
     .in("war_id", warIds)
     .limit(20000);
 
@@ -477,15 +477,17 @@ export async function getMemberMirrorStats(tag: string, limit = 20): Promise<Mir
       const dt = a.defender_tag as string | null;
       const order = (a.attack_order as number | null) ?? 0;
       const seen = a.first_seen_at ? Date.parse(a.first_seen_at as string) : null;
-      const st = classifyAttackStatus({
-        isMirror: (a.is_mirror as boolean | null) ?? null,
-        defenderPosition: (a.defender_position as number | null) ?? null,
-        fresh: !!dt && firstOrder.get(dt) === order,
-        isCwl,
-        endMs,
-        seenMs: seen,
-        stealWindowMs: window,
-      });
+      const st =
+        (a.mirror_status as MirrorStatus | null) ??
+        classifyAttackStatus({
+          isMirror: (a.is_mirror as boolean | null) ?? null,
+          defenderPosition: (a.defender_position as number | null) ?? null,
+          fresh: !!dt && firstOrder.get(dt) === order,
+          isCwl,
+          endMs,
+          seenMs: seen,
+          stealWindowMs: window,
+        });
       if (!st) continue;
       stats.attacks++;
       if (st === "mirror") stats.mirror++;
@@ -557,16 +559,20 @@ export async function getWarDetail(
     const seenIso = (a.first_seen_at as string | null) ?? null;
     const seenMs = seenIso ? Date.parse(seenIso) : null;
 
-    // Clasificación con la ventana de 5h (solo si hay datos; guerras antiguas → null).
-    const mirrorStatus: MirrorStatus | null = classifyAttackStatus({
-      isMirror,
-      defenderPosition,
-      fresh: !!defenderTag && firstOrderByDefender.get(defenderTag) === order,
-      isCwl,
-      endMs: endMsOrNull,
-      seenMs: Number.isNaN(seenMs as number) ? null : seenMs,
-      stealWindowMs: window,
-    });
+    // Estado congelado al capturar (preferido); si no hay, se calcula (guerras
+    // anteriores a guardarlo).
+    const stored = (a.mirror_status as MirrorStatus | null) ?? null;
+    const mirrorStatus: MirrorStatus | null =
+      stored ??
+      classifyAttackStatus({
+        isMirror,
+        defenderPosition,
+        fresh: !!defenderTag && firstOrderByDefender.get(defenderTag) === order,
+        isCwl,
+        endMs: endMsOrNull,
+        seenMs: Number.isNaN(seenMs as number) ? null : seenMs,
+        stealWindowMs: window,
+      });
     const stolenFrom =
       mirrorStatus === "stolen" && defenderPosition != null
         ? (nameByPosition.get(defenderPosition) ?? null)

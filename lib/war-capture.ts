@@ -1,5 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getWarRecords, getWarLog, type WarLogEntry } from "@/lib/war";
+import {
+  getWarRecords,
+  getWarLog,
+  classifyAttackStatus,
+  type WarLogEntry,
+  type MirrorStatus,
+} from "@/lib/war";
+import { getRulesConfig, stealWindowMs } from "@/lib/rules";
 import { createServerClient } from "@/lib/supabase/server";
 
 export interface WarCaptureResult {
@@ -28,6 +35,7 @@ export async function captureWar(
   );
 
   const records = await getWarRecords(undefined, finalizedTags);
+  const win = stealWindowMs((await getRulesConfig()).stealWindowHours);
   let recorded = 0;
   let attacks = 0;
   let cwl = false;
@@ -65,19 +73,49 @@ export async function captureWar(
     // reescribe la guerra cada captura, pero un ataque conserva cuándo se
     // detectó por primera vez (clave = orden global, único en la guerra).
     let prevSeen = new Map<number, string>();
+    let prevStatus = new Map<number, string>();
     try {
       const { data: prev } = await supabase
         .from("war_attacks")
-        .select("attack_order, first_seen_at")
+        .select("attack_order, first_seen_at, mirror_status")
         .eq("war_id", warId);
       prevSeen = new Map(
         (prev ?? [])
           .filter((p) => p.first_seen_at)
           .map((p) => [p.attack_order as number, p.first_seen_at as string]),
       );
+      prevStatus = new Map(
+        (prev ?? [])
+          .filter((p) => p.mirror_status)
+          .map((p) => [p.attack_order as number, p.mirror_status as string]),
+      );
     } catch {
-      /* columna first_seen_at aún no existe: se rellenará al aplicar la migración */
+      /* columnas nuevas aún no existen: se rellenarán al aplicar la migración */
     }
+
+    // Primer ataque a cada base (para saber si estaba "fresca") en esta captura.
+    const firstOrderByDefender = new Map<string, number>();
+    for (const a of rec.attacks) {
+      const prevO = firstOrderByDefender.get(a.defenderTag);
+      if (prevO == null || a.order < prevO) firstOrderByDefender.set(a.defenderTag, a.order);
+    }
+    const endMs = rec.endTime ? Date.parse(rec.endTime) : null;
+
+    // Estado de espejo CONGELADO al capturar: se calcula con la hora de la 1ª
+    // detección; y si ya estaba guardado como "stolen", nunca se degrada.
+    const statusFor = (a: (typeof rec.attacks)[number]): MirrorStatus | null => {
+      const seenIso = prevSeen.get(a.order) ?? capturedAt;
+      const computed = classifyAttackStatus({
+        isMirror: a.isMirror,
+        defenderPosition: a.defenderPosition,
+        fresh: firstOrderByDefender.get(a.defenderTag) === a.order,
+        isCwl: rec.isCwl,
+        endMs,
+        seenMs: Date.parse(seenIso),
+        stealWindowMs: win,
+      });
+      return prevStatus.get(a.order) === "stolen" ? "stolen" : computed;
+    };
 
     // Escritura IDEMPOTENTE (upsert por clave única), no borrar+insertar: así dos
     // capturas simultáneas (cron horario + al abrir + snapshot) no duplican filas.
@@ -97,6 +135,7 @@ export async function captureWar(
           attacker_position: a.attackerPosition,
           is_mirror: a.isMirror,
           first_seen_at: prevSeen.get(a.order) ?? capturedAt,
+          mirror_status: statusFor(a),
         })),
         { onConflict: "war_id,attack_order" },
       );
