@@ -13,6 +13,7 @@ export interface UnifiedWarMember {
   stars: number;
   destruction: number;
   attacks?: {
+    attackNo?: number;
     stars: number;
     destruction: number;
     order: number;
@@ -23,6 +24,7 @@ export interface UnifiedWarMember {
     isMirror?: boolean | null;
     mirrorStatus?: "mirror" | "cleanup" | "late" | "stolen" | "offmirror" | null;
     stolenFrom?: string | null;
+    warHour?: number | null;
   }[];
   reachableHelp?: boolean; // (en vivo) el 2º ayudaría: hay base a su alcance sin 3⭐
 }
@@ -288,6 +290,11 @@ export function WarDetail({
                                 className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-bold"
                                 title={`Ataque nº ${a.order} de la guerra`}
                               >
+                                {a.attackNo ? (
+                                  <span className="rounded bg-surface-2 px-1.5 py-px text-[10px] font-extrabold text-ink-soft">
+                                    {a.attackNo}º
+                                  </span>
+                                ) : null}
                                 <span className="text-gold-deep">{starGlyphs(a.stars)}</span>
                                 <span className="tabular-nums text-ink-soft">
                                   {Math.round(a.destruction)}%
@@ -319,6 +326,14 @@ export function WarDetail({
                                     robó espejo{a.stolenFrom ? ` a ${a.stolenFrom}` : ""}
                                   </span>
                                 ) : null}
+                                {a.warHour != null && (
+                                  <span
+                                    className="tabular-nums text-ink-soft/70"
+                                    title="Hora estimada dentro de la guerra"
+                                  >
+                                    ≈{a.warHour} h
+                                  </span>
+                                )}
                               </div>
                             );
                           })}

@@ -29,6 +29,7 @@ export interface CwlSeasonSummary {
 }
 
 export interface WarAttackDetail {
+  attackNo: number; // 1º o 2º ataque del jugador
   stars: number;
   destruction: number;
   order: number;
@@ -39,6 +40,7 @@ export interface WarAttackDetail {
   isMirror: boolean | null;
   mirrorStatus: MirrorStatus | null;
   stolenFrom: string | null;
+  warHour: number | null; // hora estimada dentro de la guerra (0-24), congelada
 }
 export interface WarMemberDetail {
   tag: string;
@@ -541,6 +543,8 @@ export async function getWarDetail(
   const endTimeIso = (wr.end_time as string | null) ?? null;
   const endMs = endTimeIso ? Date.parse(endTimeIso) : NaN;
   const endMsOrNull = Number.isNaN(endMs) ? null : endMs;
+  const startTimeIso = (wr.start_time as string | null) ?? null;
+  const startMs = startTimeIso ? Date.parse(startTimeIso) : NaN;
   const window = stealWindowMs((await getRulesConfig()).stealWindowHours);
 
   // Agrupa los ataques individuales por atacante (nuestro miembro).
@@ -578,7 +582,15 @@ export async function getWarDetail(
         ? (nameByPosition.get(defenderPosition) ?? null)
         : null;
 
+    // Hora estimada dentro de la guerra: desde el inicio hasta la 1ª detección.
+    let warHour: number | null = null;
+    if (!Number.isNaN(startMs) && seenMs != null && !Number.isNaN(seenMs)) {
+      const h = Math.round((seenMs - startMs) / 3_600_000);
+      warHour = Math.min(24, Math.max(0, h));
+    }
+
     attacksByTag.get(tag)!.push({
+      attackNo: 0, // se fija al ordenar por jugador (abajo)
       stars: (a.stars as number | null) ?? 0,
       destruction: Number(a.destruction ?? 0),
       order,
@@ -589,6 +601,7 @@ export async function getWarDetail(
       isMirror,
       mirrorStatus,
       stolenFrom,
+      warHour,
     });
   }
 
@@ -611,7 +624,9 @@ export async function getWarDetail(
       attacksUsed: (m.attacks_used as number | null) ?? 0,
       stars: (m.stars as number | null) ?? 0,
       destruction: (m.destruction as number | null) ?? 0,
-      attacks: attacksByTag.get(m.tag as string) ?? [],
+      attacks: (attacksByTag.get(m.tag as string) ?? [])
+        .sort((x, y) => x.order - y.order)
+        .map((a, i) => ({ ...a, attackNo: i + 1 })),
     })),
   };
 }

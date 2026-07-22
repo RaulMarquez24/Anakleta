@@ -82,6 +82,7 @@ export function classifyAttackStatus(p: {
   return beforeWindow ? "stolen" : "late";
 }
 export interface AttackView {
+  attackNo: number; // 1º o 2º ataque del jugador
   stars: number;
   destruction: number;
   order: number; // orden global del ataque en la guerra
@@ -92,6 +93,7 @@ export interface AttackView {
   isMirror: boolean; // atacó a su espejo (misma posición)
   mirrorStatus: MirrorStatus | null; // null si no hay datos (guerra antigua)
   stolenFrom: string | null; // a quién le robó el espejo (si "stolen")
+  warHour: number | null; // hora estimada dentro de la guerra (en vivo: null)
 }
 export interface WarMemberRow {
   tag: string;
@@ -192,6 +194,8 @@ function attackView(
     isMirror: defenderPosition != null && defenderPosition === attacker.mapPosition,
     mirrorStatus: null, // lo fija classifyMirror() con el contexto de la guerra
     stolenFrom: null,
+    attackNo: 0, // se fija al ordenar los ataques del jugador
+    warHour: null, // en vivo no hay hora estimada (no hay first_seen guardado)
   };
 }
 
@@ -279,7 +283,11 @@ function buildView(
             }
             return v;
           })
-          .sort((a, b) => a.order - b.order),
+          .sort((a, b) => a.order - b.order)
+          .map((v, i) => {
+            v.attackNo = i + 1;
+            return v;
+          }),
         reachableHelp,
       };
     })
