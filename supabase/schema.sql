@@ -114,6 +114,9 @@ alter table war_attacks add column if not exists defender_th       int;
 alter table war_attacks add column if not exists attacker_position int;
 alter table war_attacks add column if not exists is_mirror         boolean;
 alter table war_attacks add column if not exists first_seen_at     timestamptz;
+-- Claves únicas: la captura hace upsert idempotente (evita duplicados por
+-- capturas simultáneas).
+create unique index if not exists war_attacks_war_order_uidx on war_attacks (war_id, attack_order);
 
 -- Sistema de ligas nuevo (Ranked) + XP + datos por jugador (enriquecimiento).
 -- El leagueTier es el "rango real": su id es creciente y sirve para ordenar.
@@ -151,6 +154,8 @@ create table if not exists war_members (
   destruction   numeric
 );
 create index if not exists war_members_war_idx on war_members (war_id);
+-- Clave única: la captura hace upsert idempotente (evita duplicados).
+create unique index if not exists war_members_war_tag_uidx on war_members (war_id, tag);
 
 -- Control de recordatorios de guerra en Discord (para no repetir tramos de aviso).
 create table if not exists war_reminders (

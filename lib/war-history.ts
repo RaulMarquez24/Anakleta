@@ -543,10 +543,14 @@ export async function getWarDetail(
 
   // Agrupa los ataques individuales por atacante (nuestro miembro).
   const attacksByTag = new Map<string, WarAttackDetail[]>();
+  const seenAtk = new Set<string>(); // dedupe por (atacante, orden) por si hay duplicados en BD
   for (const a of atks ?? []) {
     const tag = a.attacker_tag as string;
-    if (!attacksByTag.has(tag)) attacksByTag.set(tag, []);
     const order = (a.attack_order as number | null) ?? 0;
+    const dkey = `${tag}#${order}`;
+    if (seenAtk.has(dkey)) continue;
+    seenAtk.add(dkey);
+    if (!attacksByTag.has(tag)) attacksByTag.set(tag, []);
     const defenderPosition = (a.defender_position as number | null) ?? null;
     const isMirror = (a.is_mirror as boolean | null) ?? null;
     const defenderTag = a.defender_tag as string | null;
@@ -582,9 +586,18 @@ export async function getWarDetail(
     });
   }
 
+  // Dedupe de la alineación por tag (por si hay filas duplicadas en BD).
+  const seenMember = new Set<string>();
+  const uniqueMembers = (members ?? []).filter((m) => {
+    const t = m.tag as string;
+    if (seenMember.has(t)) return false;
+    seenMember.add(t);
+    return true;
+  });
+
   return {
     war: toSummary(war as Record<string, unknown>),
-    members: (members ?? []).map((m) => ({
+    members: uniqueMembers.map((m) => ({
       tag: m.tag as string,
       name: m.name as string,
       mapPosition: (m.map_position as number | null) ?? 0,

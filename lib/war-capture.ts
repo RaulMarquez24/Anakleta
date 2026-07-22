@@ -79,10 +79,10 @@ export async function captureWar(
       /* columna first_seen_at aún no existe: se rellenará al aplicar la migración */
     }
 
-    // Reescribe ataques y alineación de esta guerra.
-    await supabase.from("war_attacks").delete().eq("war_id", warId);
+    // Escritura IDEMPOTENTE (upsert por clave única), no borrar+insertar: así dos
+    // capturas simultáneas (cron horario + al abrir + snapshot) no duplican filas.
     if (rec.attacks.length > 0) {
-      const { error: aErr } = await supabase.from("war_attacks").insert(
+      const { error: aErr } = await supabase.from("war_attacks").upsert(
         rec.attacks.map((a) => ({
           war_id: warId,
           attacker_tag: a.attackerTag,
@@ -98,13 +98,13 @@ export async function captureWar(
           is_mirror: a.isMirror,
           first_seen_at: prevSeen.get(a.order) ?? capturedAt,
         })),
+        { onConflict: "war_id,attack_order" },
       );
       if (aErr) throw aErr;
     }
 
-    await supabase.from("war_members").delete().eq("war_id", warId);
     if (rec.members.length > 0) {
-      const { error: mErr } = await supabase.from("war_members").insert(
+      const { error: mErr } = await supabase.from("war_members").upsert(
         rec.members.map((m) => ({
           war_id: warId,
           tag: m.tag,
@@ -115,6 +115,7 @@ export async function captureWar(
           stars: m.stars,
           destruction: m.destruction,
         })),
+        { onConflict: "war_id,tag" },
       );
       if (mErr) throw mErr;
     }
