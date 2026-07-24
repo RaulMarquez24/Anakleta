@@ -69,30 +69,6 @@ export async function captureWar(
     if (warErr) throw warErr;
     const warId = warRow.id as number;
 
-    // Preserva la hora aprox. (first_seen_at) de los ataques ya vistos: se
-    // reescribe la guerra cada captura, pero un ataque conserva cuándo se
-    // detectó por primera vez (clave = orden global, único en la guerra).
-    let prevSeen = new Map<number, string>();
-    let prevStatus = new Map<number, string>();
-    try {
-      const { data: prev } = await supabase
-        .from("war_attacks")
-        .select("attack_order, first_seen_at, mirror_status")
-        .eq("war_id", warId);
-      prevSeen = new Map(
-        (prev ?? [])
-          .filter((p) => p.first_seen_at)
-          .map((p) => [p.attack_order as number, p.first_seen_at as string]),
-      );
-      prevStatus = new Map(
-        (prev ?? [])
-          .filter((p) => p.mirror_status)
-          .map((p) => [p.attack_order as number, p.mirror_status as string]),
-      );
-    } catch {
-      /* columnas nuevas aún no existen: se rellenarán al aplicar la migración */
-    }
-
     // Primer ataque a cada base (para saber si estaba "fresca") en esta captura.
     const firstOrderByDefender = new Map<string, number>();
     for (const a of rec.attacks) {
@@ -100,25 +76,26 @@ export async function captureWar(
       if (prevO == null || a.order < prevO) firstOrderByDefender.set(a.defenderTag, a.order);
     }
     const endMs = rec.endTime ? Date.parse(rec.endTime) : null;
+    const capturedMs = Date.parse(capturedAt);
 
-    // Estado de espejo CONGELADO al capturar: se calcula con la hora de la 1ª
-    // detección; y si ya estaba guardado como "stolen", nunca se degrada.
-    const statusFor = (a: (typeof rec.attacks)[number]): MirrorStatus | null => {
-      const seenIso = prevSeen.get(a.order) ?? capturedAt;
-      const computed = classifyAttackStatus({
+    // Estado de espejo CONGELADO al capturar: se calcula con la hora de ESTA
+    // captura (1ª vez que se ve el ataque). Como el ataque se INSERTA una sola
+    // vez (nunca se sobrescribe), este estado queda inmóvil para siempre.
+    const statusFor = (a: (typeof rec.attacks)[number]): MirrorStatus | null =>
+      classifyAttackStatus({
         isMirror: a.isMirror,
         defenderPosition: a.defenderPosition,
         fresh: firstOrderByDefender.get(a.defenderTag) === a.order,
         isCwl: rec.isCwl,
         endMs,
-        seenMs: Date.parse(seenIso),
+        seenMs: capturedMs,
         stealWindowMs: win,
       });
-      return prevStatus.get(a.order) === "stolen" ? "stolen" : computed;
-    };
 
-    // Escritura IDEMPOTENTE (upsert por clave única), no borrar+insertar: así dos
-    // capturas simultáneas (cron horario + al abrir + snapshot) no duplican filas.
+    // INMUTABLE: inserta cada ataque una sola vez (on conflict do nothing). Un
+    // ataque ya registrado NO se toca nunca más → su clasificación y su hora no
+    // cambian aunque corran más capturas. (Los conteos que sí cambian —ataques
+    // usados por miembro— van en war_members, que sí se actualiza.)
     if (rec.attacks.length > 0) {
       const { error: aErr } = await supabase.from("war_attacks").upsert(
         rec.attacks.map((a) => ({
@@ -134,10 +111,10 @@ export async function captureWar(
           defender_th: a.defenderTh,
           attacker_position: a.attackerPosition,
           is_mirror: a.isMirror,
-          first_seen_at: prevSeen.get(a.order) ?? capturedAt,
+          first_seen_at: capturedAt,
           mirror_status: statusFor(a),
         })),
-        { onConflict: "war_id,attack_order" },
+        { onConflict: "war_id,attack_order", ignoreDuplicates: true },
       );
       if (aErr) throw aErr;
     }

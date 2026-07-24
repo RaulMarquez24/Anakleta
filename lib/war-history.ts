@@ -407,6 +407,46 @@ export async function getMemberWarLog(
   return { wars, seasons };
 }
 
+// Estado CONGELADO (guardado en BD) de los ataques de una guerra, identificada
+// por su hora de inicio. Se usa en la vista EN VIVO para no recalcular la
+// clasificación con la hora actual (un robo detectado a tiempo se mantiene robo).
+export interface FrozenAttack {
+  mirrorStatus: MirrorStatus | null;
+  stolenFrom: string | null;
+  warHour: number | null;
+  attackNo: number;
+}
+export async function getFrozenAttackMap(
+  startTimeIso: string | null,
+  isCwl: boolean,
+): Promise<Map<string, FrozenAttack>> {
+  const map = new Map<string, FrozenAttack>();
+  if (!startTimeIso) return map;
+  const supabase = createServerClient();
+  const { data: rows } = await supabase
+    .from("wars")
+    .select("id")
+    .eq("is_cwl", isCwl)
+    .eq("start_time", startTimeIso)
+    .order("id", { ascending: false })
+    .limit(1);
+  const warId = rows?.[0]?.id as number | undefined;
+  if (warId == null) return map;
+  const detail = await getWarDetail(warId);
+  if (!detail) return map;
+  for (const m of detail.members) {
+    for (const a of m.attacks) {
+      map.set(`${m.tag}#${a.order}`, {
+        mirrorStatus: a.mirrorStatus,
+        stolenFrom: a.stolenFrom,
+        warHour: a.warHour,
+        attackNo: a.attackNo,
+      });
+    }
+  }
+  return map;
+}
+
 // Desglose de espejo/remate/robo de un miembro en sus últimas guerras. Clasifica
 // cada ataque suyo con el contexto de la guerra (orden global + ventana de 5h).
 export interface MirrorStats {

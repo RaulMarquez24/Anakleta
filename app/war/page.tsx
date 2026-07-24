@@ -1,6 +1,7 @@
 import { after } from "next/server";
 import { getCurrentWarFresh, type WarView } from "@/lib/war";
 import { captureCurrentWarOnView } from "@/lib/war-capture";
+import { getFrozenAttackMap } from "@/lib/war-history";
 import { getWarHelpOverrides } from "@/lib/war-overrides";
 import { getClanName } from "@/lib/dashboard";
 import { getCurrentUser } from "@/lib/supabase/current-user";
@@ -40,6 +41,25 @@ export default async function WarPage() {
   // Correcciones manuales del 2º ataque, solo para guerra normal en curso.
   const warKey = !war.isCwl && war.state === "inWar" ? (war.startTime ?? "") : "";
   const helpOverrides = warKey ? await getWarHelpOverrides(warKey) : {};
+
+  // Clasificación CONGELADA (de la BD) para no recalcular con la hora actual: un
+  // ataque ya registrado como "robó espejo" se mantiene, no pasa a "libre".
+  const frozen = showDetail ? await getFrozenAttackMap(war.startTime, war.isCwl) : new Map();
+  const members = war.members.map((m) => ({
+    ...m,
+    attacks: m.attacks.map((a) => {
+      const f = frozen.get(`${m.tag}#${a.order}`);
+      return f
+        ? {
+            ...a,
+            mirrorStatus: f.mirrorStatus,
+            stolenFrom: f.stolenFrom,
+            warHour: f.warHour,
+            attackNo: f.attackNo,
+          }
+        : a;
+    }),
+  }));
 
   return (
     <AppShell email={user?.email} title="Guerra" back="/guerras">
@@ -85,7 +105,7 @@ export default async function WarPage() {
             attacksPerMember: war.attacksPerMember,
             warCompleted: war.warCompleted,
           }}
-          members={war.members}
+          members={members}
           opponentMembers={war.opponentMembers.map((o) => ({
             mapPosition: o.mapPosition,
             townHall: o.townHall,
