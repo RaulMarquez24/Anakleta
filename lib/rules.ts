@@ -8,6 +8,8 @@ export interface RulesConfig {
   warnsThreshold: number; // nº de warns vigentes para saltar a "A echar"
   warnsExpiryDays: number; // días hasta que un warn caduca (0 = nunca)
   inactivityDays: number; // días sin actividad para marcar "revisar"
+  expulsionInactiveDays: number; // días sin actividad para proponer expulsión
+  expulsionMissedWars: number; // guerras sin atacar para proponer expulsión
   donationMin: number; // por debajo de esto, si además recibió mucho, cuenta negativo
   donationGap: number; // desfase recibido−donado que dispara "balance bajo"
 }
@@ -17,6 +19,8 @@ export const RULES_DEFAULTS: RulesConfig = {
   warnsThreshold: 3,
   warnsExpiryDays: 90,
   inactivityDays: 7,
+  expulsionInactiveDays: 14,
+  expulsionMissedWars: 3,
   donationMin: 1000,
   donationGap: 1000,
 };
@@ -94,6 +98,30 @@ export const RULE_FIELDS: RuleField[] = [
     min: 1,
     max: 60,
     unit: "días",
+  },
+  {
+    key: "expulsion_inactive_days",
+    prop: "expulsionInactiveDays",
+    token: "dias_inactividad_expulsion",
+    group: "Actividad",
+    affectsApp: true,
+    label: "Inactividad para expulsar",
+    help: "Días sin actividad a partir de los cuales se propone la expulsión (por debajo, solo «revisar»).",
+    min: 3,
+    max: 90,
+    unit: "días",
+  },
+  {
+    key: "expulsion_missed_wars",
+    prop: "expulsionMissedWars",
+    token: "guerras_sin_atacar_expulsion",
+    group: "Guerra",
+    affectsApp: true,
+    label: "Guerras sin atacar para expulsar",
+    help: "Nº de guerras terminadas en las que entró y no atacó que proponen la expulsión.",
+    min: 1,
+    max: 10,
+    unit: "guerras",
   },
   {
     key: "donation_min",
@@ -251,6 +279,8 @@ export async function getRulesConfig(): Promise<RulesConfig> {
       warnsThreshold: clamp(num("warns_threshold", 3), 1, 10),
       warnsExpiryDays: clamp(num("warns_expiry_days", 90), 0, 365),
       inactivityDays: clamp(num("inactivity_days", 7), 1, 60),
+      expulsionInactiveDays: clamp(num("expulsion_inactive_days", 14), 3, 90),
+      expulsionMissedWars: clamp(num("expulsion_missed_wars", 3), 1, 10),
       donationMin: clamp(num("donation_min", 1000), 0, 20000),
       donationGap: clamp(num("donation_gap", 1000), 0, 20000),
     };

@@ -580,42 +580,61 @@ export async function getActivityReport(
     const fs = m.first_seen_at ? new Date(m.first_seen_at as string).getTime() : null;
     const isNew = fs != null && now - fs < 7 * DAY_MS && fs - baseline > 12 * 3_600_000;
 
-    // Faltillas: señales concretas de poca implicación (solo si hay datos suficientes).
+    // Señales. Se separan en GRAVES (incumplen una norma de forma objetiva y
+    // pesan en la categoría) e informativas (contexto: no son falta, no expulsan).
+    // Ojo: ponerse en rojo o no jugar ranked NO incumple nada — de hecho las
+    // normas piden ponerse en rojo si no puedes atacar.
     const enoughData = snapRows.length >= 2;
     const flags: string[] = [];
-    if (enoughData && donationsPeriod === 0 && receivedPeriod === 0) flags.push("🚫 No dona ni pide");
-    if (warsInPeriod > 0 && w.played === 0) flags.push("🚫 No juega guerras");
+    const graves: string[] = [];
+    const warStolen = stolenByTag.get(tag) ?? 0;
+    const capPart = capitalParticipated.get(tag) ?? 0;
+    const activeWarns = warnCounts.get(tag) ?? 0;
+
+    // — Graves —
+    if (enoughData && donationsPeriod === 0 && receivedPeriod === 0) {
+      flags.push("🚫 No dona ni pide");
+      graves.push("no dona");
+    }
+    if (warsInPeriod > 0 && w.played === 0) {
+      flags.push("🚫 No juega guerras");
+      graves.push("no juega guerras");
+    }
+    if (w.missed >= 1) graves.push("no atacó en guerra");
+    if (warStolen > 0) {
+      flags.push(`🎯 ${warStolen} robó espejo`);
+      graves.push("robó espejo");
+    }
+    if (donNeg) graves.push("balance de donaciones");
+    if (activeWarns > 0) {
+      flags.push(`⚠️ ${activeWarns} warn${activeWarns === 1 ? "" : "s"}`);
+      graves.push("warns");
+    }
+
+    // — Informativas (no cuentan para expulsar) —
     if (trophies != null && trophies === 0) flags.push("🎯 Sin competitivo esta semana");
     if (lastWarPref.get(tag) === "out") flags.push("💤 Guerra desactivada");
-    const warStolen = stolenByTag.get(tag) ?? 0;
-    if (warStolen > 0) flags.push(`🎯 ${warStolen} robó espejo`);
-    const capPart = capitalParticipated.get(tag) ?? 0;
     if (capitalWeekends > 0 && capPart === 0 && !isNew) flags.push("🏛️ Sin capital");
-    const activeWarns = warnCounts.get(tag) ?? 0;
-    if (activeWarns > 0) flags.push(`⚠️ ${activeWarns} warn${activeWarns === 1 ? "" : "s"}`);
 
     const isStaff = role === "leader" || role === "coLeader";
+    const inactivo = staleDays != null && staleDays >= thresholdDays;
     let category: ActivityCategory;
     if (isStaff) category = "mando";
     else if (
-      (staleDays != null && staleDays >= 14) ||
-      w.missed >= 3 ||
-      flags.length >= 3 ||
-      activeWarns >= warnCfg.threshold
+      // Expulsión SOLO por motivos graves y objetivos (nunca por acumular
+      // faltillas). `capped` = no hay señal en la ventana: sin certeza, no expulsa.
+      activeWarns >= warnCfg.threshold ||
+      (staleDays != null && !capped && staleDays >= rules.expulsionInactiveDays) ||
+      w.missed >= rules.expulsionMissedWars ||
+      (w.missed >= 2 && inactivo)
     )
       category = "expulsion";
-    else if (
-      (staleDays != null && staleDays >= thresholdDays) ||
-      w.missed >= 1 ||
-      donNeg ||
-      flags.length >= 2
-    )
+    else if (inactivo || w.missed >= 1 || warStolen > 0 || activeWarns > 0 || donNeg || graves.length >= 2)
       category = "revisar";
     else if (
       staleDays != null &&
       staleDays < 2 &&
-      w.missed === 0 &&
-      flags.length === 0 &&
+      graves.length === 0 &&
       // Destacar EXIGE aporte real de donaciones (> 1000) además de activo y sin fallos.
       donations != null &&
       donations > 1000
@@ -630,8 +649,8 @@ export async function getActivityReport(
         w.missed * 8 +
         warStolen * 5 +
         (donNeg ? 8 : 0) +
-        (staleDays != null && staleDays >= thresholdDays ? 10 : 0) +
-        flags.length * 4 +
+        (inactivo ? 10 : 0) +
+        graves.length * 4 +
         activeWarns * 6;
     }
 
