@@ -244,6 +244,30 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
               </span>
             </div>
 
+            {/* Por qué está en esa categoría (motivo literal con cifras) */}
+            {row.categoryReasons.length > 0 && (
+              <div className="border-t border-line px-4 py-3">
+                <p
+                  className={`text-xs leading-snug ${
+                    row.category === "expulsion"
+                      ? "text-banner"
+                      : row.category === "destacado"
+                        ? "text-grass"
+                        : "text-gold-deep"
+                  }`}
+                >
+                  <span className="font-extrabold">
+                    {row.category === "expulsion"
+                      ? "Motivo de expulsión: "
+                      : row.category === "destacado"
+                        ? "Destaca por: "
+                        : "A revisar por: "}
+                  </span>
+                  {row.categoryReasons.join(" · ")}
+                </p>
+              </div>
+            )}
+
             {/* Alertas (faltillas) */}
             {row.flags.length > 0 && (
               <div className="border-t border-line px-4 py-3">

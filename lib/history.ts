@@ -180,6 +180,7 @@ export interface ActivityRow {
   capitalParticipated: number; // findes de capital en los que atacó
   capitalWeekends: number; // findes de capital registrados en el periodo (clan)
   category: ActivityCategory;
+  categoryReasons: string[]; // por qué está en esa categoría (motivos con cifras)
   kickScore: number; // mayor = más candidato a echar
   participationScore: number; // mayor = más participativo (candidato a subir)
   flags: string[]; // "faltillas" detectadas (no dona, no guerra, no sube liga, guerra off)
@@ -638,38 +639,75 @@ export async function getActivityReport(): Promise<ActivityReport> {
 
     const isStaff = role === "leader" || role === "coLeader";
     const inactivo = staleDays != null && staleDays >= thresholdDays;
+    const d = (n: number) => Math.round(n);
+    const plural = (n: number, s: string, p: string) => `${n} ${n === 1 ? s : p}`;
+
+    // Motivos LITERALES (con cifras y su límite) de por qué cae en cada nivel.
+    // Expulsión: solo motivos graves y objetivos, nunca acumular faltillas.
+    // `capped` = no hay señal en la ventana: sin certeza, no se expulsa.
+    const expulsionReasons: string[] = [];
+    if (activeWarns >= warnCfg.threshold)
+      expulsionReasons.push(
+        `${plural(activeWarns, "warn vigente", "warns vigentes")} (límite ${warnCfg.threshold})`,
+      );
+    if (staleDays != null && !capped && staleDays >= rules.expulsionInactiveDays)
+      expulsionReasons.push(
+        `${d(staleDays)} días sin actividad (límite ${rules.expulsionInactiveDays})`,
+      );
+    if (w.missed >= rules.expulsionMissedWars)
+      expulsionReasons.push(
+        `${plural(w.missed, "guerra", "guerras")} sin atacar (límite ${rules.expulsionMissedWars})`,
+      );
+    if (redDays != null && redDays >= rules.redDaysExpulsion)
+      expulsionReasons.push(
+        `${d(redDays)} días seguidos en rojo sin entrar a guerra (límite ${rules.redDaysExpulsion})`,
+      );
+    if (w.missed >= 2 && inactivo && staleDays != null)
+      expulsionReasons.push(
+        `${plural(w.missed, "guerra", "guerras")} sin atacar y ${d(staleDays)} días inactivo`,
+      );
+
+    const reviewReasons: string[] = [];
+    if (inactivo && staleDays != null)
+      reviewReasons.push(`${d(staleDays)} días sin actividad (límite ${thresholdDays})`);
+    if (w.missed >= 1) reviewReasons.push(`${plural(w.missed, "guerra", "guerras")} sin atacar`);
+    if (warStolen > 0)
+      reviewReasons.push(`${plural(warStolen, "robo", "robos")} de espejo fuera de plazo`);
+    if (activeWarns > 0) reviewReasons.push(plural(activeWarns, "warn vigente", "warns vigentes"));
+    if (donNeg)
+      reviewReasons.push(
+        `balance de donaciones bajo (dio ${donations ?? 0}, recibió ${received ?? 0})`,
+      );
+    if (redDays != null && redDays >= rules.redDaysReview)
+      reviewReasons.push(`${d(redDays)} días seguidos en rojo (límite ${rules.redDaysReview})`);
+    if (daysSinceDonation != null && daysSinceDonation >= rules.noDonationDays)
+      reviewReasons.push(`${d(daysSinceDonation)} días sin donar nada`);
+    if (warsInPeriod > 0 && w.played === 0)
+      reviewReasons.push(`no entró a ninguna de las ${warsInPeriod} guerras`);
+
     let category: ActivityCategory;
+    let categoryReasons: string[] = [];
     if (isStaff) category = "mando";
-    else if (
-      // Expulsión SOLO por motivos graves y objetivos (nunca por acumular
-      // faltillas). `capped` = no hay señal en la ventana: sin certeza, no expulsa.
-      activeWarns >= warnCfg.threshold ||
-      (staleDays != null && !capped && staleDays >= rules.expulsionInactiveDays) ||
-      w.missed >= rules.expulsionMissedWars ||
-      (redDays != null && redDays >= rules.redDaysExpulsion) ||
-      (w.missed >= 2 && inactivo)
-    )
+    else if (expulsionReasons.length > 0) {
       category = "expulsion";
-    else if (
-      inactivo ||
-      w.missed >= 1 ||
-      warStolen > 0 ||
-      activeWarns > 0 ||
-      donNeg ||
-      (redDays != null && redDays >= rules.redDaysReview) ||
-      graves.length >= 2
-    )
+      // Se listan también las faltas menores, para tener el cuadro completo.
+      categoryReasons = [...expulsionReasons, ...reviewReasons.filter((r) => !expulsionReasons.some((e) => e.startsWith(r.split(" (")[0])))];
+    } else if (reviewReasons.length > 0 || graves.length >= 2) {
       category = "revisar";
-    else if (
+      categoryReasons = reviewReasons.length > 0 ? reviewReasons : [`varias faltas: ${graves.join(", ")}`];
+    } else if (
       staleDays != null &&
       staleDays < 2 &&
       graves.length === 0 &&
       // Destacar EXIGE aporte real de donaciones (> 1000) además de activo y sin fallos.
       donations != null &&
       donations > 1000
-    )
+    ) {
       category = "destacado";
-    else category = "ok";
+      categoryReasons = [
+        `activo hoy, ${donations.toLocaleString("es-ES")} donaciones y sin faltas`,
+      ];
+    } else category = "ok";
 
     let kickScore = -1;
     if (!isStaff) {
@@ -714,6 +752,7 @@ export async function getActivityReport(): Promise<ActivityReport> {
       capitalParticipated: capPart,
       capitalWeekends,
       category,
+      categoryReasons,
       kickScore,
       // Participación (para ascensos): donaciones + estrellas + ataques, penaliza fallos.
       participationScore: (donations ?? 0) + w.stars * 100 + w.attacks * 50 - w.missed * 300,

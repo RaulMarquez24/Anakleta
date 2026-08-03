@@ -295,6 +295,28 @@ export function ActivityList({
                 </Vital>
               </div>
 
+              {/* Por qué está en esta categoría (motivo literal con cifras) */}
+              {m.categoryReasons.length > 0 && (
+                <p
+                  className={`mb-2 rounded-xl px-2.5 py-1.5 text-[11px] leading-snug ${
+                    m.category === "expulsion"
+                      ? "bg-banner/10 text-banner"
+                      : m.category === "destacado"
+                        ? "bg-grass/10 text-grass"
+                        : "bg-gold/10 text-gold-deep"
+                  }`}
+                >
+                  <span className="font-extrabold">
+                    {m.category === "expulsion"
+                      ? "Expulsión: "
+                      : m.category === "destacado"
+                        ? "Destaca: "
+                        : "Revisar: "}
+                  </span>
+                  {m.categoryReasons.join(" · ")}
+                </p>
+              )}
+
               {/* Faltillas */}
               {m.flags.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
