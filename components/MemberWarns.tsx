@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { addWarn, resolveWarn } from "@/app/miembros/actions";
-import { WARN_PRESETS } from "@/lib/warn-presets";
+import { addWarn, resolveWarn, compensateWarns } from "@/app/miembros/actions";
+import { WARN_PRESETS, COMPENSATION_PRESETS } from "@/lib/warn-presets";
 
 export interface WarnItem {
   id: number;
@@ -27,10 +27,14 @@ export function MemberWarns({
   tag,
   threshold,
   initial,
+  accounts = [],
 }: {
   tag: string;
   threshold: number;
   initial: { vigentes: WarnItem[]; caducados: WarnItem[]; resueltos: WarnItem[] };
+  // Cuentas del mismo jugador (principal + secundarias): la sanción puede
+  // aplicarse sobre otra de sus cuentas (p. ej. degradar la principal).
+  accounts?: { tag: string; name: string }[];
 }) {
   const [vigentes, setVigentes] = useState<WarnItem[]>(initial.vigentes);
   const [caducados, setCaducados] = useState<WarnItem[]>(initial.caducados);
@@ -39,6 +43,40 @@ export function MemberWarns({
   const [busy, setBusy] = useState(false);
   const [resolvingId, setResolvingId] = useState<number | null>(null);
   const [resolveText, setResolveText] = useState("");
+  // Compensación: saldar todos los vigentes aplicando otra sanción.
+  const [compOpen, setCompOpen] = useState(false);
+  const [compText, setCompText] = useState("");
+  const [compOn, setCompOn] = useState(tag); // sobre qué cuenta se aplicó
+  const [compMsg, setCompMsg] = useState<string | null>(null);
+
+  async function doCompensate() {
+    if (!compText.trim()) return;
+    setBusy(true);
+    const target = accounts.find((a) => a.tag === compOn);
+    const r = await compensateWarns(tag, compText, {
+      tag: compOn,
+      name: target?.name ?? null,
+    });
+    setBusy(false);
+    if (!r.ok) {
+      setCompMsg(r.error ?? "No se pudo compensar.");
+      return;
+    }
+    // Los vigentes pasan a resueltos con la misma resolución.
+    const now = new Date().toISOString();
+    const saldados = vigentes.map((w) => ({
+      ...w,
+      status: "resuelto" as const,
+      resolvedBy: r.by ?? null,
+      resolvedAt: r.at ?? now,
+      resolution: r.resolution ?? null,
+    }));
+    setResueltos((s) => [...saldados, ...s]);
+    setVigentes([]);
+    setCompOpen(false);
+    setCompText("");
+    setCompMsg(null);
+  }
 
   async function add() {
     const reason = draft.trim();
@@ -159,6 +197,81 @@ export function MemberWarns({
               <WarnRow key={w.id} w={w} />
             ))}
           </ul>
+
+          {/* Compensar: aplicar otra sanción y saldar todos los warns vigentes */}
+          {!compOpen ? (
+            <button
+              onClick={() => {
+                setCompOpen(true);
+                setCompMsg(null);
+              }}
+              className="mt-2 w-full rounded-xl border border-dashed border-line py-2 text-xs font-extrabold text-ink-soft transition hover:bg-surface-2"
+            >
+              ⚖️ Compensar warns con otra sanción
+            </button>
+          ) : (
+            <div className="mt-2 rounded-xl border border-gold/40 bg-gold/5 p-3">
+              <p className="mb-2 text-xs text-ink-soft">
+                En vez de expulsar, aplica otra medida: los {vigentes.length} warns vigentes quedan
+                <strong className="text-ink"> saldados</strong> y se guarda qué se hizo.
+              </p>
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {COMPENSATION_PRESETS.map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setCompText(p)}
+                    className={`rounded-lg px-2 py-1 text-[11px] font-bold transition ${
+                      compText === p
+                        ? "bg-gold text-banner-dark"
+                        : "bg-surface-2 text-ink-soft hover:bg-line"
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+              <input
+                value={compText}
+                onChange={(e) => setCompText(e.target.value)}
+                placeholder="Sanción aplicada…"
+                maxLength={200}
+                className="mb-2 w-full rounded-lg border border-line bg-surface-2 px-2.5 py-1.5 text-sm text-ink outline-none focus:border-gold"
+              />
+              {accounts.length > 1 && (
+                <label className="mb-2 flex items-center gap-2 text-xs text-ink-soft">
+                  <span className="flex-none font-bold">Aplicada a</span>
+                  <select
+                    value={compOn}
+                    onChange={(e) => setCompOn(e.target.value)}
+                    className="min-w-0 flex-1 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm font-bold text-ink outline-none focus:border-gold"
+                  >
+                    {accounts.map((a) => (
+                      <option key={a.tag} value={a.tag}>
+                        {a.name}
+                        {a.tag === tag ? " (esta cuenta)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={doCompensate}
+                  disabled={busy || !compText.trim()}
+                  className="rounded-full bg-gold px-4 py-1.5 text-xs font-extrabold text-banner-dark transition hover:brightness-105 disabled:opacity-50"
+                >
+                  {busy ? "…" : `Compensar ${vigentes.length}`}
+                </button>
+                <button
+                  onClick={() => setCompOpen(false)}
+                  className="rounded-full px-3 py-1.5 text-xs font-bold text-ink-soft hover:bg-surface-2"
+                >
+                  Cancelar
+                </button>
+                {compMsg && <span className="text-xs font-bold text-banner">{compMsg}</span>}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

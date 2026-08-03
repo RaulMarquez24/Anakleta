@@ -366,7 +366,12 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
           )
         }
       >
-        <MemberWarns tag={history.tag} threshold={warnCfg.threshold} initial={warns} />
+        <MemberWarns
+          tag={history.tag}
+          threshold={warnCfg.threshold}
+          initial={warns}
+          accounts={accGroup.map((a) => ({ tag: a.tag, name: a.name }))}
+        />
       </Section>
 
       <Section

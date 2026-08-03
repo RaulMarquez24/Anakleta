@@ -139,6 +139,36 @@ export async function addWarn(tag: string, reason: string): Promise<{ ok: boolea
 }
 
 // Resuelve un warn (deja de contar) guardando quién y el desenlace. No borra.
+// Compensa (salda) TODOS los warns vigentes de un miembro: en vez de expulsar se
+// aplica otra sanción (degradar, excluir de una guerra…) y los warns quedan
+// resueltos con constancia de qué se hizo. `appliedToTag`/`appliedToName`: si la
+// medida se aplicó sobre otra cuenta del mismo jugador (p. ej. su principal).
+export async function compensateWarns(
+  tag: string,
+  sanction: string,
+  appliedTo?: { tag?: string | null; name?: string | null },
+): Promise<{ ok: boolean; resolved?: number; resolution?: string; by?: string | null; at?: string | null; error?: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "No autorizado." };
+  const s = sanction.trim().slice(0, 200);
+  if (!s) return { ok: false, error: "Indica qué sanción se aplicó." };
+
+  const by = user.email ?? null;
+  const at = new Date().toISOString();
+  const onOther = appliedTo?.tag && appliedTo.tag !== tag;
+  const resolution = `Compensado: ${s}${onOther ? ` (aplicado a ${appliedTo?.name ?? appliedTo?.tag})` : ""}`.slice(0, 300);
+
+  const svc = createServerClient();
+  const { data, error } = await svc
+    .from("warns")
+    .update({ active: false, resolved_by: by, resolved_at: at, resolution })
+    .eq("member_tag", tag)
+    .eq("active", true)
+    .select("id");
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, resolved: (data ?? []).length, resolution, by, at };
+}
+
 export async function resolveWarn(
   id: number,
   resolution: string,
