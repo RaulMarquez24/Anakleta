@@ -17,6 +17,8 @@ import { ThImage } from "@/components/ThImage";
 import { CopyTag } from "@/components/CopyTag";
 import { MemberNote } from "@/components/MemberNote";
 import { MemberWarns } from "@/components/MemberWarns";
+import { MemberSanction } from "@/components/MemberSanction";
+import { getMemberSanctions } from "@/lib/sanctions";
 import { Section } from "@/components/Section";
 import { ReturneeBanner } from "@/components/ReturneeBanner";
 import { AccountLinker } from "@/components/AccountLinker";
@@ -91,6 +93,10 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
       getMemberMirrorStats(decoded).catch(() => null),
     ]);
   if (!history) notFound();
+
+  // Sanciones que compensan su expulsión (vigente + historial).
+  const sanctions = await getMemberSanctions(decoded).catch(() => []);
+  const activeSanction = sanctions.find((s) => s.active) ?? null;
 
   // Resumen de temporada: capital (desde su alta), donaciones (última captura =
   // temporada actual) y guerra (del informe de actividad).
@@ -371,6 +377,33 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
           threshold={warnCfg.threshold}
           initial={warns}
           accounts={accGroup.map((a) => ({ tag: a.tag, name: a.name }))}
+        />
+      </Section>
+
+      {/* Compensar la expulsión (venga de warns o de cualquier otro motivo) */}
+      <Section
+        title="⚖️ Sanciones"
+        defaultOpen={row?.category === "expulsion" || activeSanction != null}
+        summary={
+          activeSanction ? (
+            <span className="font-bold text-sky">
+              Expulsión compensada: {activeSanction.sanction}
+            </span>
+          ) : row?.category === "expulsion" ? (
+            <span className="font-bold text-banner">Propuesto para expulsión</span>
+          ) : (
+            <span className="text-ink-soft">Sin sanciones</span>
+          )
+        }
+      >
+        <MemberSanction
+          tag={history.tag}
+          isExpulsion={row?.category === "expulsion"}
+          reasons={row?.categoryReasons ?? []}
+          accounts={accGroup.map((a) => ({ tag: a.tag, name: a.name }))}
+          activeSanction={activeSanction}
+          history={sanctions}
+          warnsVigentes={warns.vigentes.length}
         />
       </Section>
 

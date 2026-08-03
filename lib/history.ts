@@ -1,6 +1,7 @@
 import { createServerClient } from "@/lib/supabase/server";
 import { donationsNegative } from "@/lib/dashboard";
 import { getActiveWarnCounts, getWarnConfig } from "@/lib/warns";
+import { getActiveSanctions } from "@/lib/sanctions";
 import { classifyAttackStatus } from "@/lib/war";
 import { getRulesConfig, stealWindowMs } from "@/lib/rules";
 
@@ -181,6 +182,14 @@ export interface ActivityRow {
   capitalWeekends: number; // findes de capital registrados en el periodo (clan)
   category: ActivityCategory;
   categoryReasons: string[]; // por qué está en esa categoría (motivos con cifras)
+  // Expulsión ya conmutada por otra sanción (mientras esté vigente).
+  compensated: {
+    sanction: string;
+    by: string | null;
+    at: string;
+    until: string | null;
+    appliedToName: string | null;
+  } | null;
   kickScore: number; // mayor = más candidato a echar
   participationScore: number; // mayor = más participativo (candidato a subir)
   flags: string[]; // "faltillas" detectadas (no dona, no guerra, no sube liga, guerra off)
@@ -490,7 +499,11 @@ export async function getActivityReport(): Promise<ActivityReport> {
     }
   }
 
-  const [warnCounts, warnCfg] = await Promise.all([getActiveWarnCounts(), getWarnConfig()]);
+  const [warnCounts, warnCfg, sanctions] = await Promise.all([
+    getActiveWarnCounts(),
+    getWarnConfig(),
+    getActiveSanctions(), // expulsiones ya compensadas con otra sanción
+  ]);
 
   const rowsOut: ActivityRow[] = active.map((m) => {
     const tag = m.tag as string;
@@ -685,13 +698,32 @@ export async function getActivityReport(): Promise<ActivityReport> {
     if (warsInPeriod > 0 && w.played === 0)
       reviewReasons.push(`no entró a ninguna de las ${warsInPeriod} guerras`);
 
+    // ¿Su expulsión ya se compensó con otra sanción? Mientras esté vigente no se
+    // vuelve a proponer: baja a "revisar" con constancia de lo que se aplicó.
+    const sanction = sanctions.get(tag) ?? null;
+    const compensated = sanction
+      ? {
+          sanction: sanction.sanction,
+          by: sanction.createdBy,
+          at: sanction.createdAt,
+          until: sanction.expiresAt,
+          appliedToName: sanction.appliedToName,
+        }
+      : null;
+
     let category: ActivityCategory;
     let categoryReasons: string[] = [];
     if (isStaff) category = "mando";
-    else if (expulsionReasons.length > 0) {
+    else if (expulsionReasons.length > 0 && !compensated) {
       category = "expulsion";
       // Se listan también las faltas menores, para tener el cuadro completo.
       categoryReasons = [...expulsionReasons, ...reviewReasons.filter((r) => !expulsionReasons.some((e) => e.startsWith(r.split(" (")[0])))];
+    } else if (expulsionReasons.length > 0 && compensated) {
+      category = "revisar";
+      categoryReasons = [
+        `expulsión compensada: ${compensated.sanction}${compensated.appliedToName ? ` (aplicado a ${compensated.appliedToName})` : ""}`,
+        ...expulsionReasons,
+      ];
     } else if (reviewReasons.length > 0 || graves.length >= 2) {
       category = "revisar";
       categoryReasons = reviewReasons.length > 0 ? reviewReasons : [`varias faltas: ${graves.join(", ")}`];
@@ -753,6 +785,7 @@ export async function getActivityReport(): Promise<ActivityReport> {
       capitalWeekends,
       category,
       categoryReasons,
+      compensated,
       kickScore,
       // Participación (para ascensos): donaciones + estrellas + ataques, penaliza fallos.
       participationScore: (donations ?? 0) + w.stars * 100 + w.attacks * 50 - w.missed * 300,

@@ -231,6 +231,22 @@ create unique index if not exists cwl_signups_season_discord_idx
 create index if not exists cwl_signups_season_order_idx
   on cwl_signups (season, created_at);
 
+-- Sanciones que compensan una propuesta de expulsión. Ver member_sanctions.sql.
+create table if not exists member_sanctions (
+  id              bigint generated always as identity primary key,
+  member_tag      text not null,
+  sanction        text not null,
+  applied_to_tag  text,
+  applied_to_name text,
+  reasons         text,
+  note            text,
+  created_by      text,
+  created_at      timestamptz not null default now(),
+  expires_at      timestamptz,
+  revoked         boolean not null default false
+);
+create index if not exists member_sanctions_tag_idx on member_sanctions (member_tag, created_at desc);
+
 -- Asaltos de Capital (Clan Capital Raids), un registro por fin de semana.
 create table if not exists capital_raids (
   id          bigint generated always as identity primary key,

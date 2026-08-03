@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { createServerClient } from "@/lib/supabase/server";
 
@@ -139,6 +140,61 @@ export async function addWarn(tag: string, reason: string): Promise<{ ok: boolea
 }
 
 // Resuelve un warn (deja de contar) guardando quién y el desenlace. No borra.
+// Compensa una propuesta de EXPULSIÓN (venga de warns, inactividad, guerras sin
+// atacar, días en rojo…) aplicando otra sanción. Mientras esté vigente, la app
+// no vuelve a proponer su expulsión y queda constancia de qué se hizo.
+// `days`: cuánto compensa (0 = indefinida). `alsoWarns`: saldar además sus warns.
+export async function compensateExpulsion(input: {
+  tag: string;
+  sanction: string;
+  days: number;
+  note?: string;
+  reasons?: string[];
+  appliedTo?: { tag?: string | null; name?: string | null };
+  alsoWarns?: boolean;
+}): Promise<{ ok: boolean; error?: string; warnsResolved?: number }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "No autorizado." };
+  const sanction = input.sanction.trim().slice(0, 200);
+  if (!sanction) return { ok: false, error: "Indica qué sanción se aplicó." };
+
+  const svc = createServerClient();
+  const days = Number.isFinite(input.days) ? Math.max(0, Math.min(365, Math.round(input.days))) : 30;
+  const expiresAt = days > 0 ? new Date(Date.now() + days * 86_400_000).toISOString() : null;
+  const onOther = input.appliedTo?.tag && input.appliedTo.tag !== input.tag;
+
+  const { error } = await svc.from("member_sanctions").insert({
+    member_tag: input.tag,
+    sanction,
+    applied_to_tag: onOther ? input.appliedTo?.tag : null,
+    applied_to_name: onOther ? (input.appliedTo?.name ?? null) : null,
+    reasons: (input.reasons ?? []).join(" · ").slice(0, 500) || null,
+    note: input.note?.trim().slice(0, 300) || null,
+    created_by: user.email ?? null,
+    expires_at: expiresAt,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  let warnsResolved = 0;
+  if (input.alsoWarns) {
+    const r = await compensateWarns(input.tag, sanction, input.appliedTo);
+    warnsResolved = r.resolved ?? 0;
+  }
+  revalidatePath("/actividad");
+  return { ok: true, warnsResolved };
+}
+
+// Revoca una compensación: el miembro vuelve a evaluarse con normalidad.
+export async function revokeSanction(id: number): Promise<{ ok: boolean; error?: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "No autorizado." };
+  const svc = createServerClient();
+  const { error } = await svc.from("member_sanctions").update({ revoked: true }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/actividad");
+  return { ok: true };
+}
+
 // Compensa (salda) TODOS los warns vigentes de un miembro: en vez de expulsar se
 // aplica otra sanción (degradar, excluir de una guerra…) y los warns quedan
 // resueltos con constancia de qué se hizo. `appliedToTag`/`appliedToName`: si la
