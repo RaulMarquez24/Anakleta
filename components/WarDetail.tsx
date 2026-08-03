@@ -95,10 +95,16 @@ export function WarDetail({
   );
   const missingDetail = anyAttacks && !anyTargetDetail;
 
+  const ended = !inWar && !prep;
+
   // 1er ataque = obligatorio (no lo hizo). El 2º es AYUDA, nunca "negativo".
   const obligatorio = members.filter((m) => m.attacksUsed === 0);
   // Miembros con el 2º libre (guerra no rematada): la lista de "pueden ayudar".
   const segundos = war.warCompleted
+    ? []
+    : members.filter((m) => m.attacksUsed >= 1 && m.attacksPending > 0);
+  // Terminada: quién atacó pero dejó su 2º sin usar (ayuda que no llegó).
+  const sinSegundo = war.isCwl
     ? []
     : members.filter((m) => m.attacksUsed >= 1 && m.attacksPending > 0);
   // Bases rivales que faltan por rematar (solo en vivo).
@@ -224,6 +230,68 @@ export function WarDetail({
                     className="rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink"
                   >
                     #{o.mapPosition} · TH{o.townHall} · {o.starsTaken}⭐
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Terminada: quién falló, de un vistazo (sin tener que revisar la alineación) */}
+      {ended && members.length > 0 && (
+        <>
+          {obligatorio.length === 0 ? (
+            <div className="rounded-2xl border border-grass/40 bg-grass/10 p-4 text-center font-bold text-grass">
+              ✅ Atacaron todos ({attacked}/{members.length})
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-banner/40 bg-banner/8 p-4">
+              <div className="mb-2.5 flex items-center gap-2">
+                <span className="rounded-full bg-banner/15 px-2.5 py-0.5 text-xs font-extrabold text-banner">
+                  {obligatorio.length}
+                </span>
+                <h2 className="font-extrabold text-ink">
+                  No atacaron{war.isCwl ? "" : " (ataque obligatorio)"}
+                </h2>
+              </div>
+              <ul className="space-y-2">
+                {obligatorio.map((m) => (
+                  <li key={m.tag} className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate font-bold text-ink">
+                      {m.name}{" "}
+                      <span className="text-xs font-semibold text-ink-soft">TH{m.townHall}</span>
+                    </span>
+                    <span className="flex-none text-xs font-extrabold text-banner">
+                      #{m.mapPosition} · 0/{war.attacksPerMember}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* El 2º ataque es AYUDA: se informa, no se marca como falta. */}
+          {sinSegundo.length > 0 && (
+            <div className="rounded-2xl border border-line bg-surface p-4">
+              <div className="mb-1 flex items-center gap-2">
+                <span className="rounded-full bg-gold/20 px-2.5 py-0.5 text-xs font-extrabold text-gold-deep">
+                  {sinSegundo.length}
+                </span>
+                <h2 className="font-extrabold text-ink">Se dejaron el 2º ataque</h2>
+              </div>
+              <p className="mb-2.5 text-xs text-ink-soft">
+                {war.warCompleted
+                  ? "La guerra estaba rematada: no hacía falta usarlo."
+                  : "El 2º es ayuda opcional; podían haber rematado alguna base."}
+              </p>
+              <ul className="flex flex-wrap gap-1.5">
+                {sinSegundo.map((m) => (
+                  <li
+                    key={m.tag}
+                    className="rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink"
+                  >
+                    {m.name} <span className="text-ink-soft">TH{m.townHall}</span>
                   </li>
                 ))}
               </ul>

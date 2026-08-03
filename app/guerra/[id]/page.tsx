@@ -25,6 +25,9 @@ export default async function GuerraDetailPage({
 
   const attacksPerMember = war.isCwl ? 1 : 2;
   const back = war.isCwl && war.season ? `/liga/${encodeURIComponent(war.season)}` : "/guerras";
+  // Guerra "rematada": todas las bases rivales al 3⭐ (máximo de estrellas).
+  const warCompleted =
+    war.teamSize != null && war.clanStars != null && war.clanStars >= war.teamSize * 3;
 
   return (
     <AppShell email={user?.email} title={war.isCwl ? `Ronda ${war.round}` : "Guerra"} back={back}>
@@ -56,6 +59,7 @@ export default async function GuerraDetailPage({
           startTime: war.startTime,
           endTime: war.endTime,
           attacksPerMember,
+          warCompleted,
         }}
         members={members.map((m) => ({
           tag: m.tag,
