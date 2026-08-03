@@ -203,7 +203,10 @@ export function ActivityList({
           const cat = CAT[m.category];
           const susp = m.category === "expulsion" || m.category === "revisar";
           const stale = susp && m.staleDays != null && m.staleDays >= thresholdDays;
-          const roundsAttacked = Math.min(m.warAttacks, m.warsPlayed);
+          // Guerras en las que SÍ atacó = jugadas − falladas. (Antes se usaba
+          // min(ataques, guerras), y los 2 ataques de una guerra tapaban el
+          // hueco de otra: salía 5/5 con una guerra sin atacar.)
+          const roundsAttacked = Math.max(0, m.warsPlayed - m.warMissed);
           const warTone =
             m.warStolen > 0 || m.warMissed > 0
               ? "bad"
