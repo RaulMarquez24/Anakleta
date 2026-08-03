@@ -19,6 +19,7 @@ const EDITABLE_SETTINGS = new Set([
   "rules_channel_id", // canal donde publicar las normas (si no, usa el de anuncios)
   "warns_threshold", // nº de warns vigentes para saltar a "A echar" (def. 3)
   "warns_expiry_days", // días hasta que un warn caduca (def. 90; 0 = nunca)
+  "coleader_role_id", // rol que puede apuntar a otros con /apuntar @usuario
 ]);
 
 // Publica o actualiza la tarjeta viva del clan en el canal configurado.

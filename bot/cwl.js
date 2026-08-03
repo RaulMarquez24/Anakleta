@@ -69,13 +69,20 @@ export async function getConfig(db) {
   const { data } = await db
     .from("settings")
     .select("key, value")
-    .in("key", ["cwl_list_channel_id", "cwl_role_id", "clan_role_id", "welcome_channel_id"]);
+    .in("key", [
+      "cwl_list_channel_id",
+      "cwl_role_id",
+      "clan_role_id",
+      "welcome_channel_id",
+      "coleader_role_id",
+    ]);
   const map = new Map((data ?? []).map((r) => [r.key, r.value]));
   return {
     listChannelId: map.get("cwl_list_channel_id") || process.env.CWL_LIST_CHANNEL_ID || null,
     cwlRoleId: map.get("cwl_role_id") || process.env.CWL_ROLE_ID || null,
     clanRoleId: map.get("clan_role_id") || process.env.CLAN_ROLE_ID || null,
     welcomeChannelId: map.get("welcome_channel_id") || process.env.WELCOME_CHANNEL_ID || null,
+    coleaderRoleId: map.get("coleader_role_id") || process.env.COLEADER_ROLE_ID || null,
   };
 }
 
@@ -339,7 +346,7 @@ export async function getAccountsForDiscord(db, discordId) {
 
 // Apunta varias cuentas concretas (por tag) de un mismo Discord. Evita duplicar
 // las que ya estén en esa temporada. Devuelve nombres añadidos / ya existentes.
-export async function addAccounts(db, season, discordId, accounts) {
+export async function addAccounts(db, season, discordId, accounts, addedBy = "self") {
   const { data: existing } = await db
     .from("cwl_signups")
     .select("member_tag")
@@ -354,7 +361,7 @@ export async function addAccounts(db, season, discordId, accounts) {
       discord_id: discordId,
       username: a.name,
       source: "discord",
-      added_by: "self",
+      added_by: addedBy,
     }));
     const { error } = await db.from("cwl_signups").insert(rows);
     if (error) {

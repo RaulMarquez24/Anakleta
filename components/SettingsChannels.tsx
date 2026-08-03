@@ -20,6 +20,7 @@ const ITEMS: Item[] = [
   { key: "announcements_channel_id", label: "Anuncios", hint: "Canal por defecto del compositor de anuncios.", kind: "channel" },
   { key: "cwl_role_id", label: "Rol CWL", hint: "Se asigna al inscribirse y se retira al terminar la liga.", kind: "role" },
   { key: "clan_role_id", label: "Rol del clan", hint: "A quién etiquetan los avisos (@Clan).", kind: "role" },
+  { key: "coleader_role_id", label: "Rol de colíder", hint: "Quién puede apuntar a otros con /apuntar @usuario.", kind: "role" },
 ];
 
 function Row({
