@@ -467,13 +467,16 @@ export async function getActivityReport(): Promise<ActivityReport> {
       .select("id")
       .gte("start_time", since);
     const raidIds = (raids ?? []).map((r) => r.id as number);
-    capitalWeekends = raidIds.length;
     if (raidIds.length > 0) {
       const { data: crm } = await supabase
         .from("capital_raid_members")
         .select("raid_id, tag, attacks")
         .in("raid_id", raidIds)
         .limit(50000);
+      // Solo cuentan los findes de los que TENEMOS lista de participantes: la
+      // API no la da de asaltos pasados, y sin ella nadie "participó" (falso).
+      const raidsWithData = new Set((crm ?? []).map((r) => r.raid_id as number));
+      capitalWeekends = raidIds.filter((id) => raidsWithData.has(id)).length;
       const seen = new Set<string>(); // tag+raid, por si hubiera duplicados
       for (const r of crm ?? []) {
         const tag = r.tag as string;

@@ -58,9 +58,12 @@ export async function captureCapitalRaids(
     if (error || !row) continue;
     const raidId = row.id as number;
 
-    await supabase.from("capital_raid_members").delete().eq("raid_id", raidId);
+    // La API solo devuelve `members` del asalto más reciente; en los findes
+    // pasados llega vacío. Por eso SOLO se reescribe cuando hay lista: si no,
+    // se conserva lo que ya se guardó (antes se borraba y se perdía el dato).
     const members = s.members ?? [];
     if (members.length > 0) {
+      await supabase.from("capital_raid_members").delete().eq("raid_id", raidId);
       await supabase.from("capital_raid_members").insert(
         members.map((m) => ({
           raid_id: raidId,
@@ -103,19 +106,27 @@ export async function getMemberCapital(
   if (!raids || raids.length === 0) return [];
 
   const ids = raids.map((r) => r.id as number);
-  const { data: mine } = await supabase
-    .from("capital_raid_members")
-    .select("raid_id, attacks, attack_limit, bonus_limit, looted")
-    .eq("tag", tag)
-    .in("raid_id", ids);
+  const [{ data: mine }, { data: any_ }] = await Promise.all([
+    supabase
+      .from("capital_raid_members")
+      .select("raid_id, attacks, attack_limit, bonus_limit, looted")
+      .eq("tag", tag)
+      .in("raid_id", ids),
+    // Findes de los que tenemos lista de participantes (la API no la da de los
+    // asaltos pasados; sin ella no se puede afirmar que alguien no participara).
+    supabase.from("capital_raid_members").select("raid_id").in("raid_id", ids).limit(50000),
+  ]);
   const byRaid = new Map<number, Record<string, unknown>>();
   for (const m of mine ?? []) byRaid.set(m.raid_id as number, m);
+  const raidsWithData = new Set((any_ ?? []).map((r) => r.raid_id as number));
 
   const out: CapitalWeekend[] = [];
   for (const r of raids) {
     const endMs = r.end_time ? new Date(r.end_time as string).getTime() : null;
     // Si el finde acabó antes de que el jugador entrara al clan, no lo contamos.
     if (memberSinceMs != null && endMs != null && endMs < memberSinceMs) continue;
+    // Sin datos de participación de ese finde: no se cuenta (ni a favor ni en contra).
+    if (!raidsWithData.has(r.id as number)) continue;
     const row = byRaid.get(r.id as number);
     const possible =
       ((row?.attack_limit as number | null) ?? 5) + ((row?.bonus_limit as number | null) ?? 1);
