@@ -15,6 +15,7 @@ import {
   ActionRowBuilder,
   StringSelectMenuBuilder,
   ActivityType,
+  PermissionFlagsBits,
 } from "discord.js";
 import http from "node:http";
 import { createClient } from "@supabase/supabase-js";
@@ -24,7 +25,23 @@ import * as coc from "./coc.js";
 
 // Súbelo cuando cambies algo. En `fly logs` verás esta línea al arrancar: si NO
 // cambia tras un deploy, es que el deploy no ha subido el código nuevo.
-const BOT_VERSION = "v15 participo";
+const BOT_VERSION = "v16 apuntar-a-otros";
+
+// ¿Puede este miembro apuntar a otros? (rol de colíder configurable, o admin).
+function isColeader(member, coleaderRoleId) {
+  if (!member) return false;
+  try {
+    if (member.permissions?.has?.(PermissionFlagsBits.Administrator)) return true;
+  } catch {
+    /* ignore */
+  }
+  if (coleaderRoleId) {
+    const roles = member.roles;
+    if (roles?.cache?.has?.(coleaderRoleId)) return true;
+    if (Array.isArray(roles) && roles.includes(coleaderRoleId)) return true;
+  }
+  return false;
+}
 
 // Texto de ayuda, compartido por «¿cómo me apunto?» (texto libre) y /help.
 const HELP_TEXT =
@@ -101,6 +118,22 @@ function pickRow(season, discordId, accounts) {
   const menu = new StringSelectMenuBuilder()
     .setCustomId(`cwl_pick:${season}:${discordId}`)
     .setPlaceholder("¿Qué cuentas apuntas a la CWL?")
+    .setMinValues(1)
+    .setMaxValues(accounts.length)
+    .addOptions(
+      accounts.map((a) => ({
+        label: a.town_hall ? `${a.name} (TH${a.town_hall})` : a.name,
+        value: a.tag,
+      })),
+    );
+  return new ActionRowBuilder().addComponents(menu);
+}
+
+// Menú para que un colíder elija qué cuentas de OTRO apuntar. value = tag.
+function pickForRow(season, targetId, accounts) {
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`cwl_pickfor:${season}:${targetId}`)
+    .setPlaceholder("¿Qué cuentas apuntas?")
     .setMinValues(1)
     .setMaxValues(accounts.length)
     .addOptions(
@@ -205,7 +238,13 @@ async function doStatus(id) {
 // --- Slash commands ---
 
 const COMMANDS = [
-  { name: "apuntar", description: "Apuntarte a la Liga de Clanes (CWL)" },
+  {
+    name: "apuntar",
+    description: "Apuntarte a la CWL (colíder: /apuntar usuario para apuntar a otro)",
+    options: [
+      { type: 6, name: "usuario", description: "Colíder: apuntar a este jugador", required: false }, // 6 = USER
+    ],
+  },
   { name: "desapuntar", description: "Salir de la Liga de Clanes (CWL)" },
   { name: "lista-cwl", description: "Ver la lista de inscritos a la CWL" },
   { name: "help", description: "Cómo funciona la inscripción a la CWL" },
@@ -316,11 +355,76 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  // Menú de un colíder para apuntar cuentas de OTRO jugador.
+  if (interaction.isStringSelectMenu() && interaction.customId.startsWith("cwl_pickfor:")) {
+    const [, season, targetId] = interaction.customId.split(":");
+    const { coleaderRoleId } = await cwl.getConfig(db);
+    if (!isColeader(interaction.member, coleaderRoleId)) {
+      await interaction.reply({ content: "🔒 Solo un colíder puede usar esto.", flags: eph }).catch(() => {});
+      return;
+    }
+    try {
+      const accounts = await cwl.getAccountsForDiscord(db, targetId);
+      const chosen = accounts.filter((a) => interaction.values.includes(a.tag));
+      const r = await cwl.addAccounts(db, season, targetId, chosen, interaction.user.username);
+      await cwl.assignRole(db, targetId);
+      await cwl.refreshLiveList(db, season);
+      const parts = [];
+      if (r.added.length) parts.push(`✅ Apuntado: ${r.added.join(", ")}`);
+      if (r.already.length) parts.push(`ℹ️ Ya estaban: ${r.already.join(", ")}`);
+      await interaction.update({ content: parts.join(" · ") || "Sin cambios.", components: [] });
+    } catch {
+      await interaction.reply({ content: "⚠️ No se pudo apuntar. Inténtalo de nuevo.", flags: eph }).catch(() => {});
+    }
+    return;
+  }
+
   if (!interaction.isChatInputCommand()) return;
   const id = interaction.user.id;
   const username = interaction.user.username;
   try {
     if (interaction.commandName === "apuntar") {
+      const target = interaction.options.getUser("usuario");
+
+      // Apuntar a OTRO jugador: solo colíder (rol de Discord) y objetivo identificado.
+      if (target) {
+        const { coleaderRoleId } = await cwl.getConfig(db);
+        if (!isColeader(interaction.member, coleaderRoleId)) {
+          await interaction.reply({ content: "🔒 Solo un colíder puede apuntar a otros.", flags: eph });
+          return;
+        }
+        const list = await cwl.getActiveList(db);
+        if (!list) {
+          await interaction.reply({ content: "🚫 No hay ninguna lista de CWL.", flags: eph });
+          return;
+        }
+        const accounts = await cwl.getAccountsForDiscord(db, target.id);
+        if (accounts.length === 0) {
+          await interaction.reply({
+            content: `⛔ <@${target.id}> aún no se ha identificado. Que me escriba su **tag de CoC** por privado y lo vinculo; luego ya podrás apuntarlo.`,
+            flags: eph,
+          });
+          return;
+        }
+        if (accounts.length >= 2) {
+          await interaction.reply({
+            content: `Elige qué cuentas de <@${target.id}> apuntar:`,
+            components: [pickForRow(list.season, target.id, accounts)],
+            flags: eph,
+          });
+          return;
+        }
+        const r = await cwl.addAccounts(db, list.season, target.id, accounts, username);
+        await cwl.assignRole(db, target.id);
+        await cwl.refreshLiveList(db, list.season);
+        await interaction.reply({
+          content: r.added.length ? `✅ Apuntado **${r.added.join(", ")}**.` : "ℹ️ Ya estaba apuntado.",
+          flags: eph,
+        });
+        return;
+      }
+
+      // Apuntarte a ti mismo (comportamiento normal).
       const r = await doSignup(id, username);
       if (r.pick) {
         await interaction.reply({
