@@ -246,6 +246,7 @@ create table if not exists member_sanctions (
   revoked         boolean not null default false
 );
 create index if not exists member_sanctions_tag_idx on member_sanctions (member_tag, created_at desc);
+alter table member_sanctions add column if not exists scope text not null default 'all';
 
 -- Asaltos de Capital (Clan Capital Raids), un registro por fin de semana.
 create table if not exists capital_raids (

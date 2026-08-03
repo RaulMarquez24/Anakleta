@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { addWarn, resolveWarn } from "@/app/miembros/actions";
+import { addWarn, resolveWarn, resolveWarns } from "@/app/miembros/actions";
 import { WARN_PRESETS } from "@/lib/warn-presets";
 
 export interface WarnItem {
@@ -39,6 +39,42 @@ export function MemberWarns({
   const [busy, setBusy] = useState(false);
   const [resolvingId, setResolvingId] = useState<number | null>(null);
   const [resolveText, setResolveText] = useState("");
+  // Selección múltiple: resolver varios warns de golpe con el mismo desenlace.
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkText, setBulkText] = useState("");
+
+  function toggleSel(id: number) {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function doResolveMany() {
+    const ids = [...selected];
+    if (ids.length === 0 || busy) return;
+    setBusy(true);
+    const r = await resolveWarns(ids, bulkText);
+    setBusy(false);
+    if (!r.ok) return;
+    const all = [...vigentes, ...caducados];
+    const resolved = all
+      .filter((w) => selected.has(w.id))
+      .map((w) => ({
+        ...w,
+        status: "resuelto" as const,
+        resolvedBy: r.by ?? null,
+        resolvedAt: r.at ?? null,
+        resolution: bulkText.trim() || null,
+      }));
+    setVigentes((v) => v.filter((w) => !selected.has(w.id)));
+    setCaducados((c) => c.filter((w) => !selected.has(w.id)));
+    setResueltos((s) => [...resolved, ...s]);
+    setSelected(new Set());
+    setBulkText("");
+  }
 
   async function add() {
     const reason = draft.trim();
@@ -91,6 +127,15 @@ export function MemberWarns({
     return (
       <li className={`rounded-xl border border-line p-2.5 ${muted ? "opacity-60" : "bg-surface-2/40"}`}>
         <div className="flex items-start justify-between gap-2">
+          {w.status !== "resuelto" && (
+            <input
+              type="checkbox"
+              checked={selected.has(w.id)}
+              onChange={() => toggleSel(w.id)}
+              title="Seleccionar para resolver varios a la vez"
+              className="mt-0.5 h-4 w-4 flex-none accent-gold"
+            />
+          )}
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-ink">{w.reason}</p>
             <p className="text-[11px] text-ink-soft">
@@ -143,11 +188,56 @@ export function MemberWarns({
 
   return (
     <div className="space-y-3">
+      {/* Resolver varios a la vez */}
+      {selected.size > 0 && (
+        <div className="rounded-xl border border-gold/40 bg-gold/5 p-3">
+          <p className="mb-2 text-xs font-bold text-ink">
+            {selected.size} seleccionado{selected.size === 1 ? "" : "s"}
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              value={bulkText}
+              onChange={(e) => setBulkText(e.target.value)}
+              placeholder="Desenlace común (hablado, mejoró, anulado…)"
+              maxLength={300}
+              className="min-w-0 flex-1 rounded-lg border border-line bg-surface-2 px-2.5 py-1.5 text-sm text-ink outline-none focus:border-gold"
+            />
+            <button
+              onClick={doResolveMany}
+              disabled={busy}
+              className="flex-none rounded-full bg-gold px-3 py-1.5 text-xs font-extrabold text-banner-dark disabled:opacity-50"
+            >
+              {busy ? "…" : `Resolver ${selected.size}`}
+            </button>
+            <button
+              onClick={() => setSelected(new Set())}
+              className="flex-none rounded-full px-2 py-1.5 text-xs font-bold text-ink-soft hover:bg-surface-2"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Vigentes */}
       {vigentes.length > 0 && (
         <div>
           <p className="mb-1.5 flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wide text-ink-soft">
             Activos ({vigentes.length})
+            {vigentes.length > 1 && (
+              <button
+                onClick={() =>
+                  setSelected((s) =>
+                    vigentes.every((w) => s.has(w.id))
+                      ? new Set()
+                      : new Set(vigentes.map((w) => w.id)),
+                  )
+                }
+                className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-extrabold text-ink-soft transition hover:bg-line"
+              >
+                {vigentes.every((w) => selected.has(w.id)) ? "quitar selección" : "seleccionar todos"}
+              </button>
+            )}
             {overLimit && (
               <span className="rounded-full bg-banner/15 px-2 py-0.5 text-[10px] font-extrabold text-banner">
                 supera el límite ({vigentes.length}/{threshold}) · candidato a echar

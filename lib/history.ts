@@ -291,7 +291,11 @@ export async function getActivityReport(): Promise<ActivityReport> {
   // Punto y aparte por miembro: fecha a partir de la cual se vuelve a contar.
   // Lo anterior queda perdonado (NO se borra nada: sigue en el historial).
   const sanctions = await getActiveSanctions();
-  const cutOf = (tag: string): number | null => sanctions.get(tag)?.cutMs ?? null;
+  // Si el perdón fue SOLO de warns, las demás métricas siguen contando igual.
+  const cutOf = (tag: string): number | null => {
+    const s = sanctions.get(tag);
+    return !s || s.scope === "warns" ? null : s.cutMs;
+  };
   const thresholdDays = rules.inactivityDays; // días de inactividad → "revisar"
   const stealWinMs = stealWindowMs(rules.stealWindowHours);
 

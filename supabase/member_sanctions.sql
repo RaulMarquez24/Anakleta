@@ -17,6 +17,9 @@ create table if not exists member_sanctions (
   revoked         boolean not null default false
 );
 create index if not exists member_sanctions_tag_idx on member_sanctions (member_tag, created_at desc);
+-- Alcance del perdón: 'all' (todo), 'warns' (solo los warns) u 'others' (todo
+-- menos los warns: guerras, inactividad, rojo, donaciones…).
+alter table member_sanctions add column if not exists scope text not null default 'all';
 
 grant all privileges on table member_sanctions to service_role;
 grant usage, select on sequence member_sanctions_id_seq to service_role;

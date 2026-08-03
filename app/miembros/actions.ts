@@ -147,10 +147,12 @@ export async function addWarn(tag: string, reason: string): Promise<{ ok: boolea
 export async function compensateExpulsion(input: {
   tag: string;
   sanction: string;
+  // Qué se perdona: "all" (todo), "warns" (solo los warns) u "others" (todo
+  // menos los warns: guerras, inactividad, días en rojo, donaciones…).
+  scope?: "all" | "warns" | "others";
   note?: string;
   reasons?: string[];
   appliedTo?: { tag?: string | null; name?: string | null };
-  alsoWarns?: boolean;
 }): Promise<{ ok: boolean; error?: string; warnsResolved?: number }> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "No autorizado." };
@@ -159,10 +161,12 @@ export async function compensateExpulsion(input: {
 
   const svc = createServerClient();
   const onOther = input.appliedTo?.tag && input.appliedTo.tag !== input.tag;
+  const scope = input.scope ?? "all";
 
   const { error } = await svc.from("member_sanctions").insert({
     member_tag: input.tag,
     sanction,
+    scope,
     applied_to_tag: onOther ? input.appliedTo?.tag : null,
     applied_to_name: onOther ? (input.appliedTo?.name ?? null) : null,
     reasons: (input.reasons ?? []).join(" · ").slice(0, 500) || null,
@@ -172,8 +176,9 @@ export async function compensateExpulsion(input: {
   });
   if (error) return { ok: false, error: error.message };
 
+  // Los warns solo se saldan si entran en el alcance elegido.
   let warnsResolved = 0;
-  if (input.alsoWarns) {
+  if (scope === "all" || scope === "warns") {
     const r = await compensateWarns(input.tag, sanction, input.appliedTo);
     warnsResolved = r.resolved ?? 0;
   }
@@ -220,6 +225,32 @@ export async function compensateWarns(
     .select("id");
   if (error) return { ok: false, error: error.message };
   return { ok: true, resolved: (data ?? []).length, resolution, by, at };
+}
+
+// Resuelve VARIOS warns a la vez con el mismo desenlace.
+export async function resolveWarns(
+  ids: number[],
+  resolution: string,
+): Promise<{ ok: boolean; by?: string | null; at?: string | null; resolved?: number }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false };
+  const list = ids.filter((n) => Number.isFinite(n)).slice(0, 100);
+  if (list.length === 0) return { ok: false };
+  const by = user.email ?? null;
+  const at = new Date().toISOString();
+  const svc = createServerClient();
+  const { data, error } = await svc
+    .from("warns")
+    .update({
+      active: false,
+      resolved_by: by,
+      resolved_at: at,
+      resolution: resolution.trim().slice(0, 300) || null,
+    })
+    .in("id", list)
+    .select("id");
+  if (error) return { ok: false };
+  return { ok: true, by, at, resolved: (data ?? []).length };
 }
 
 export async function resolveWarn(

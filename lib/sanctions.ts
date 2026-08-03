@@ -18,14 +18,25 @@ export interface Sanction {
   revoked: boolean;
   active: boolean; // no revocada (el perdón de lo anterior es permanente)
   cutMs: number; // punto de corte en ms: lo anterior no cuenta
+  scope: SanctionScope; // qué se perdonó
 }
+
+// Alcance del perdón: todo, solo los warns, o todo menos los warns.
+export type SanctionScope = "all" | "warns" | "others";
+export const SCOPE_LABEL: Record<SanctionScope, string> = {
+  all: "todo",
+  warns: "solo los warns",
+  others: "todo menos los warns",
+};
 
 function toSanction(r: Record<string, unknown>): Sanction {
   const expiresAt = (r.expires_at as string | null) ?? null;
   const revoked = Boolean(r.revoked);
   const vigente = !revoked;
+  const rawScope = (r.scope as string | null) ?? "all";
   return {
     cutMs: Date.parse(r.created_at as string),
+    scope: (rawScope === "warns" || rawScope === "others" ? rawScope : "all") as SanctionScope,
     id: r.id as number,
     memberTag: r.member_tag as string,
     sanction: (r.sanction as string) ?? "",

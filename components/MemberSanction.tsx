@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { compensateExpulsion, revokeSanction } from "@/app/miembros/actions";
 import { COMPENSATION_PRESETS } from "@/lib/warn-presets";
-import type { Sanction } from "@/lib/sanctions";
+import { SCOPE_LABEL, type Sanction } from "@/lib/sanctions";
 
 const who = (email: string | null) => (email ? email.split("@")[0] : "alguien");
 const shortDate = (iso: string | null) =>
@@ -38,7 +38,7 @@ export function MemberSanction({
   const [sanction, setSanction] = useState("");
   const [note, setNote] = useState("");
   const [appliedTo, setAppliedTo] = useState(tag);
-  const [alsoWarns, setAlsoWarns] = useState(true);
+  const [scope, setScope] = useState<"all" | "warns" | "others">("all");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [current, setCurrent] = useState<Sanction | null>(activeSanction);
@@ -51,10 +51,10 @@ export function MemberSanction({
     const r = await compensateExpulsion({
       tag,
       sanction,
+      scope,
       note,
       reasons,
       appliedTo: { tag: appliedTo, name: target?.name ?? null },
-      alsoWarns: alsoWarns && warnsVigentes > 0,
     });
     setBusy(false);
     if (!r.ok) {
@@ -75,6 +75,7 @@ export function MemberSanction({
       revoked: false,
       active: true,
       cutMs: Date.now(),
+      scope,
     });
     setOpen(false);
     setSanction("");
@@ -109,7 +110,8 @@ export function MemberSanction({
             )}
           </p>
           <p className="mt-1 text-[11px] text-ink-soft">
-            Por {who(current.createdBy)} · lo anterior a esa fecha ya no cuenta; cuenta desde cero.
+            Por {who(current.createdBy)} · se perdonó <strong>{SCOPE_LABEL[current.scope]}</strong>;
+            desde esa fecha cuenta de cero.
           </p>
           {current.reasons && (
             <p className="mt-1 text-[11px] text-ink-soft">
@@ -196,18 +198,36 @@ export function MemberSanction({
             className="mb-2 w-full rounded-lg border border-line bg-surface-2 px-2.5 py-1.5 text-sm text-ink outline-none focus:border-gold"
           />
 
-          {warnsVigentes > 0 && (
-            <label className="mb-2 flex items-center gap-2 text-xs font-bold text-ink">
-              <input
-                type="checkbox"
-                checked={alsoWarns}
-                onChange={(e) => setAlsoWarns(e.target.checked)}
-                className="h-4 w-4 accent-gold"
-              />
-              Saldar también sus {warnsVigentes} warn{warnsVigentes === 1 ? "" : "s"} vigente
-              {warnsVigentes === 1 ? "" : "s"}
-            </label>
-          )}
+          {/* Qué se perdona */}
+          <div className="mb-2">
+            <p className="mb-1 text-[11px] font-bold text-ink-soft">Qué se perdona</p>
+            <div className="flex flex-wrap gap-1.5">
+              {(
+                [
+                  { k: "all", label: "Todo" },
+                  { k: "warns", label: `Solo warns${warnsVigentes ? ` (${warnsVigentes})` : ""}` },
+                  { k: "others", label: "Solo el resto de motivos" },
+                ] as const
+              ).map((o) => (
+                <button
+                  key={o.k}
+                  onClick={() => setScope(o.k)}
+                  className={`rounded-lg px-2 py-1 text-[11px] font-bold transition ${
+                    scope === o.k ? "bg-gold text-banner-dark" : "bg-surface-2 text-ink-soft hover:bg-line"
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-[10px] text-ink-soft">
+              {scope === "all"
+                ? "Se saldan sus warns y dejan de contar guerras, inactividad, rojo y donaciones anteriores."
+                : scope === "warns"
+                  ? "Solo se saldan los warns vigentes; el resto de motivos sigue contando."
+                  : "Dejan de contar guerras, inactividad, rojo y donaciones anteriores; los warns siguen vigentes."}
+            </p>
+          </div>
 
           <div className="flex items-center gap-2">
             <button
