@@ -164,6 +164,9 @@ export interface ActivityRow {
   donationsTrend: "up" | "down" | "flat" | null; // últimos 7d vs 7d anteriores
   daysSinceDonation: number | null; // días seguidos sin donar nada (null si nunca donó/sin datos)
   redDays: number | null; // días seguidos con la guerra desactivada (rojo)
+  warPref: string | null; // "in" | "out": disponibilidad de guerra actual
+  rankedWeeks: number; // semanas en las que jugó ranked (hizo copas)
+  rankedWeeksTotal: number; // semanas con datos en el histórico analizado
   lastActivityAt: string | null; // última señal de actividad detectada
   staleDays: number | null; // días desde la última actividad (null si no hay histórico)
   capped: boolean; // true si podría llevar más (lo topamos a la ventana de análisis)
@@ -330,6 +333,7 @@ export async function getActivityReport(): Promise<ActivityReport> {
 
   const byTag = new Map<string, SignalRow[]>();
   const prefByTag = new Map<string, { t: number; pref: string | null }[]>(); // para rachas
+  const trophyByTag = new Map<string, { t: number; v: number | null }[]>(); // ranked por semana
   const lastWarPref = new Map<string, string | null>();
   const lastTH = new Map<string, number | null>();
   const lastTrophies = new Map<string, number | null>();
@@ -341,11 +345,11 @@ export async function getActivityReport(): Promise<ActivityReport> {
     const row = { capturedAt: s.captured_at as string } as SignalRow;
     for (const k of SIGNALS) row[k] = (s[k] as number | null) ?? null;
     byTag.get(tag)!.push(row);
+    const tMs = new Date(s.captured_at as string).getTime();
     if (!prefByTag.has(tag)) prefByTag.set(tag, []);
-    prefByTag.get(tag)!.push({
-      t: new Date(s.captured_at as string).getTime(),
-      pref: (s.war_preference as string | null) ?? null,
-    });
+    prefByTag.get(tag)!.push({ t: tMs, pref: (s.war_preference as string | null) ?? null });
+    if (!trophyByTag.has(tag)) trophyByTag.set(tag, []);
+    trophyByTag.get(tag)!.push({ t: tMs, v: (s.trophies as number | null) ?? null });
     lastWarPref.set(tag, (s.war_preference as string | null) ?? null);
     lastTH.set(tag, (s.town_hall as number | null) ?? null);
     lastTrophies.set(tag, (s.trophies as number | null) ?? null);
@@ -609,6 +613,21 @@ export async function getActivityReport(): Promise<ActivityReport> {
       if (redDays != null) redDays = Math.round(redDays * 10) / 10;
     }
 
+    // Ranked por semanas: en cuántas semanas (L-D) hizo copas. Las copas ranked
+    // se resetean cada semana, así que "0 copas" = no compitió esa semana.
+    const weeksSeen = new Set<number>();
+    const weeksRanked = new Set<number>();
+    for (const r of trophyByTag.get(tag) ?? []) {
+      if (cut != null && r.t < cut) continue; // punto y aparte
+      const dt = new Date(r.t);
+      const dow = (dt.getUTCDay() + 6) % 7; // 0 = lunes
+      const wk = Math.floor(
+        Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate() - dow) / DAY_MS,
+      );
+      weeksSeen.add(wk);
+      if ((r.v ?? 0) > 0) weeksRanked.add(wk);
+    }
+
     // Liga vs. compañeros del mismo TH (requiere ≥3 del mismo TH para comparar).
     let leagueVsTh: ActivityRow["leagueVsTh"] = null;
     const th = lastTH.get(tag);
@@ -781,6 +800,9 @@ export async function getActivityReport(): Promise<ActivityReport> {
       donationsTrend,
       daysSinceDonation,
       redDays,
+      warPref: lastWarPref.get(tag) ?? null,
+      rankedWeeks: weeksRanked.size,
+      rankedWeeksTotal: weeksSeen.size,
       lastActivityAt,
       staleDays,
       capped,
