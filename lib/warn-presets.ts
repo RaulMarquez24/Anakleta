@@ -13,11 +13,11 @@ export const WARN_PRESETS = [
 // expulsar se aplica otra medida y los warns quedan resueltos, con constancia
 // de qué se hizo. Se puede escribir cualquier otra.
 export const COMPENSATION_PRESETS = [
-  "Degradado de Veterano a Miembro",
-  "Degradado a Miembro",
-  "Expulsión conmutada por degradación",
-  "Excluido de la próxima guerra",
+  "Conmutada por degradación",
+  "Perdonado",
+  "Hablado",
+  "Aviso final",
+  "Excluido de próximas guerras",
   "Excluido de la próxima CWL",
-  "Aviso final hablado",
-  "Perdonado (mejoró)",
+  "Segunda oportunidad",
 ];
