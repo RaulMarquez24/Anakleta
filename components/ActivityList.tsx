@@ -244,9 +244,9 @@ export function ActivityList({
                 {m.compensated && (
                   <span
                     className="flex-none rounded-full bg-sky/15 px-2 py-0.5 text-[10px] font-extrabold text-sky"
-                    title={`Expulsión compensada: ${m.compensated.sanction}`}
+                    title={`Punto y aparte (${new Intl.DateTimeFormat("es-ES", { dateStyle: "short" }).format(new Date(m.compensated.at))}): ${m.compensated.sanction}. Cuenta desde cero.`}
                   >
-                    ⚖️ compensada
+                    ⚖️ desde cero
                   </span>
                 )}
                 <span className={`ml-auto flex-none rounded-full px-2 py-0.5 text-[11px] font-extrabold ${cat.cls}`}>

@@ -13,15 +13,10 @@ const shortDate = (iso: string | null) =>
       )
     : "";
 
-const DURATIONS = [
-  { days: 15, label: "15 días" },
-  { days: 30, label: "1 mes" },
-  { days: 90, label: "3 meses" },
-  { days: 0, label: "Indefinida" },
-];
-
 // Compensar una propuesta de expulsión (venga de warns, inactividad, guerras…)
-// aplicando otra sanción: degradar, excluir de una guerra, aviso final…
+// aplicando otra sanción. Es un PUNTO Y APARTE: lo anterior queda perdonado para
+// siempre y el jugador vuelve a acumular desde cero. Nada se borra: todo el
+// historial (warns, guerras, capturas) se conserva, solo deja de contar.
 export function MemberSanction({
   tag,
   isExpulsion,
@@ -41,7 +36,6 @@ export function MemberSanction({
 }) {
   const [open, setOpen] = useState(false);
   const [sanction, setSanction] = useState("");
-  const [days, setDays] = useState(30);
   const [note, setNote] = useState("");
   const [appliedTo, setAppliedTo] = useState(tag);
   const [alsoWarns, setAlsoWarns] = useState(true);
@@ -57,7 +51,6 @@ export function MemberSanction({
     const r = await compensateExpulsion({
       tag,
       sanction,
-      days,
       note,
       reasons,
       appliedTo: { tag: appliedTo, name: target?.name ?? null },
@@ -78,9 +71,10 @@ export function MemberSanction({
       note: note.trim() || null,
       createdBy: null,
       createdAt: new Date().toISOString(),
-      expiresAt: days > 0 ? new Date(Date.now() + days * 86_400_000).toISOString() : null,
+      expiresAt: null,
       revoked: false,
       active: true,
+      cutMs: Date.now(),
     });
     setOpen(false);
     setSanction("");
@@ -105,7 +99,9 @@ export function MemberSanction({
     <div className="space-y-2.5">
       {current ? (
         <div className="rounded-xl border border-sky/40 bg-sky/8 p-3">
-          <p className="text-sm font-extrabold text-ink">⚖️ Expulsión compensada</p>
+          <p className="text-sm font-extrabold text-ink">
+            ⚖️ Punto y aparte el {shortDate(current.createdAt)}
+          </p>
           <p className="mt-0.5 text-sm text-ink">
             {current.sanction}
             {current.appliedToName && (
@@ -113,9 +109,13 @@ export function MemberSanction({
             )}
           </p>
           <p className="mt-1 text-[11px] text-ink-soft">
-            {who(current.createdBy)} · {shortDate(current.createdAt)} ·{" "}
-            {current.expiresAt ? `vigente hasta ${shortDate(current.expiresAt)}` : "indefinida"}
+            Por {who(current.createdBy)} · lo anterior a esa fecha ya no cuenta; cuenta desde cero.
           </p>
+          {current.reasons && (
+            <p className="mt-1 text-[11px] text-ink-soft">
+              <span className="font-bold">Se perdonó:</span> {current.reasons}
+            </p>
+          )}
           {current.note && <p className="mt-1 text-xs text-ink-soft">{current.note}</p>}
           <button
             onClick={revoke}
@@ -139,8 +139,9 @@ export function MemberSanction({
       ) : (
         <div className="rounded-xl border border-gold/40 bg-gold/5 p-3">
           <p className="mb-2 text-xs text-ink-soft">
-            En vez de expulsar, aplica otra medida. Mientras esté vigente no se volverá a proponer su
-            expulsión y quedará registrado qué se hizo.
+            En vez de expulsar, aplica otra medida. Es un <strong className="text-ink">punto y
+            aparte</strong>: lo de antes queda perdonado y vuelve a acumular desde cero. Nada se
+            borra — el historial se conserva, solo deja de contar.
           </p>
           {reasons.length > 0 && (
             <p className="mb-2 rounded-lg bg-surface-2/60 px-2 py-1.5 text-[11px] text-ink-soft">
@@ -168,21 +169,6 @@ export function MemberSanction({
             maxLength={200}
             className="mb-2 w-full rounded-lg border border-line bg-surface-2 px-2.5 py-1.5 text-sm text-ink outline-none focus:border-gold"
           />
-
-          <div className="mb-2 flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] font-bold text-ink-soft">Compensa durante</span>
-            {DURATIONS.map((d) => (
-              <button
-                key={d.days}
-                onClick={() => setDays(d.days)}
-                className={`rounded-lg px-2 py-1 text-[11px] font-bold transition ${
-                  days === d.days ? "bg-gold text-banner-dark" : "bg-surface-2 text-ink-soft hover:bg-line"
-                }`}
-              >
-                {d.label}
-              </button>
-            ))}
-          </div>
 
           {accounts.length > 1 && (
             <label className="mb-2 flex items-center gap-2 text-xs text-ink-soft">

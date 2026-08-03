@@ -141,13 +141,12 @@ export async function addWarn(tag: string, reason: string): Promise<{ ok: boolea
 
 // Resuelve un warn (deja de contar) guardando quién y el desenlace. No borra.
 // Compensa una propuesta de EXPULSIÓN (venga de warns, inactividad, guerras sin
-// atacar, días en rojo…) aplicando otra sanción. Mientras esté vigente, la app
-// no vuelve a proponer su expulsión y queda constancia de qué se hizo.
-// `days`: cuánto compensa (0 = indefinida). `alsoWarns`: saldar además sus warns.
+// atacar, días en rojo…) aplicando otra sanción. Funciona como PUNTO Y APARTE:
+// su fecha es el corte y lo anterior deja de contar para siempre; el miembro
+// vuelve a acumular desde cero. NO se borra nada: todo queda en el historial.
 export async function compensateExpulsion(input: {
   tag: string;
   sanction: string;
-  days: number;
   note?: string;
   reasons?: string[];
   appliedTo?: { tag?: string | null; name?: string | null };
@@ -159,8 +158,6 @@ export async function compensateExpulsion(input: {
   if (!sanction) return { ok: false, error: "Indica qué sanción se aplicó." };
 
   const svc = createServerClient();
-  const days = Number.isFinite(input.days) ? Math.max(0, Math.min(365, Math.round(input.days))) : 30;
-  const expiresAt = days > 0 ? new Date(Date.now() + days * 86_400_000).toISOString() : null;
   const onOther = input.appliedTo?.tag && input.appliedTo.tag !== input.tag;
 
   const { error } = await svc.from("member_sanctions").insert({
@@ -171,7 +168,7 @@ export async function compensateExpulsion(input: {
     reasons: (input.reasons ?? []).join(" · ").slice(0, 500) || null,
     note: input.note?.trim().slice(0, 300) || null,
     created_by: user.email ?? null,
-    expires_at: expiresAt,
+    expires_at: null, // el perdón de lo anterior no caduca
   });
   if (error) return { ok: false, error: error.message };
 

@@ -1,8 +1,9 @@
 import { createServerClient } from "@/lib/supabase/server";
 
 // Sanción aplicada para COMPENSAR una propuesta de expulsión (venga de warns,
-// inactividad, guerras sin atacar, días en rojo…). Mientras está vigente, la app
-// no vuelve a proponer la expulsión de ese miembro.
+// inactividad, guerras sin atacar, días en rojo…). Funciona como BORRÓN Y CUENTA
+// NUEVA: su fecha es un punto de corte y todo lo anterior queda perdonado para
+// siempre; a partir de ahí el miembro vuelve a acumular desde cero.
 export interface Sanction {
   id: number;
   memberTag: string;
@@ -13,16 +14,18 @@ export interface Sanction {
   note: string | null;
   createdBy: string | null;
   createdAt: string;
-  expiresAt: string | null; // null = indefinida
+  expiresAt: string | null; // en desuso: la amnistía no caduca
   revoked: boolean;
-  active: boolean; // no revocada y sin caducar
+  active: boolean; // no revocada (el perdón de lo anterior es permanente)
+  cutMs: number; // punto de corte en ms: lo anterior no cuenta
 }
 
 function toSanction(r: Record<string, unknown>): Sanction {
   const expiresAt = (r.expires_at as string | null) ?? null;
   const revoked = Boolean(r.revoked);
-  const vigente = !revoked && (expiresAt == null || Date.parse(expiresAt) > Date.now());
+  const vigente = !revoked;
   return {
+    cutMs: Date.parse(r.created_at as string),
     id: r.id as number,
     memberTag: r.member_tag as string,
     sanction: (r.sanction as string) ?? "",

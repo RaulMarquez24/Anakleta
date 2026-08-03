@@ -288,6 +288,10 @@ export async function getActivityReport(): Promise<ActivityReport> {
   const since = new Date(windowStartMs).toISOString();
   const sinceHistory = new Date(now - HISTORY_DAYS * DAY_MS).toISOString();
   const rules = await getRulesConfig();
+  // Punto y aparte por miembro: fecha a partir de la cual se vuelve a contar.
+  // Lo anterior queda perdonado (NO se borra nada: sigue en el historial).
+  const sanctions = await getActiveSanctions();
+  const cutOf = (tag: string): number | null => sanctions.get(tag)?.cutMs ?? null;
   const thresholdDays = rules.inactivityDays; // días de inactividad → "revisar"
   const stealWinMs = stealWindowMs(rules.stealWindowHours);
 
@@ -406,6 +410,9 @@ export async function getActivityReport(): Promise<ActivityReport> {
     for (const m of wm ?? []) {
       const tag = m.tag as string;
       const wid = m.war_id as number;
+      // Punto y aparte: las guerras terminadas ANTES del corte no cuentan.
+      const cut = cutOf(tag);
+      if (cut != null && (warEndMs.get(wid) ?? 0) < cut) continue;
       if (!warStat.has(tag)) warStat.set(tag, { played: 0, attacks: 0, missed: 0, missedRounds: [], stars: 0 });
       const s = warStat.get(tag)!;
       const used = (m.attacks_used as number | null) ?? 0;
@@ -462,6 +469,9 @@ export async function getActivityReport(): Promise<ActivityReport> {
           });
         if (st === "stolen") {
           const tag = a.attacker_tag as string;
+          // Punto y aparte: los robos de guerras anteriores al corte no cuentan.
+          const cut = cutOf(tag);
+          if (cut != null && (warEndMs.get(wid) ?? 0) < cut) continue;
           stolenByTag.set(tag, (stolenByTag.get(tag) ?? 0) + 1);
         }
       }
@@ -499,11 +509,7 @@ export async function getActivityReport(): Promise<ActivityReport> {
     }
   }
 
-  const [warnCounts, warnCfg, sanctions] = await Promise.all([
-    getActiveWarnCounts(),
-    getWarnConfig(),
-    getActiveSanctions(), // expulsiones ya compensadas con otra sanción
-  ]);
+  const [warnCounts, warnCfg] = await Promise.all([getActiveWarnCounts(), getWarnConfig()]);
 
   const rowsOut: ActivityRow[] = active.map((m) => {
     const tag = m.tag as string;
@@ -541,6 +547,13 @@ export async function getActivityReport(): Promise<ActivityReport> {
       .map((k) => ({ key: k, icon: SIGNAL_META[k].icon, label: SIGNAL_META[k].label, at: lastBySignal[k]! }))
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 
+    // Punto y aparte: las rachas (inactividad, rojo, sin donar) se cuentan desde
+    // el corte. Si el perdón fue ayer, hoy no puede llevar "30 días" de nada.
+    const cut = cutOf(tag);
+    const daysSinceCut = cut != null ? (now - cut) / DAY_MS : null;
+    const sinceCut = (v: number | null): number | null =>
+      v == null ? null : daysSinceCut == null ? v : Math.min(v, Math.max(0, daysSinceCut));
+
     const lastActivityAt = recent[0]?.at ?? null;
     let staleDays: number | null = null;
     let capped = false;
@@ -550,6 +563,7 @@ export async function getActivityReport(): Promise<ActivityReport> {
       staleDays = (now - new Date(snapRows[0].capturedAt).getTime()) / DAY_MS;
       capped = true;
     }
+    staleDays = sinceCut(staleDays);
     staleDays = staleDays != null ? Math.round(staleDays * 10) / 10 : null;
 
     const donations = snapRows.length > 0 ? donationsPeriod : null;
@@ -569,13 +583,13 @@ export async function getActivityReport(): Promise<ActivityReport> {
     // Días seguidos SIN donar (desde la última vez que subió su contador).
     let daysSinceDonation: number | null = null;
     if (lastBySignal.donations) {
-      daysSinceDonation =
-        Math.round(((now - new Date(lastBySignal.donations).getTime()) / DAY_MS) * 10) / 10;
+      daysSinceDonation = (now - new Date(lastBySignal.donations).getTime()) / DAY_MS;
     } else if (snapRows.length > 1) {
       // No donó nada en todo el histórico cargado: al menos esos días.
-      daysSinceDonation =
-        Math.round(((now - new Date(snapRows[0].capturedAt).getTime()) / DAY_MS) * 10) / 10;
+      daysSinceDonation = (now - new Date(snapRows[0].capturedAt).getTime()) / DAY_MS;
     }
+    daysSinceDonation = sinceCut(daysSinceDonation);
+    if (daysSinceDonation != null) daysSinceDonation = Math.round(daysSinceDonation * 10) / 10;
 
     // Racha actual en ROJO: días seguidos con la guerra desactivada. Se recorre
     // el histórico desde la última captura hacia atrás hasta encontrar un verde.
@@ -587,7 +601,8 @@ export async function getActivityReport(): Promise<ActivityReport> {
         if (prefs[i].pref !== "out") break;
         startOfRun = prefs[i].t;
       }
-      redDays = Math.round(((now - startOfRun) / DAY_MS) * 10) / 10;
+      redDays = sinceCut((now - startOfRun) / DAY_MS);
+      if (redDays != null) redDays = Math.round(redDays * 10) / 10;
     }
 
     // Liga vs. compañeros del mismo TH (requiere ≥3 del mismo TH para comparar).
@@ -698,15 +713,16 @@ export async function getActivityReport(): Promise<ActivityReport> {
     if (warsInPeriod > 0 && w.played === 0)
       reviewReasons.push(`no entró a ninguna de las ${warsInPeriod} guerras`);
 
-    // ¿Su expulsión ya se compensó con otra sanción? Mientras esté vigente no se
-    // vuelve a proponer: baja a "revisar" con constancia de lo que se aplicó.
+    // Punto y aparte aplicado (si lo hay). No silencia nada: lo anterior ya no
+    // cuenta porque las métricas de arriba se miden desde el corte. Lo que se
+    // vea aquí son faltas NUEVAS, posteriores al perdón.
     const sanction = sanctions.get(tag) ?? null;
     const compensated = sanction
       ? {
           sanction: sanction.sanction,
           by: sanction.createdBy,
           at: sanction.createdAt,
-          until: sanction.expiresAt,
+          until: null,
           appliedToName: sanction.appliedToName,
         }
       : null;
@@ -714,16 +730,10 @@ export async function getActivityReport(): Promise<ActivityReport> {
     let category: ActivityCategory;
     let categoryReasons: string[] = [];
     if (isStaff) category = "mando";
-    else if (expulsionReasons.length > 0 && !compensated) {
+    else if (expulsionReasons.length > 0) {
       category = "expulsion";
       // Se listan también las faltas menores, para tener el cuadro completo.
       categoryReasons = [...expulsionReasons, ...reviewReasons.filter((r) => !expulsionReasons.some((e) => e.startsWith(r.split(" (")[0])))];
-    } else if (expulsionReasons.length > 0 && compensated) {
-      category = "revisar";
-      categoryReasons = [
-        `expulsión compensada: ${compensated.sanction}${compensated.appliedToName ? ` (aplicado a ${compensated.appliedToName})` : ""}`,
-        ...expulsionReasons,
-      ];
     } else if (reviewReasons.length > 0 || graves.length >= 2) {
       category = "revisar";
       categoryReasons = reviewReasons.length > 0 ? reviewReasons : [`varias faltas: ${graves.join(", ")}`];

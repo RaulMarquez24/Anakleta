@@ -372,12 +372,7 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
           )
         }
       >
-        <MemberWarns
-          tag={history.tag}
-          threshold={warnCfg.threshold}
-          initial={warns}
-          accounts={accGroup.map((a) => ({ tag: a.tag, name: a.name }))}
-        />
+        <MemberWarns tag={history.tag} threshold={warnCfg.threshold} initial={warns} />
       </Section>
 
       {/* Compensar la expulsión (venga de warns o de cualquier otro motivo) */}
@@ -387,7 +382,7 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
         summary={
           activeSanction ? (
             <span className="font-bold text-sky">
-              Expulsión compensada: {activeSanction.sanction}
+              Punto y aparte: {activeSanction.sanction}
             </span>
           ) : row?.category === "expulsion" ? (
             <span className="font-bold text-banner">Propuesto para expulsión</span>
