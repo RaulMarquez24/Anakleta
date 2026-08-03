@@ -295,14 +295,20 @@ export async function getActivityReport(): Promise<ActivityReport> {
 
   // Snapshots del histórico (60 días): con esto se calculan tanto el volumen de
   // los últimos 30 como las rachas largas (p. ej. "un mes entero en rojo").
-  const { data: snaps } = await supabase
+  // OJO: se pide SOLO de los miembros activos y de la más RECIENTE hacia atrás.
+  // Si alguna vez se topara el límite, se perderían las capturas viejas (inocuo);
+  // al revés se perderían las recientes y todo el mundo saldría "sin actividad".
+  const activeTags = active.map((m) => m.tag as string);
+  const { data: snapsDesc } = await supabase
     .from("member_snapshots")
     .select(
       `member_tag, captured_at, war_preference, town_hall, trophies, league_tier_id, league_tier_name, league_tier_icon, ${SIGNALS.join(", ")}`,
     )
+    .in("member_tag", activeTags)
     .gte("captured_at", sinceHistory)
-    .order("captured_at", { ascending: true })
+    .order("captured_at", { ascending: false })
     .limit(50000);
+  const snaps = (snapsDesc ?? []).slice().reverse(); // a orden ascendente
 
   const byTag = new Map<string, SignalRow[]>();
   const prefByTag = new Map<string, { t: number; pref: string | null }[]>(); // para rachas
@@ -311,7 +317,7 @@ export async function getActivityReport(): Promise<ActivityReport> {
   const lastTrophies = new Map<string, number | null>();
   const lastTierId = new Map<string, number | null>();
   const lastTier = new Map<string, { name: string | null; icon: string | null }>();
-  for (const s of (snaps ?? []) as unknown as Record<string, unknown>[]) {
+  for (const s of snaps as unknown as Record<string, unknown>[]) {
     const tag = s.member_tag as string;
     if (!byTag.has(tag)) byTag.set(tag, []);
     const row = { capturedAt: s.captured_at as string } as SignalRow;
