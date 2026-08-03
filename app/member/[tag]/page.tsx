@@ -81,7 +81,7 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
   const [history, report, warLog, myTag, accountLinks, discordMembers, warns, warnCfg, mirror] =
     await Promise.all([
       getMemberHistory(decoded),
-      getActivityReport("todo").catch(() => null),
+      getActivityReport().catch(() => null),
       getMemberWarLog(decoded),
       getMyPlayerTag(),
       getAccountLinks(),

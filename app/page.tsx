@@ -69,25 +69,24 @@ export default async function ClanHomePage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [data, week, report, war, trends, returnees] = await Promise.all([
+  const [data, report, war, trends, returnees] = await Promise.all([
     getMembersOverview(),
-    getActivityReport("semana"), // gestión = estado actionable de la semana
-    getActivityReport(period), // resumen/tops = periodo elegido
+    getActivityReport(), // estado global continuo (ventana móvil), sin periodos
     getCurrentWar().catch(() => null),
     getClanTrends(),
     getReturnees(),
   ]);
 
-  // Gestión: siempre de la semana (a quién hay que atender ahora).
+  // Gestión: a quién hay que atender ahora (evaluación continua).
   const cats = {
-    expulsar: week.members.filter((m) => m.category === "expulsion").length,
-    revisar: week.members.filter((m) => m.category === "revisar").length,
-    destacables: week.members.filter((m) => m.category === "destacado").length,
+    expulsar: report.members.filter((m) => m.category === "expulsion").length,
+    revisar: report.members.filter((m) => m.category === "revisar").length,
+    destacables: report.members.filter((m) => m.category === "destacado").length,
   };
   // "Al día": el resto (total − los tres cubos de gestión).
-  const alDia = Math.max(0, week.members.length - cats.expulsar - cats.revisar - cats.destacables);
+  const alDia = Math.max(0, report.members.length - cats.expulsar - cats.revisar - cats.destacables);
 
-  // Resumen/tops del periodo elegido.
+  // Resumen/tops (ventana móvil del informe).
   const activos = report.members.length;
   const media = activos > 0 ? Math.round(report.clanDonations / activos) : 0;
   const topDon = [...report.members]
@@ -373,7 +372,7 @@ export default async function ClanHomePage({
       {/* Destacados del periodo + ranking */}
       <div className="rounded-2xl border border-line bg-surface p-4">
         <div className="mb-3 flex items-center justify-between">
-          <p className="font-extrabold text-ink">Destacados ({report.periodLabel})</p>
+          <p className="font-extrabold text-ink">Destacados (últimos {report.windowDays} días)</p>
           <Link href="/ranking" className="text-xs font-bold text-ink-soft hover:underline">
             Ranking completo ›
           </Link>

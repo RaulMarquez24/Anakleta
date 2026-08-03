@@ -82,7 +82,7 @@ export default async function RankingPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const report = await getActivityReport("todo");
+  const report = await getActivityReport();
   const ranked = order(report.members, metric);
   const total = ranked.length;
 

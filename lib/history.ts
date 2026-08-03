@@ -160,7 +160,9 @@ export interface ActivityRow {
   trophies: number | null; // copas actuales (se resetean cada semana; solo display)
   // Liga comparada con los del mismo TH en el clan.
   leagueVsTh: "muy_alta" | "alta" | "normal" | "baja" | "muy_baja" | null;
-  donationsTrend: "up" | "down" | "flat" | null; // vs periodo anterior
+  donationsTrend: "up" | "down" | "flat" | null; // últimos 7d vs 7d anteriores
+  daysSinceDonation: number | null; // días seguidos sin donar nada (null si nunca donó/sin datos)
+  redDays: number | null; // días seguidos con la guerra desactivada (rojo)
   lastActivityAt: string | null; // última señal de actividad detectada
   staleDays: number | null; // días desde la última actividad (null si no hay histórico)
   capped: boolean; // true si podría llevar más (lo topamos a la ventana de análisis)
@@ -197,30 +199,19 @@ const SIGNAL_META: Record<(typeof SIGNALS)[number], { icon: string; label: strin
 };
 
 export interface ActivityReport {
-  period: ActivityPeriod;
-  periodLabel: string; // "esta semana", "este mes", "todo el histórico"
+  windowDays: number; // ventana móvil de análisis (últimos N días)
   thresholdDays: number;
-  warsInPeriod: number; // nº de guerras del clan en el periodo
-  clanDonations: number; // donaciones totales del clan en el periodo
-  clanWarStars: number; // estrellas de guerra totales del clan en el periodo
+  warsInPeriod: number; // nº de guerras del clan en la ventana
+  clanDonations: number; // donaciones totales del clan en la ventana
+  clanWarStars: number; // estrellas de guerra totales del clan en la ventana
   members: ActivityRow[]; // ordenado por kickScore desc (candidatos a echar primero)
 }
 
-// Inicio del periodo (en UTC; el desfase con Madrid es <2h, irrelevante para
-// contar actividad). Semana = lunes; Mes = día 1; Todo = desde siempre.
-function periodStartMs(period: ActivityPeriod): number {
-  const now = new Date();
-  if (period === "todo") return 0;
-  if (period === "mes") return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
-  const dow = (now.getUTCDay() + 6) % 7; // 0 = lunes
-  return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - dow);
-}
-
-const PERIOD_LABEL: Record<ActivityPeriod, string> = {
-  semana: "esta semana (L-D)",
-  mes: "este mes",
-  todo: "todo el histórico",
-};
+// Ventana MÓVIL de análisis: siempre "los últimos N días", nunca semanas o meses
+// de calendario. Así no hay reset brusco (el lunes no aparecen todos en rojo) y
+// lo que se mide son tendencias y rachas reales.
+const WINDOW_DAYS = 30; // volumen (donaciones, guerras, capital)
+const HISTORY_DAYS = 60; // histórico que se carga, para medir rachas largas
 
 export interface Departure {
   tag: string;
@@ -277,13 +268,15 @@ const SIGNALS = [
 
 type SignalRow = { capturedAt: string } & Record<(typeof SIGNALS)[number], number | null>;
 
-// Última actividad detectada (multi-señal) + participación en guerra del último mes.
-export async function getActivityReport(
-  period: ActivityPeriod = "semana",
-): Promise<ActivityReport> {
+// Estado GLOBAL del clan: última actividad (multi-señal), volumen en la ventana
+// móvil de 30 días y rachas (días en rojo, días sin donar). Sin periodos de
+// calendario: nada se resetea de golpe, todo se mueve día a día.
+export async function getActivityReport(): Promise<ActivityReport> {
   const supabase = createServerClient();
   const now = Date.now();
-  const since = new Date(periodStartMs(period)).toISOString();
+  const windowStartMs = now - WINDOW_DAYS * DAY_MS;
+  const since = new Date(windowStartMs).toISOString();
+  const sinceHistory = new Date(now - HISTORY_DAYS * DAY_MS).toISOString();
   const rules = await getRulesConfig();
   const thresholdDays = rules.inactivityDays; // días de inactividad → "revisar"
   const stealWinMs = stealWindowMs(rules.stealWindowHours);
@@ -300,17 +293,19 @@ export async function getActivityReport(
     .filter((t): t is number => t != null);
   const baseline = firstSeens.length ? Math.min(...firstSeens) : now;
 
-  // Snapshots de la ventana con todas las señales.
+  // Snapshots del histórico (60 días): con esto se calculan tanto el volumen de
+  // los últimos 30 como las rachas largas (p. ej. "un mes entero en rojo").
   const { data: snaps } = await supabase
     .from("member_snapshots")
     .select(
       `member_tag, captured_at, war_preference, town_hall, trophies, league_tier_id, league_tier_name, league_tier_icon, ${SIGNALS.join(", ")}`,
     )
-    .gte("captured_at", since)
+    .gte("captured_at", sinceHistory)
     .order("captured_at", { ascending: true })
     .limit(50000);
 
   const byTag = new Map<string, SignalRow[]>();
+  const prefByTag = new Map<string, { t: number; pref: string | null }[]>(); // para rachas
   const lastWarPref = new Map<string, string | null>();
   const lastTH = new Map<string, number | null>();
   const lastTrophies = new Map<string, number | null>();
@@ -322,6 +317,11 @@ export async function getActivityReport(
     const row = { capturedAt: s.captured_at as string } as SignalRow;
     for (const k of SIGNALS) row[k] = (s[k] as number | null) ?? null;
     byTag.get(tag)!.push(row);
+    if (!prefByTag.has(tag)) prefByTag.set(tag, []);
+    prefByTag.get(tag)!.push({
+      t: new Date(s.captured_at as string).getTime(),
+      pref: (s.war_preference as string | null) ?? null,
+    });
     lastWarPref.set(tag, (s.war_preference as string | null) ?? null);
     lastTH.set(tag, (s.town_hall as number | null) ?? null);
     lastTrophies.set(tag, (s.trophies as number | null) ?? null);
@@ -351,38 +351,6 @@ export async function getActivityReport(
     const s = [...ranks].sort((a, b) => a - b);
     const n = s.length;
     medianRankByTH.set(th, n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2);
-  }
-
-  // Donaciones del periodo ANTERIOR (para la tendencia). Semana→semana previa,
-  // Mes→mes previo, Todo→sin comparación.
-  const prevDon = new Map<string, number>();
-  let prevHasData = false;
-  if (period !== "todo") {
-    const curStart = periodStartMs(period);
-    const d = new Date(curStart);
-    const prevStart =
-      period === "mes"
-        ? Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)
-        : curStart - 7 * DAY_MS;
-    const { data: prevSnaps } = await supabase
-      .from("member_snapshots")
-      .select("member_tag, captured_at, donations")
-      .gte("captured_at", new Date(prevStart).toISOString())
-      .lt("captured_at", new Date(curStart).toISOString())
-      .order("captured_at", { ascending: true })
-      .limit(50000);
-    prevHasData = (prevSnaps?.length ?? 0) > 0;
-    const prevByTag = new Map<string, number[]>();
-    for (const s of prevSnaps ?? []) {
-      const tag = s.member_tag as string;
-      if (!prevByTag.has(tag)) prevByTag.set(tag, []);
-      prevByTag.get(tag)!.push((s.donations as number | null) ?? 0);
-    }
-    for (const [tag, vals] of prevByTag) {
-      let sum = 0;
-      for (let i = 1; i < vals.length; i++) if (vals[i] > vals[i - 1]) sum += vals[i] - vals[i - 1];
-      prevDon.set(tag, sum);
-    }
   }
 
   // Participación en guerra del último mes (desde la alineación war_members).
@@ -519,22 +487,32 @@ export async function getActivityReport(
     const role = (m.role as string | null) ?? null;
     const snapRows = byTag.get(tag) ?? [];
 
-    // Última señal de cada tipo + donaciones DEL PERIODO (suma de subidas).
+    // Última señal de cada tipo + donaciones de la VENTANA MÓVIL (suma de
+    // subidas). don7 / donPrev7 dan la tendencia sin depender del calendario.
     const lastBySignal: Partial<Record<(typeof SIGNALS)[number], string>> = {};
     let donationsPeriod = 0;
     let receivedPeriod = 0;
+    let don7 = 0;
+    let donPrev7 = 0;
     for (let i = 1; i < snapRows.length; i++) {
       const prev = snapRows[i - 1];
       const cur = snapRows[i];
+      const t = new Date(cur.capturedAt).getTime();
       for (const k of SIGNALS) {
         const a = prev[k];
         const b = cur[k];
         if (a != null && b != null && b > a) lastBySignal[k] = cur.capturedAt;
       }
       const dDon = (cur.donations ?? 0) - (prev.donations ?? 0);
-      if (dDon > 0) donationsPeriod += dDon;
       const dRec = (cur.donations_received ?? 0) - (prev.donations_received ?? 0);
-      if (dRec > 0) receivedPeriod += dRec;
+      if (t >= windowStartMs) {
+        if (dDon > 0) donationsPeriod += dDon;
+        if (dRec > 0) receivedPeriod += dRec;
+      }
+      if (dDon > 0) {
+        if (t >= now - 7 * DAY_MS) don7 += dDon;
+        else if (t >= now - 14 * DAY_MS) donPrev7 += dDon;
+      }
     }
     const recent: ActivitySignal[] = SIGNALS.filter((k) => lastBySignal[k])
       .map((k) => ({ key: k, icon: SIGNAL_META[k].icon, label: SIGNAL_META[k].label, at: lastBySignal[k]! }))
@@ -558,11 +536,35 @@ export async function getActivityReport(
     // Copas actuales (ranked). Se resetea cada lunes: 0 = sin competitivo esta semana.
     const trophies = lastTrophies.get(tag) ?? null;
 
-    // Tendencia de donaciones vs periodo anterior.
+    // Tendencia: últimos 7 días vs los 7 anteriores (ventana móvil).
     let donationsTrend: "up" | "down" | "flat" | null = null;
-    if (prevHasData && donations != null) {
-      const diff = donations - (prevDon.get(tag) ?? 0);
+    if (snapRows.length > 1) {
+      const diff = don7 - donPrev7;
       donationsTrend = Math.abs(diff) < 50 ? "flat" : diff > 0 ? "up" : "down";
+    }
+
+    // Días seguidos SIN donar (desde la última vez que subió su contador).
+    let daysSinceDonation: number | null = null;
+    if (lastBySignal.donations) {
+      daysSinceDonation =
+        Math.round(((now - new Date(lastBySignal.donations).getTime()) / DAY_MS) * 10) / 10;
+    } else if (snapRows.length > 1) {
+      // No donó nada en todo el histórico cargado: al menos esos días.
+      daysSinceDonation =
+        Math.round(((now - new Date(snapRows[0].capturedAt).getTime()) / DAY_MS) * 10) / 10;
+    }
+
+    // Racha actual en ROJO: días seguidos con la guerra desactivada. Se recorre
+    // el histórico desde la última captura hacia atrás hasta encontrar un verde.
+    let redDays: number | null = null;
+    const prefs = prefByTag.get(tag) ?? [];
+    if (prefs.length > 0 && prefs[prefs.length - 1].pref === "out") {
+      let startOfRun = prefs[prefs.length - 1].t;
+      for (let i = prefs.length - 1; i >= 0; i--) {
+        if (prefs[i].pref !== "out") break;
+        startOfRun = prefs[i].t;
+      }
+      redDays = Math.round(((now - startOfRun) / DAY_MS) * 10) / 10;
     }
 
     // Liga vs. compañeros del mismo TH (requiere ≥3 del mismo TH para comparar).
@@ -592,9 +594,15 @@ export async function getActivityReport(
     const activeWarns = warnCounts.get(tag) ?? 0;
 
     // — Graves —
-    if (enoughData && donationsPeriod === 0 && receivedPeriod === 0) {
-      flags.push("🚫 No dona ni pide");
+    // Sin donar de forma SOSTENIDA (racha), no "esta semana aún no ha donado".
+    if (enoughData && daysSinceDonation != null && daysSinceDonation >= rules.noDonationDays) {
+      flags.push(`🎁 ${Math.round(daysSinceDonation)}d sin donar`);
       graves.push("no dona");
+    }
+    // En rojo de forma sostenida: está en el clan pero no participa en guerras.
+    if (redDays != null && redDays >= rules.redDaysReview) {
+      flags.push(`🔴 ${Math.round(redDays)}d en rojo`);
+      graves.push("en rojo");
     }
     if (warsInPeriod > 0 && w.played === 0) {
       flags.push("🚫 No juega guerras");
@@ -612,8 +620,11 @@ export async function getActivityReport(
     }
 
     // — Informativas (no cuentan para expulsar) —
-    if (trophies != null && trophies === 0) flags.push("🎯 Sin competitivo esta semana");
-    if (lastWarPref.get(tag) === "out") flags.push("💤 Guerra desactivada");
+    // Estar en rojo puntualmente es correcto (las normas lo piden si no puedes
+    // atacar); solo pesa cuando se mantiene en el tiempo (racha, arriba).
+    if (trophies != null && trophies === 0) flags.push("🎯 Sin ranked esta semana");
+    if (lastWarPref.get(tag) === "out" && (redDays == null || redDays < rules.redDaysReview))
+      flags.push("💤 Guerra desactivada");
     if (capitalWeekends > 0 && capPart === 0 && !isNew) flags.push("🏛️ Sin capital");
 
     const isStaff = role === "leader" || role === "coLeader";
@@ -626,10 +637,19 @@ export async function getActivityReport(
       activeWarns >= warnCfg.threshold ||
       (staleDays != null && !capped && staleDays >= rules.expulsionInactiveDays) ||
       w.missed >= rules.expulsionMissedWars ||
+      (redDays != null && redDays >= rules.redDaysExpulsion) ||
       (w.missed >= 2 && inactivo)
     )
       category = "expulsion";
-    else if (inactivo || w.missed >= 1 || warStolen > 0 || activeWarns > 0 || donNeg || graves.length >= 2)
+    else if (
+      inactivo ||
+      w.missed >= 1 ||
+      warStolen > 0 ||
+      activeWarns > 0 ||
+      donNeg ||
+      (redDays != null && redDays >= rules.redDaysReview) ||
+      graves.length >= 2
+    )
       category = "revisar";
     else if (
       staleDays != null &&
@@ -666,6 +686,8 @@ export async function getActivityReport(
       trophies,
       leagueVsTh,
       donationsTrend,
+      daysSinceDonation,
+      redDays,
       lastActivityAt,
       staleDays,
       capped,
@@ -697,8 +719,7 @@ export async function getActivityReport(
   const clanWarStars = rowsOut.reduce((n, r) => n + r.warStars, 0);
 
   return {
-    period,
-    periodLabel: PERIOD_LABEL[period],
+    windowDays: WINDOW_DAYS,
     thresholdDays: thresholdDays,
     warsInPeriod,
     clanDonations,

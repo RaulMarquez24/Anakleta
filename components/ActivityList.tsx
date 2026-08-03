@@ -2,9 +2,8 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
-import type { ActivityRow, ActivityCategory, ActivityPeriod } from "@/lib/history";
+import type { ActivityRow, ActivityCategory } from "@/lib/history";
 
 const CAT: Record<ActivityCategory, { label: string; cls: string }> = {
   expulsion: { label: "🔴 Expulsión", cls: "bg-banner/15 text-banner" },
@@ -55,8 +54,8 @@ function ago(days: number | null, capped: boolean): string {
 
 // Tono de un flag según su gravedad (para colorear los chips).
 function flagTone(f: string): string {
-  if (/robó|No juega|No dona|warn/i.test(f)) return "bg-banner/12 text-banner";
-  if (/capital|desactivada|competitivo/i.test(f)) return "bg-gold/15 text-gold-deep";
+  if (/robó|No juega|sin donar|en rojo|warn/i.test(f)) return "bg-banner/12 text-banner";
+  if (/capital|desactivada|ranked/i.test(f)) return "bg-gold/15 text-gold-deep";
   return "bg-surface-2 text-ink-soft";
 }
 
@@ -84,26 +83,19 @@ function Vital({
   );
 }
 
-const PERIODS: { key: ActivityPeriod; label: string }[] = [
-  { key: "semana", label: "Semana" },
-  { key: "mes", label: "Mes" },
-  { key: "todo", label: "Todo" },
-];
-
 export function ActivityList({
   members,
   thresholdDays,
   warsInPeriod,
+  windowDays,
   defaultSort,
-  period,
 }: {
   members: ActivityRow[];
   thresholdDays: number;
   warsInPeriod: number;
+  windowDays: number;
   defaultSort: Sort;
-  period: ActivityPeriod;
 }) {
-  const router = useRouter();
   const [filter, setFilter] = useState<Filter>("todos");
   const [sort, setSort] = useState<Sort>(defaultSort);
   const [q, setQ] = useState("");
@@ -170,21 +162,10 @@ export function ActivityList({
         {q && <span className="flex-none text-[11px] font-bold text-ink-soft">{shown.length}</span>}
       </label>
 
-      {/* Periodo + Orden (desplegables) */}
-      <div className="mb-3 grid grid-cols-2 gap-2">
-        <label className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2 py-1.5">
-          <span className="text-[11px] font-bold text-ink-soft">Periodo</span>
-          <select
-            value={period}
-            onChange={(e) => router.push(`/actividad?p=${e.target.value}`)}
-            className="min-w-0 flex-1 bg-transparent text-sm font-bold text-ink outline-none"
-          >
-            {PERIODS.map((p) => (
-              <option key={p.key} value={p.key}>{p.label}</option>
-            ))}
-          </select>
-        </label>
-        <label className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2 py-1.5">
+      {/* Orden. No hay selector de periodo: el análisis es continuo (últimos
+          {windowDays} días móviles), así nada se resetea de golpe. */}
+      <div className="mb-3 flex items-center gap-2">
+        <label className="flex flex-1 items-center gap-1.5 rounded-lg border border-line bg-surface px-2 py-1.5">
           <span className="text-[11px] font-bold text-ink-soft">Orden</span>
           <select
             value={sort}
@@ -196,6 +177,9 @@ export function ActivityList({
             ))}
           </select>
         </label>
+        <span className="flex-none rounded-lg bg-surface-2 px-2 py-1.5 text-[11px] font-bold text-ink-soft">
+          últimos {windowDays} días
+        </span>
       </div>
 
       {/* Filtros: control segmentado de 4 columnas */}
@@ -227,6 +211,9 @@ export function ActivityList({
                 ? "good"
                 : "ok";
           const capMissed = m.capitalWeekends - m.capitalParticipated;
+          // Rachas: llevar mucho en rojo o sin donar es lo que de verdad delata.
+          const redLong = m.redDays != null && m.redDays >= 14;
+          const noDonaLong = m.daysSinceDonation != null && m.daysSinceDonation >= 7;
           const actTone =
             m.staleDays == null ? "ok" : stale ? "bad" : m.staleDays < 1 ? "good" : "ok";
           const edge =
@@ -277,8 +264,10 @@ export function ActivityList({
 
               {/* Vitales: guerra · donaciones · capital · actividad */}
               <div className="mb-2 grid grid-cols-2 gap-1.5">
-                <Vital label="Guerra" tone={warsInPeriod > 0 ? warTone : "ok"}>
-                  {warsInPeriod > 0 ? (
+                <Vital label="Guerra" tone={redLong ? "bad" : warsInPeriod > 0 ? warTone : "ok"}>
+                  {redLong ? (
+                    <>🔴 {Math.round(m.redDays!)}d en rojo</>
+                  ) : warsInPeriod > 0 ? (
                     <>
                       {roundsAttacked}/{m.warsPlayed} · ⭐{m.warStars}
                       {m.warStolen > 0 && (
@@ -289,7 +278,7 @@ export function ActivityList({
                     "—"
                   )}
                 </Vital>
-                <Vital label="Donaciones" tone={m.donationNegative ? "bad" : "ok"}>
+                <Vital label="Donaciones" tone={m.donationNegative || noDonaLong ? "bad" : "ok"}>
                   🎁{m.donations ?? "—"}
                   {m.donationsTrend === "up" && <span className="text-grass">↑</span>}
                   {m.donationsTrend === "down" && <span className="text-banner">↓</span>}

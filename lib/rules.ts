@@ -10,6 +10,9 @@ export interface RulesConfig {
   inactivityDays: number; // días sin actividad para marcar "revisar"
   expulsionInactiveDays: number; // días sin actividad para proponer expulsión
   expulsionMissedWars: number; // guerras sin atacar para proponer expulsión
+  redDaysReview: number; // días seguidos con la guerra desactivada (rojo) → revisar
+  redDaysExpulsion: number; // días seguidos en rojo → proponer expulsión
+  noDonationDays: number; // días seguidos sin donar nada → señal
   donationMin: number; // por debajo de esto, si además recibió mucho, cuenta negativo
   donationGap: number; // desfase recibido−donado que dispara "balance bajo"
 }
@@ -21,6 +24,9 @@ export const RULES_DEFAULTS: RulesConfig = {
   inactivityDays: 7,
   expulsionInactiveDays: 14,
   expulsionMissedWars: 3,
+  redDaysReview: 14,
+  redDaysExpulsion: 30,
+  noDonationDays: 7,
   donationMin: 1000,
   donationGap: 1000,
 };
@@ -122,6 +128,42 @@ export const RULE_FIELDS: RuleField[] = [
     min: 1,
     max: 10,
     unit: "guerras",
+  },
+  {
+    key: "red_days_review",
+    prop: "redDaysReview",
+    token: "dias_en_rojo_revisar",
+    group: "Guerra",
+    affectsApp: true,
+    label: "Días seguidos en rojo para revisar",
+    help: "Días seguidos con la guerra desactivada (rojo) a partir de los cuales se marca para revisar: está en el clan pero no participa.",
+    min: 3,
+    max: 90,
+    unit: "días",
+  },
+  {
+    key: "red_days_expulsion",
+    prop: "redDaysExpulsion",
+    token: "dias_en_rojo_expulsion",
+    group: "Guerra",
+    affectsApp: true,
+    label: "Días seguidos en rojo para expulsar",
+    help: "Días seguidos en rojo que proponen la expulsión (p. ej. un mes entero sin entrar a guerra).",
+    min: 7,
+    max: 180,
+    unit: "días",
+  },
+  {
+    key: "no_donation_days",
+    prop: "noDonationDays",
+    token: "dias_sin_donar",
+    group: "Donaciones",
+    affectsApp: true,
+    label: "Días seguidos sin donar",
+    help: "Días sin donar ni una tropa a partir de los cuales se señala (no dona nada de nada).",
+    min: 2,
+    max: 60,
+    unit: "días",
   },
   {
     key: "donation_min",
@@ -281,6 +323,9 @@ export async function getRulesConfig(): Promise<RulesConfig> {
       inactivityDays: clamp(num("inactivity_days", 7), 1, 60),
       expulsionInactiveDays: clamp(num("expulsion_inactive_days", 14), 3, 90),
       expulsionMissedWars: clamp(num("expulsion_missed_wars", 3), 1, 10),
+      redDaysReview: clamp(num("red_days_review", 14), 3, 90),
+      redDaysExpulsion: clamp(num("red_days_expulsion", 30), 7, 180),
+      noDonationDays: clamp(num("no_donation_days", 7), 2, 60),
       donationMin: clamp(num("donation_min", 1000), 0, 20000),
       donationGap: clamp(num("donation_gap", 1000), 0, 20000),
     };
