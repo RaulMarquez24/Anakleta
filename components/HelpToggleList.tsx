@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { setWarHelpOverride } from "@/app/war/actions";
 
 export interface HelpMember {
@@ -56,9 +57,12 @@ export function HelpToggleList({
           const on = effective(m);
           return (
             <li key={m.tag} className="flex items-center justify-between gap-2">
-              <span className={`min-w-0 truncate font-bold ${on ? "text-ink" : "text-ink-soft"}`}>
+              <Link
+                href={`/member/${encodeURIComponent(m.tag)}`}
+                className={`min-w-0 truncate font-bold hover:text-gold-deep hover:underline ${on ? "text-ink" : "text-ink-soft"}`}
+              >
                 {m.name} <span className="text-xs font-semibold text-ink-soft">TH{m.townHall}</span>
-              </span>
+              </Link>
               <button
                 onClick={() => toggle(m)}
                 disabled={busy === m.tag}

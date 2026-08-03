@@ -54,6 +54,31 @@ function starGlyphs(n: number): string {
   return "★★★".slice(0, n).padEnd(3, "☆");
 }
 
+// Nombre del jugador enlazado a su ficha.
+function MemberLink({
+  tag,
+  name,
+  townHall,
+  className = "text-ink",
+}: {
+  tag: string;
+  name: string;
+  townHall?: number;
+  className?: string;
+}) {
+  return (
+    <Link
+      href={`/member/${encodeURIComponent(tag)}`}
+      className={`min-w-0 truncate font-bold hover:text-gold-deep hover:underline ${className}`}
+    >
+      {name}
+      {townHall != null && (
+        <span className="ml-1 text-xs font-semibold text-ink-soft">TH{townHall}</span>
+      )}
+    </Link>
+  );
+}
+
 
 function timeLeft(iso: string | null): string | null {
   if (!iso) return null;
@@ -192,9 +217,7 @@ export function WarDetail({
               <ul className="space-y-2">
                 {obligatorio.map((m) => (
                   <li key={m.tag} className="flex items-center justify-between gap-2">
-                    <span className="min-w-0 truncate font-bold text-ink">
-                      {m.name} <span className="text-xs font-semibold text-ink-soft">TH{m.townHall}</span>
-                    </span>
+                    <MemberLink tag={m.tag} name={m.name} townHall={m.townHall} />
                     <span className="flex-none text-xs font-extrabold text-banner">
                       {war.isCwl ? "sin atacar" : "1er ataque"}
                     </span>
@@ -258,10 +281,7 @@ export function WarDetail({
               <ul className="space-y-2">
                 {obligatorio.map((m) => (
                   <li key={m.tag} className="flex items-center justify-between gap-2">
-                    <span className="min-w-0 truncate font-bold text-ink">
-                      {m.name}{" "}
-                      <span className="text-xs font-semibold text-ink-soft">TH{m.townHall}</span>
-                    </span>
+                    <MemberLink tag={m.tag} name={m.name} townHall={m.townHall} />
                     <span className="flex-none text-xs font-extrabold text-banner">
                       #{m.mapPosition} · 0/{war.attacksPerMember}
                     </span>
@@ -287,11 +307,13 @@ export function WarDetail({
               </p>
               <ul className="flex flex-wrap gap-1.5">
                 {sinSegundo.map((m) => (
-                  <li
-                    key={m.tag}
-                    className="rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink"
-                  >
-                    {m.name} <span className="text-ink-soft">TH{m.townHall}</span>
+                  <li key={m.tag}>
+                    <Link
+                      href={`/member/${encodeURIComponent(m.tag)}`}
+                      className="block rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink transition hover:bg-line hover:text-gold-deep"
+                    >
+                      {m.name} <span className="text-ink-soft">TH{m.townHall}</span>
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -347,7 +369,12 @@ export function WarDetail({
                   <li key={m.tag} className={`flex items-center gap-3 px-3.5 py-2.5 ${highlight}`}>
                     <span className="w-6 flex-none text-sm font-bold text-ink-soft">{m.mapPosition}</span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-bold text-ink">{m.name}</p>
+                      <Link
+                        href={`/member/${encodeURIComponent(m.tag)}`}
+                        className="block truncate font-bold text-ink hover:text-gold-deep hover:underline"
+                      >
+                        {m.name}
+                      </Link>
                       <p className="text-xs text-ink-soft">TH{m.townHall}</p>
                       {m.attacks && m.attacks.length > 0 && (
                         <div className="mt-1 space-y-1">
