@@ -224,7 +224,9 @@ export interface ActivityReport {
 // de calendario. Así no hay reset brusco (el lunes no aparecen todos en rojo) y
 // lo que se mide son tendencias y rachas reales.
 const WINDOW_DAYS = 30; // volumen (donaciones, guerras, capital)
-const HISTORY_DAYS = 60; // histórico que se carga, para medir rachas largas
+// Las rachas ya no dependen del histórico (viven en `members`), así que basta
+// con cargar la ventana de volumen: menos filas y sin riesgo de truncado.
+const HISTORY_DAYS = WINDOW_DAYS;
 
 export interface Departure {
   tag: string;
@@ -302,9 +304,12 @@ export async function getActivityReport(): Promise<ActivityReport> {
   const thresholdDays = rules.inactivityDays; // días de inactividad → "revisar"
   const stealWinMs = stealWindowMs(rules.stealWindowHours);
 
+  // El estado derivado (rachas, última actividad, ranked) se lee de `members`:
+  // lo mantiene el snapshot en cada captura, así no hay que recorrer miles de
+  // filas de histórico (que además la API trunca) para calcularlo.
   const { data: members } = await supabase
     .from("members")
-    .select("tag, name, role, is_active, first_seen_at")
+    .select("*")
     .eq("is_active", true);
   const active = members ?? [];
 
@@ -332,8 +337,6 @@ export async function getActivityReport(): Promise<ActivityReport> {
   const snaps = (snapsDesc ?? []).slice().reverse(); // a orden ascendente
 
   const byTag = new Map<string, SignalRow[]>();
-  const prefByTag = new Map<string, { t: number; pref: string | null }[]>(); // para rachas
-  const trophyByTag = new Map<string, { t: number; v: number | null }[]>(); // ranked por semana
   const lastWarPref = new Map<string, string | null>();
   const lastTH = new Map<string, number | null>();
   const lastTrophies = new Map<string, number | null>();
@@ -345,11 +348,6 @@ export async function getActivityReport(): Promise<ActivityReport> {
     const row = { capturedAt: s.captured_at as string } as SignalRow;
     for (const k of SIGNALS) row[k] = (s[k] as number | null) ?? null;
     byTag.get(tag)!.push(row);
-    const tMs = new Date(s.captured_at as string).getTime();
-    if (!prefByTag.has(tag)) prefByTag.set(tag, []);
-    prefByTag.get(tag)!.push({ t: tMs, pref: (s.war_preference as string | null) ?? null });
-    if (!trophyByTag.has(tag)) trophyByTag.set(tag, []);
-    trophyByTag.get(tag)!.push({ t: tMs, v: (s.trophies as number | null) ?? null });
     lastWarPref.set(tag, (s.war_preference as string | null) ?? null);
     lastTH.set(tag, (s.town_hall as number | null) ?? null);
     lastTrophies.set(tag, (s.trophies as number | null) ?? null);
@@ -562,7 +560,11 @@ export async function getActivityReport(): Promise<ActivityReport> {
     const sinceCut = (v: number | null): number | null =>
       v == null ? null : daysSinceCut == null ? v : Math.min(v, Math.max(0, daysSinceCut));
 
-    const lastActivityAt = recent[0]?.at ?? null;
+    // Última actividad: campo mantenido por el snapshot (exacto, sin depender
+    // de cuánto histórico quepa en la consulta). Si aún no está, se cae a las
+    // señales vistas en la ventana.
+    const stateActivityAt = (m.last_activity_at as string | null) ?? null;
+    const lastActivityAt = stateActivityAt ?? recent[0]?.at ?? null;
     let staleDays: number | null = null;
     let capped = false;
     if (lastActivityAt != null) {
@@ -588,45 +590,30 @@ export async function getActivityReport(): Promise<ActivityReport> {
       donationsTrend = Math.abs(diff) < 50 ? "flat" : diff > 0 ? "up" : "down";
     }
 
-    // Días seguidos SIN donar (desde la última vez que subió su contador).
+    // Días seguidos SIN donar: fecha exacta guardada en `members`.
+    const stateDonationAt = (m.last_donation_at as string | null) ?? lastBySignal.donations ?? null;
     let daysSinceDonation: number | null = null;
-    if (lastBySignal.donations) {
-      daysSinceDonation = (now - new Date(lastBySignal.donations).getTime()) / DAY_MS;
+    if (stateDonationAt) {
+      daysSinceDonation = (now - new Date(stateDonationAt).getTime()) / DAY_MS;
     } else if (snapRows.length > 1) {
-      // No donó nada en todo el histórico cargado: al menos esos días.
+      // Nunca se le vio donar: al menos el histórico que tenemos.
       daysSinceDonation = (now - new Date(snapRows[0].capturedAt).getTime()) / DAY_MS;
     }
     daysSinceDonation = sinceCut(daysSinceDonation);
     if (daysSinceDonation != null) daysSinceDonation = Math.round(daysSinceDonation * 10) / 10;
 
-    // Racha actual en ROJO: días seguidos con la guerra desactivada. Se recorre
-    // el histórico desde la última captura hacia atrás hasta encontrar un verde.
+    // Racha en ROJO: fecha exacta guardada al detectar el cambio a rojo (se
+    // borra al volver a verde). Nada de recorrer histórico.
+    const redSince = (m.red_since as string | null) ?? null;
     let redDays: number | null = null;
-    const prefs = prefByTag.get(tag) ?? [];
-    if (prefs.length > 0 && prefs[prefs.length - 1].pref === "out") {
-      let startOfRun = prefs[prefs.length - 1].t;
-      for (let i = prefs.length - 1; i >= 0; i--) {
-        if (prefs[i].pref !== "out") break;
-        startOfRun = prefs[i].t;
-      }
-      redDays = sinceCut((now - startOfRun) / DAY_MS);
+    if (redSince) {
+      redDays = sinceCut((now - new Date(redSince).getTime()) / DAY_MS);
       if (redDays != null) redDays = Math.round(redDays * 10) / 10;
     }
 
-    // Ranked por semanas: en cuántas semanas (L-D) hizo copas. Las copas ranked
-    // se resetean cada semana, así que "0 copas" = no compitió esa semana.
-    const weeksSeen = new Set<number>();
-    const weeksRanked = new Set<number>();
-    for (const r of trophyByTag.get(tag) ?? []) {
-      if (cut != null && r.t < cut) continue; // punto y aparte
-      const dt = new Date(r.t);
-      const dow = (dt.getUTCDay() + 6) % 7; // 0 = lunes
-      const wk = Math.floor(
-        Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate() - dow) / DAY_MS,
-      );
-      weeksSeen.add(wk);
-      if ((r.v ?? 0) > 0) weeksRanked.add(wk);
-    }
+    // Ranked por semanas: contadores acumulados que mantiene el snapshot.
+    const weeksRankedN = (m.ranked_weeks as number | null) ?? 0;
+    const weeksSeenN = (m.tracked_weeks as number | null) ?? 0;
 
     // Liga vs. compañeros del mismo TH (requiere ≥3 del mismo TH para comparar).
     let leagueVsTh: ActivityRow["leagueVsTh"] = null;
@@ -800,9 +787,9 @@ export async function getActivityReport(): Promise<ActivityReport> {
       donationsTrend,
       daysSinceDonation,
       redDays,
-      warPref: lastWarPref.get(tag) ?? null,
-      rankedWeeks: weeksRanked.size,
-      rankedWeeksTotal: weeksSeen.size,
+      warPref: (m.prev_war_pref as string | null) ?? lastWarPref.get(tag) ?? null,
+      rankedWeeks: weeksRankedN,
+      rankedWeeksTotal: weeksSeenN,
       lastActivityAt,
       staleDays,
       capped,

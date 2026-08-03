@@ -156,19 +156,116 @@ export async function POST(req: NextRequest) {
         .map((e) => e.tag as string);
     }
 
+    // Estado previo de cada miembro: con él se detecta qué contadores SUBEN en
+    // esta captura (=jugó) y los cambios de disponibilidad, sin releer el
+    // histórico. Best-effort: si las columnas aún no están migradas, se ignora.
+    const prevByTag = new Map<string, Record<string, unknown>>();
+    try {
+      const { data: prevRows } = await supabase
+        .from("members")
+        .select(
+          "tag, red_since, last_activity_at, last_donation_at, ranked_last_at, ranked_weeks, tracked_weeks, week_key, ranked_this_week, prev_donations, prev_received, prev_attack_wins, prev_war_stars, prev_capital, prev_exp_level, prev_war_pref",
+        )
+        .in("tag", currentTagsArr.length > 0 ? currentTagsArr : ["-"]);
+      for (const r of prevRows ?? []) prevByTag.set(r.tag as string, r);
+    } catch {
+      /* columnas de estado sin migrar todavía */
+    }
+    // Semana actual (lunes) como nº de días desde epoch: clave para el ranked.
+    const nowD = new Date(capturedAt);
+    const dow = (nowD.getUTCDay() + 6) % 7;
+    const curWeek = Math.floor(
+      Date.UTC(nowD.getUTCFullYear(), nowD.getUTCMonth(), nowD.getUTCDate() - dow) / 86_400_000,
+    );
+
     // Upsert de miembros (preserva first_seen_at; refresca last_seen_at/is_active).
-    const memberRows = clan.memberList.map((m) => ({
-      tag: m.tag,
-      name: m.name,
-      role: m.role,
-      town_hall: m.townHallLevel,
-      last_seen_at: capturedAt,
-      is_active: true,
-    }));
-    const { error: membersErr } = await supabase
-      .from("members")
-      .upsert(memberRows, { onConflict: "tag" });
-    if (membersErr) throw membersErr;
+    const memberRows = clan.memberList.map((m) => {
+      const p = playerByTag.get(m.tag);
+      const prev = prevByTag.get(m.tag) ?? {};
+      const num = (v: unknown) => (typeof v === "number" ? v : null);
+      const up = (nuevo: number | null | undefined, viejo: unknown) => {
+        const a = num(viejo);
+        return nuevo != null && a != null && nuevo > a; // subió = estuvo jugando
+      };
+
+      // ¿Alguna señal real de juego en esta captura?
+      const jugo =
+        up(m.donations, prev.prev_donations) ||
+        up(m.donationsReceived, prev.prev_received) ||
+        up(p?.attackWins, prev.prev_attack_wins) ||
+        up(p?.warStars, prev.prev_war_stars) ||
+        up(p?.clanCapitalContributions, prev.prev_capital) ||
+        up(m.expLevel, prev.prev_exp_level);
+      const dono = up(m.donations, prev.prev_donations);
+
+      // Disponibilidad de guerra: al pasar a rojo se marca el día; al volver a
+      // verde se borra. Así "en rojo desde" es exacto sin mirar el histórico.
+      const pref = p?.warPreference ?? null;
+      const prevPref = (prev.prev_war_pref as string | null) ?? null;
+      let redSince = (prev.red_since as string | null) ?? null;
+      if (pref === "out") redSince = prevPref === "out" && redSince ? redSince : capturedAt;
+      else if (pref != null) redSince = null;
+
+      // Ranked por semanas: al cambiar de semana se cierra la anterior.
+      const prevWeek = num(prev.week_key);
+      const nuevaSemana = prevWeek == null || prevWeek !== curWeek;
+      let trackedWeeks = num(prev.tracked_weeks) ?? 0;
+      let rankedWeeks = num(prev.ranked_weeks) ?? 0;
+      let rankedThisWeek = Boolean(prev.ranked_this_week);
+      if (nuevaSemana) {
+        trackedWeeks += 1;
+        rankedThisWeek = false;
+      }
+      const conCopas = (m.trophies ?? 0) > 0;
+      if (conCopas && !rankedThisWeek) {
+        rankedThisWeek = true;
+        rankedWeeks += 1;
+      }
+
+      return {
+        tag: m.tag,
+        name: m.name,
+        role: m.role,
+        town_hall: m.townHallLevel,
+        last_seen_at: capturedAt,
+        is_active: true,
+        // Estado derivado
+        red_since: redSince,
+        last_activity_at: jugo ? capturedAt : ((prev.last_activity_at as string | null) ?? null),
+        last_donation_at: dono ? capturedAt : ((prev.last_donation_at as string | null) ?? null),
+        ranked_last_at: conCopas ? capturedAt : ((prev.ranked_last_at as string | null) ?? null),
+        ranked_weeks: rankedWeeks,
+        tracked_weeks: trackedWeeks,
+        week_key: curWeek,
+        ranked_this_week: rankedThisWeek,
+        // Últimos valores vistos (para la próxima comparación)
+        prev_donations: m.donations ?? null,
+        prev_received: m.donationsReceived ?? null,
+        prev_attack_wins: p?.attackWins ?? null,
+        prev_war_stars: p?.warStars ?? null,
+        prev_capital: p?.clanCapitalContributions ?? null,
+        prev_exp_level: m.expLevel ?? null,
+        prev_war_pref: pref,
+      };
+    });
+    let membersErr: { message?: string } | null = null;
+    {
+      const { error } = await supabase.from("members").upsert(memberRows, { onConflict: "tag" });
+      membersErr = error;
+    }
+    if (membersErr) {
+      // Reintento sin las columnas de estado (por si aún no están migradas).
+      const basicRows = clan.memberList.map((m) => ({
+        tag: m.tag,
+        name: m.name,
+        role: m.role,
+        town_hall: m.townHallLevel,
+        last_seen_at: capturedAt,
+        is_active: true,
+      }));
+      const { error } = await supabase.from("members").upsert(basicRows, { onConflict: "tag" });
+      if (error) throw error;
+    }
 
     // Marca los retornados para revisión (best-effort: columnas quizá sin migrar).
     if (returnees.length > 0) {
