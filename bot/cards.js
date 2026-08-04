@@ -166,6 +166,9 @@ export async function setCategory(db, discordId, username, categoryKey, cards) {
       chosen.map((card) => ({ discord_id: discordId, username, card })),
       { onConflict: "discord_id,card" },
     );
+    // Publicar repetidas ya es participar en el evento: no hace falta cerrar un
+    // trato (puede que nadie le pida nada y aun así está echando una mano).
+    await markEventParticipation(db, [discordId]);
   }
 }
 
@@ -386,6 +389,15 @@ async function markEventParticipation(db, discordIds) {
   } catch {
     /* tabla de eventos sin migrar: el trato sigue cerrándose igual */
   }
+}
+
+// Al arrancar: da por participantes a todos los que ya tienen cartas publicadas.
+// Sirve para los que publicaron antes de que publicar contara como participar.
+export async function syncParticipation(db) {
+  const offers = await getOffers(db);
+  const ids = [...new Set(offers.map((o) => o.discord_id))];
+  if (ids.length > 0) await markEventParticipation(db, ids);
+  return ids.length;
 }
 
 // Ranking de quién ha ayudado más (cartas entregadas), para el resumen.

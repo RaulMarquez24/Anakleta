@@ -412,8 +412,12 @@ async function registerCommands(c) {
     const set = await c.application.commands.set(list);
     cardsRegistered = enabled;
     registeredCommands = set.map((cmd) => cmd.name);
-    // Al encenderlo, publica el manual y el tablón en su canal.
-    if (enabled) await cards.refreshBoard(db).catch(() => {});
+    // Al encenderlo, publica el manual y el tablón en su canal, y pone al día la
+    // participación en el evento de quien ya tenía cartas publicadas.
+    if (enabled) {
+      await cards.refreshBoard(db).catch(() => {});
+      await cards.syncParticipation(db).catch(() => {});
+    }
     const names = set.map((cmd) => `/${cmd.name}`).join(", ");
     console.log(
       `Slash commands registrados globalmente (cartas: ${enabled ? "ON" : "oculto"}): ${names}`,
