@@ -177,8 +177,9 @@ export function renderBoard(offers) {
   }
 
   const L = [
+    DIV,
     "🃏 **CARTAS REPETIDAS DEL CLAN**",
-    "_Quien aparece junto a una carta la tiene repetida: pídesela por privado o en el chat del clan._",
+    "_Quien aparece junto a una carta la tiene repetida: pídesela con_ `/cambiar`_._",
     "",
   ];
   if (byCard.size === 0) {
@@ -195,16 +196,22 @@ export function renderBoard(offers) {
     }
   }
   L.push("_Marca o quita las tuyas con_ `/repetidas`_._");
+  L.push(DIV);
   return L.join("\n").slice(0, 3900);
 }
 
-async function postMessage(channelId, content) {
+// `everyone`: permite la mención de verdad (sale resaltada y avisa). Se usa solo
+// en el manual; el tablón se edita muchas veces y nunca menciona a nadie.
+async function postMessage(channelId, content, opts = {}) {
   if (!TOKEN || !channelId) return null;
   try {
     const res = await fetch(`${API}/channels/${channelId}/messages`, {
       method: "POST",
       headers: { Authorization: `Bot ${TOKEN}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ content, allowed_mentions: { parse: [] } }),
+      body: JSON.stringify({
+        content,
+        allowed_mentions: { parse: opts.everyone ? ["everyone"] : [] },
+      }),
     });
     if (!res.ok) return null;
     const msg = await res.json();
@@ -214,13 +221,18 @@ async function postMessage(channelId, content) {
   }
 }
 
-async function editMessage(channelId, messageId, content) {
+async function editMessage(channelId, messageId, content, opts = {}) {
   if (!TOKEN || !channelId || !messageId) return false;
   try {
     const res = await fetch(`${API}/channels/${channelId}/messages/${messageId}`, {
       method: "PATCH",
       headers: { Authorization: `Bot ${TOKEN}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ content, allowed_mentions: { parse: [] } }),
+      body: JSON.stringify({
+        content,
+        // Al editar, Discord NO vuelve a notificar; permitirlo mantiene el
+        // resaltado de la mención en el manual.
+        allowed_mentions: { parse: opts.everyone ? ["everyone"] : [] },
+      }),
     });
     return res.ok;
   } catch {
@@ -228,8 +240,13 @@ async function editMessage(channelId, messageId, content) {
   }
 }
 
+const DIV = "━━━━━━━━━━━━━━━━━━━━━━━━";
+
 // Manual del evento: se publica una vez al activar y luego se mantiene editado.
-export const HELP_TEXT = `🃏 **INTERCAMBIO DE CARTAS — CLASHIVERSARIO**
+// Lleva @everyone (mención real) para que destaque y avise al publicarse.
+export const HELP_TEXT = `${DIV}
+@everyone
+🃏 **INTERCAMBIO DE CARTAS — CLASHIVERSARIO**
 _Cambiar cartas por el juego es un rollo: aquí ves de un vistazo quién tiene lo que te falta y cierras el cambio en un clic._
 
 📌 **1. Publica lo que te SOBRA**
@@ -249,14 +266,15 @@ _Cambiar cartas por el juego es un rollo: aquí ves de un vistazo quién tiene l
 ⚔️ **4. Haced el intercambio dentro del juego**
 El bot solo os pone de acuerdo; el cambio se hace en Clash como siempre.
 
-💡 Si te vuelve a salir repetida una carta que ya cambiaste, márcala otra vez con \`/repetidas\`.`;
+💡 Si te vuelve a salir repetida una carta que ya cambiaste, márcala otra vez con \`/repetidas\`.
+${DIV}`;
 
 async function ensureHelpMessage(db, cfg) {
   if (cfg.helpMessageId) {
-    const ok = await editMessage(cfg.channelId, cfg.helpMessageId, HELP_TEXT);
+    const ok = await editMessage(cfg.channelId, cfg.helpMessageId, HELP_TEXT, { everyone: true });
     if (ok) return;
   }
-  const id = await postMessage(cfg.channelId, HELP_TEXT);
+  const id = await postMessage(cfg.channelId, HELP_TEXT, { everyone: true });
   if (id) await setSetting(db, "cards_help_message_id", id);
 }
 
