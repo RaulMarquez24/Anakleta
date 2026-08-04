@@ -18,6 +18,7 @@ const ITEMS: Item[] = [
   { key: "discord_channel_id", label: "Avisos de guerra", hint: "Recordatorios de guerra (botón y cron).", kind: "channel" },
   { key: "clan_card_channel_id", label: "Tarjeta del clan", hint: "Embed con escudo, nivel, liga… que se actualiza solo.", kind: "channel" },
   { key: "announcements_channel_id", label: "Anuncios", hint: "Canal por defecto del compositor de anuncios.", kind: "channel" },
+  { key: "cards_channel_id", label: "Cartas del evento", hint: "Tablón de cartas repetidas (evento del Clashiversario).", kind: "channel" },
   { key: "cwl_role_id", label: "Rol CWL", hint: "Se asigna al inscribirse y se retira al terminar la liga.", kind: "role" },
   { key: "clan_role_id", label: "Rol del clan", hint: "A quién etiquetan los avisos (@Clan).", kind: "role" },
   { key: "coleader_role_id", label: "Rol de colíder", hint: "Quién puede apuntar a otros con /apuntar @usuario.", kind: "role" },
@@ -83,6 +84,48 @@ function Row({
   );
 }
 
+// Interruptor del evento de cartas: mientras esté apagado, sus comandos ni
+// aparecen en Discord (el bot los registra solo cuando se activa).
+function CardsToggle({ current }: { current: string }) {
+  const [on, setOn] = useState(current === "1");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function toggle() {
+    const next = !on;
+    setSaving(true);
+    setErr(null);
+    const r = await setSetting("cards_enabled", next ? "1" : "0");
+    setSaving(false);
+    if (r.ok) setOn(next);
+    else setErr(r.error ?? "Error");
+  }
+
+  return (
+    <div className="border-b border-line px-3.5 py-3 last:border-b-0">
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-extrabold text-ink">🃏 Evento de cartas</p>
+          <p className="text-[11px] text-ink-soft">
+            Activa /repetidas y /cartas y publica el tablón. Apagado = oculto (ni aparece el
+            comando). El bot lo detecta en ~5 min.
+          </p>
+        </div>
+        <button
+          onClick={toggle}
+          disabled={saving}
+          className={`flex-none rounded-full px-4 py-2 text-sm font-extrabold transition disabled:opacity-40 ${
+            on ? "bg-grass/20 text-grass" : "bg-surface-2 text-ink-soft hover:bg-line"
+          }`}
+        >
+          {saving ? "…" : on ? "Activado" : "Oculto"}
+        </button>
+      </div>
+      {err && <p className="mt-1 text-xs font-semibold text-banner">{err}</p>}
+    </div>
+  );
+}
+
 // Panel para configurar canales y roles (tabla settings) sin tocar SQL.
 export function SettingsChannels({
   channels,
@@ -102,9 +145,12 @@ export function SettingsChannels({
       {channels.length === 0 && roles.length === 0 ? (
         <p className="px-3.5 py-4 text-sm text-banner">No se pudieron cargar canales/roles (revisa el bot).</p>
       ) : (
-        ITEMS.map((it) => (
-          <Row key={it.key} item={it} channels={channels} roles={roles} current={current[it.key] ?? ""} />
-        ))
+        <>
+          {ITEMS.map((it) => (
+            <Row key={it.key} item={it} channels={channels} roles={roles} current={current[it.key] ?? ""} />
+          ))}
+          <CardsToggle current={current["cards_enabled"] ?? "0"} />
+        </>
       )}
     </div>
   );

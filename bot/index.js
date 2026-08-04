@@ -21,6 +21,7 @@ import http from "node:http";
 import { createClient } from "@supabase/supabase-js";
 import { classifyIntent } from "./match.js";
 import * as cwl from "./cwl.js";
+import * as cards from "./cards.js";
 import * as coc from "./coc.js";
 
 // Súbelo cuando cambies algo. En `fly logs` verás esta línea al arrancar: si NO
@@ -250,6 +251,13 @@ const COMMANDS = [
   { name: "help", description: "Cómo funciona la inscripción a la CWL" },
 ];
 
+// Comandos del evento de cartas. Solo se registran si está activado en la app
+// (cards_enabled): mientras esté oculto, ni siquiera aparecen en Discord.
+const CARD_COMMANDS = [
+  { name: "repetidas", description: "Marca las cartas que te sobran para intercambiar" },
+  { name: "cartas", description: "Ver quién tiene repetidas las cartas del evento" },
+];
+
 // Estado compartido para la landing/health (se rellena en updatePresence).
 const BOOT_MS = Date.now();
 let lastPresenceText = "Arrancando…";
@@ -305,6 +313,22 @@ client.once(Events.ClientReady, async (c) => {
   // Estado dinámico: ahora y cada 5 minutos.
   updatePresence(c);
   setInterval(() => updatePresence(c), 5 * 60_000);
+  await registerCommands(c);
+  // El evento de cartas se activa desde la app: se revisa cada 5 min para
+  // (des)registrar sus comandos sin tener que redesplegar el bot.
+  setInterval(() => registerCommands(c).catch(() => {}), 5 * 60_000);
+});
+
+// Registra los slash commands. Los del evento de cartas solo si está activado.
+let cardsRegistered = null; // null = aún no se sabe
+async function registerCommands(c) {
+  let enabled = false;
+  try {
+    enabled = (await cards.getConfig(db)).enabled;
+  } catch {
+    /* tabla/ajuste sin migrar: se queda oculto */
+  }
+  if (cardsRegistered === enabled) return; // nada que cambiar
   try {
     // Registro GLOBAL: así los comandos salen en el perfil del bot ("Comandos")
     // y en todos los servidores. La 1ª vez tarda ~1h en propagarse.
@@ -312,13 +336,17 @@ client.once(Events.ClientReady, async (c) => {
     if (DISCORD_GUILD_ID) {
       await c.application.commands.set([], DISCORD_GUILD_ID).catch(() => {});
     }
-    const set = await c.application.commands.set(COMMANDS);
+    const list = enabled ? [...COMMANDS, ...CARD_COMMANDS] : COMMANDS;
+    const set = await c.application.commands.set(list);
+    cardsRegistered = enabled;
     const names = set.map((cmd) => `/${cmd.name}`).join(", ");
-    console.log(`Slash commands registrados globalmente (tardan ~1h la 1ª vez): ${names}`);
+    console.log(
+      `Slash commands registrados globalmente (cartas: ${enabled ? "ON" : "oculto"}): ${names}`,
+    );
   } catch (err) {
     console.error("No se pudieron registrar los slash commands:", err);
   }
-});
+}
 
 client.on(Events.InteractionCreate, async (interaction) => {
   const eph = MessageFlags.Ephemeral;
@@ -375,6 +403,35 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await interaction.update({ content: parts.join(" · ") || "Sin cambios.", components: [] });
     } catch {
       await interaction.reply({ content: "⚠️ No se pudo apuntar. Inténtalo de nuevo.", flags: eph }).catch(() => {});
+    }
+    return;
+  }
+
+  // Cartas del evento: cada menú guarda su categoría al vuelo (sin botón).
+  if (interaction.isStringSelectMenu() && interaction.customId.startsWith("cards_pick:")) {
+    const [, catKey] = interaction.customId.split(":");
+    try {
+      await cards.setCategory(
+        db,
+        interaction.user.id,
+        interaction.user.username,
+        catKey,
+        interaction.values,
+      );
+      await cards.refreshBoard(db);
+      const mine = await cards.getMyCards(db, interaction.user.id);
+      await interaction.reply({
+        content:
+          mine.size > 0
+            ? `✅ Guardado. Tus repetidas (${mine.size}): ${[...mine].join(", ")}`
+            : "✅ Guardado. Ahora mismo no tienes ninguna carta publicada.",
+        flags: eph,
+      });
+    } catch (err) {
+      console.error("[cards] pick:", err?.message ?? err);
+      await interaction
+        .reply({ content: "⚠️ No se pudo guardar. Inténtalo de nuevo.", flags: eph })
+        .catch(() => {});
     }
     return;
   }
@@ -457,6 +514,37 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
     if (interaction.commandName === "help") {
       await interaction.reply({ content: HELP_TEXT, flags: eph });
+      return;
+    }
+
+    // --- Evento de cartas ---
+    if (interaction.commandName === "repetidas") {
+      const mine = await cards.getMyCards(db, id);
+      // Un menú por categoría, con lo que ya tenía marcado preseleccionado.
+      const rows = cards.CATEGORIES.map((cat) =>
+        new ActionRowBuilder().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId(`cards_pick:${cat.key}`)
+            .setPlaceholder(`${cat.emoji} ${cat.label}`)
+            .setMinValues(0)
+            .setMaxValues(cat.cards.length)
+            .addOptions(
+              cat.cards.map((c) => ({ label: c, value: c, default: mine.has(c) })),
+            ),
+        ),
+      );
+      await interaction.reply({
+        content:
+          "🃏 **Marca las cartas que te SOBRAN** (repetidas).\n" +
+          "Se guarda categoría por categoría; para quitar una, desmárcala.\n" +
+          (mine.size > 0 ? `Ahora tienes publicadas **${mine.size}**.` : ""),
+        components: rows,
+        flags: eph,
+      });
+      return;
+    }
+    if (interaction.commandName === "cartas") {
+      await interaction.reply(cards.renderBoard(await cards.getOffers(db)));
       return;
     }
   } catch (err) {
