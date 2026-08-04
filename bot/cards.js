@@ -178,10 +178,14 @@ export async function clearMine(db, discordId) {
 
 // Texto del tablón: agrupado por categoría y carta, con quién la ofrece.
 export function renderBoard(offers) {
+  // Se muestra el NOMBRE en texto, no la mención: el tablón se publica sin
+  // menciones (para no avisar a nadie al reeditarlo) y entonces Discord no manda
+  // los datos de esos usuarios, así que los clientes que no los tienen en caché
+  // los pintaban como "usuario-desconocido".
   const byCard = new Map();
   for (const o of offers) {
     if (!byCard.has(o.card)) byCard.set(o.card, []);
-    byCard.get(o.card).push(o.discord_id);
+    byCard.get(o.card).push(o.username || `id:${o.discord_id}`);
   }
 
   const L = [
@@ -196,7 +200,7 @@ export function renderBoard(offers) {
     for (const cat of CATEGORIES) {
       const lineas = cat.cards
         .filter((c) => byCard.has(c))
-        .map((c) => `• **${c}** → ${byCard.get(c).map((id) => `<@${id}>`).join(", ")}`);
+        .map((c) => `• **${c}** → ${byCard.get(c).join(", ")}`);
       if (lineas.length === 0) continue;
       L.push(`${cat.emoji} **${cat.label}**`);
       L.push(...lineas);
