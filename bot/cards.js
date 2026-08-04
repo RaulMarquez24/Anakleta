@@ -185,7 +185,8 @@ export function renderBoard(offers) {
   const byCard = new Map();
   for (const o of offers) {
     if (!byCard.has(o.card)) byCard.set(o.card, []);
-    byCard.get(o.card).push(o.username || `id:${o.discord_id}`);
+    // En «chip» (código) para que resalte como resaltaba la mención.
+    byCard.get(o.card).push(`\`${o.username || o.discord_id}\``);
   }
 
   const L = [

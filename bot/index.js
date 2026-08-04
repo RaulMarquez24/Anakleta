@@ -558,7 +558,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await cards.setCategory(
         db,
         interaction.user.id,
-        interaction.user.username,
+        // El nombre que se ve en el servidor: el tablón lo escribe en texto (no
+        // menciona) y así se reconoce a la gente igual que en el chat.
+        interaction.member?.displayName ?? interaction.user.globalName ?? interaction.user.username,
         catKey,
         interaction.values,
       );
