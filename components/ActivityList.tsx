@@ -86,13 +86,11 @@ function Vital({
 export function ActivityList({
   members,
   thresholdDays,
-  warsInPeriod,
   windowDays,
   defaultSort,
 }: {
   members: ActivityRow[];
   thresholdDays: number;
-  warsInPeriod: number;
   windowDays: number;
   defaultSort: Sort;
 }) {
@@ -280,8 +278,8 @@ export function ActivityList({
 
               {/* Vitales: guerra · donaciones · capital · actividad */}
               <div className="mb-2 grid grid-cols-2 gap-1.5">
-                <Vital label="Guerra" tone={warsInPeriod > 0 ? warTone : "ok"}>
-                  {warsInPeriod > 0 ? (
+                <Vital label="Guerra" tone={m.warsEligible > 0 ? warTone : "ok"}>
+                  {m.warsEligible > 0 ? (
                     <>
                       {roundsAttacked}/{m.warsPlayed} · ⭐{m.warStars}
                       {m.warStolen > 0 && (

@@ -175,6 +175,7 @@ export interface ActivityRow {
   donationsReceived: number | null;
   ratio: number | null;
   donationNegative: boolean; // cuenta negativo (leeching) según la regla
+  warsEligible: number; // guerras del periodo posteriores a su alta/punto y aparte
   warsPlayed: number; // rondas/guerras del periodo en las que estuvo alineado
   warAttacks: number; // ataques usados en guerra el periodo
   warMissed: number; // rondas TERMINADAS alineado sin atacar (periodo)
@@ -296,10 +297,18 @@ export async function getActivityReport(): Promise<ActivityReport> {
   // Punto y aparte por miembro: fecha a partir de la cual se vuelve a contar.
   // Lo anterior queda perdonado (NO se borra nada: sigue en el historial).
   const sanctions = await getActiveSanctions();
-  // Si el perdón fue SOLO de warns, las demás métricas siguen contando igual.
+  // Corte efectivo de cada miembro: lo más reciente entre su ALTA en el clan y
+  // un punto y aparte. Lo anterior no cuenta (un recién llegado no puede haber
+  // fallado guerras o findes en los que no estaba).
+  const firstSeenOf = new Map<string, number>();
   const cutOf = (tag: string): number | null => {
     const s = sanctions.get(tag);
-    return !s || s.scope === "warns" ? null : s.cutMs;
+    // Si el perdón fue SOLO de warns, no mueve el corte de las demás métricas.
+    const sanctionCut = !s || s.scope === "warns" ? null : s.cutMs;
+    const alta = firstSeenOf.get(tag) ?? null;
+    if (sanctionCut == null) return alta;
+    if (alta == null) return sanctionCut;
+    return Math.max(sanctionCut, alta);
   };
   const thresholdDays = rules.inactivityDays; // días de inactividad → "revisar"
   const stealWinMs = stealWindowMs(rules.stealWindowHours);
@@ -312,6 +321,12 @@ export async function getActivityReport(): Promise<ActivityReport> {
     .select("*")
     .eq("is_active", true);
   const active = members ?? [];
+
+  // Alta de cada miembro: nada anterior a su entrada le puede contar en contra.
+  for (const m of active) {
+    const t = m.first_seen_at ? new Date(m.first_seen_at as string).getTime() : null;
+    if (t != null) firstSeenOf.set(m.tag as string, t);
+  }
 
   // Línea base del tracking para detectar "nuevos" reales (ver dashboard).
   const firstSeens = active
@@ -487,12 +502,18 @@ export async function getActivityReport(): Promise<ActivityReport> {
   // Participación en asaltos de capital durante el periodo (findes registrados).
   const capitalParticipated = new Map<string, number>();
   let capitalWeekends = 0;
+  const capitalRaidEnds: number[] = []; // fin de cada finde CON datos (para filtrar por alta)
   {
     const { data: raids } = await supabase
       .from("capital_raids")
-      .select("id")
+      .select("id, start_time, end_time")
       .gte("start_time", since);
     const raidIds = (raids ?? []).map((r) => r.id as number);
+    const endById = new Map<number, number>();
+    for (const r of raids ?? []) {
+      const iso = (r.end_time as string | null) ?? (r.start_time as string | null);
+      if (iso) endById.set(r.id as number, Date.parse(iso));
+    }
     if (raidIds.length > 0) {
       const { data: crm } = await supabase
         .from("capital_raid_members")
@@ -502,7 +523,12 @@ export async function getActivityReport(): Promise<ActivityReport> {
       // Solo cuentan los findes de los que TENEMOS lista de participantes: la
       // API no la da de asaltos pasados, y sin ella nadie "participó" (falso).
       const raidsWithData = new Set((crm ?? []).map((r) => r.raid_id as number));
-      capitalWeekends = raidIds.filter((id) => raidsWithData.has(id)).length;
+      for (const id of raidIds) {
+        if (!raidsWithData.has(id)) continue;
+        capitalWeekends++;
+        const e = endById.get(id);
+        if (e != null) capitalRaidEnds.push(e);
+      }
       const seen = new Set<string>(); // tag+raid, por si hubiera duplicados
       for (const r of crm ?? []) {
         const tag = r.tag as string;
@@ -627,6 +653,15 @@ export async function getActivityReport(): Promise<ActivityReport> {
 
     const w = warStat.get(tag) ?? { played: 0, attacks: 0, missed: 0, missedRounds: [], stars: 0 };
 
+    // Guerras y findes que SÍ le corresponden: los posteriores a su corte (alta
+    // en el clan o punto y aparte). Un recién llegado no falló lo de antes.
+    const warsEligible =
+      cut == null
+        ? warsInPeriod
+        : warIds.filter((id) => (warEndMs.get(id) ?? 0) >= cut).length;
+    const capitalEligible =
+      cut == null ? capitalWeekends : capitalRaidEnds.filter((e) => e >= cut).length;
+
     const fs = m.first_seen_at ? new Date(m.first_seen_at as string).getTime() : null;
     const isNew = fs != null && now - fs < 7 * DAY_MS && fs - baseline > 12 * 3_600_000;
 
@@ -652,7 +687,7 @@ export async function getActivityReport(): Promise<ActivityReport> {
       flags.push(`🔴 ${Math.round(redDays)}d en rojo`);
       graves.push("en rojo");
     }
-    if (warsInPeriod > 0 && w.played === 0) {
+    if (warsEligible > 0 && w.played === 0) {
       flags.push("🚫 No juega guerras");
       graves.push("no juega guerras");
     }
@@ -673,7 +708,7 @@ export async function getActivityReport(): Promise<ActivityReport> {
     if (trophies != null && trophies === 0) flags.push("🎯 Sin ranked esta semana");
     if (lastWarPref.get(tag) === "out" && (redDays == null || redDays < rules.redDaysReview))
       flags.push("💤 Guerra desactivada");
-    if (capitalWeekends > 0 && capPart === 0 && !isNew) flags.push("🏛️ Sin capital");
+    if (capitalEligible > 0 && capPart === 0 && !isNew) flags.push("🏛️ Sin capital");
 
     const isStaff = role === "leader" || role === "coLeader";
     const inactivo = staleDays != null && staleDays >= thresholdDays;
@@ -720,8 +755,8 @@ export async function getActivityReport(): Promise<ActivityReport> {
       reviewReasons.push(`${d(redDays)} días seguidos en rojo (límite ${rules.redDaysReview})`);
     if (daysSinceDonation != null && daysSinceDonation >= rules.noDonationDays)
       reviewReasons.push(`${d(daysSinceDonation)} días sin donar nada`);
-    if (warsInPeriod > 0 && w.played === 0)
-      reviewReasons.push(`no entró a ninguna de las ${warsInPeriod} guerras`);
+    if (warsEligible > 0 && w.played === 0)
+      reviewReasons.push(`no entró a ninguna de las ${warsEligible} guerras`);
 
     // Punto y aparte aplicado (si lo hay). No silencia nada: lo anterior ya no
     // cuenta porque las métricas de arriba se miden desde el corte. Lo que se
@@ -798,6 +833,7 @@ export async function getActivityReport(): Promise<ActivityReport> {
       donationsReceived: received,
       ratio,
       donationNegative: donNeg,
+      warsEligible,
       warsPlayed: w.played,
       warAttacks: w.attacks,
       warMissed: w.missed,
@@ -805,7 +841,7 @@ export async function getActivityReport(): Promise<ActivityReport> {
       warStars: w.stars,
       warStolen,
       capitalParticipated: capPart,
-      capitalWeekends,
+      capitalWeekends: capitalEligible,
       category,
       categoryReasons,
       compensated,
