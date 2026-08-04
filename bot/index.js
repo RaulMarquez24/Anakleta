@@ -278,6 +278,15 @@ const CARD_COMMANDS = [
   },
 ];
 
+// Últimos errores, para poder diagnosticar desde /health sin abrir `fly logs`.
+const recentErrors = [];
+function logError(where, err) {
+  const msg = err?.message ?? String(err);
+  console.error(`[${where}]`, err);
+  recentErrors.unshift({ at: new Date().toISOString(), where, msg: msg.slice(0, 300) });
+  if (recentErrors.length > 20) recentErrors.pop();
+}
+
 // Estado compartido para la landing/health (se rellena en updatePresence).
 const BOOT_MS = Date.now();
 let lastPresenceText = "Arrancando…";
@@ -502,12 +511,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
         return;
       }
-      await cards.closeTrade(db, {
-        asker: { id: askerId, name: null },
-        owner: { id: ownerId, name: interaction.user.username },
-        askedCard,
-        givenCard: elegida,
-      });
+      // Se cierra el mensaje primero (rápido) y luego se hace el trabajo lento.
       await interaction.update({
         content:
           `✅ **Trato cerrado**\n` +
@@ -515,8 +519,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
           `_Haced el intercambio dentro del juego. Ambas cartas salen ya del tablón._`,
         components: [],
       });
+      await cards.closeTrade(db, {
+        asker: { id: askerId, name: null },
+        owner: { id: ownerId, name: interaction.user.username },
+        askedCard,
+        givenCard: elegida,
+      });
     } catch (err) {
-      console.error("[cards] deal:", err?.message ?? err);
+      logError("cards deal", err);
       await interaction
         .reply({ content: "⚠️ No se pudo cerrar el trato.", flags: eph })
         .catch(() => {});
@@ -528,6 +538,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.isStringSelectMenu() && interaction.customId.startsWith("cards_pick:")) {
     const [, catKey] = interaction.customId.split(":");
     try {
+      // Guardar + refrescar el tablón implica varias llamadas: se acusa recibo
+      // primero para no agotar los 3 s de Discord.
+      await interaction.deferReply({ flags: eph });
       await cards.setCategory(
         db,
         interaction.user.id,
@@ -535,20 +548,23 @@ client.on(Events.InteractionCreate, async (interaction) => {
         catKey,
         interaction.values,
       );
-      await cards.refreshBoard(db);
       const mine = await cards.getMyCards(db, interaction.user.id);
-      await interaction.reply({
+      await interaction.editReply({
         content:
           mine.size > 0
             ? `✅ Guardado. Tus repetidas (${mine.size}): ${[...mine].join(", ")}`
             : "✅ Guardado. Ahora mismo no tienes ninguna carta publicada.",
-        flags: eph,
       });
+      // El tablón se actualiza después: que tarde no debe afectar a la respuesta.
+      await cards.refreshBoard(db);
     } catch (err) {
-      console.error("[cards] pick:", err?.message ?? err);
-      await interaction
-        .reply({ content: "⚠️ No se pudo guardar. Inténtalo de nuevo.", flags: eph })
-        .catch(() => {});
+      logError("cards pick", err);
+      const aviso = "⚠️ No se pudo guardar. Inténtalo de nuevo.";
+      if (interaction.deferred && !interaction.replied) {
+        await interaction.editReply({ content: aviso }).catch(() => {});
+      } else if (!interaction.replied) {
+        await interaction.reply({ content: aviso, flags: eph }).catch(() => {});
+      }
     }
     return;
   }
@@ -636,6 +652,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     // --- Evento de cartas ---
     if (interaction.commandName === "repetidas") {
+      // Se responde en dos pasos: Discord solo da 3 s para el primer acuse, y
+      // construir los 4 menús con su consulta puede pasarse.
+      await interaction.deferReply({ flags: eph });
       const mine = await cards.getMyCards(db, id);
       // Un menú por categoría, con lo que ya tenía marcado preseleccionado.
       const rows = cards.CATEGORIES.map((cat) =>
@@ -650,30 +669,30 @@ client.on(Events.InteractionCreate, async (interaction) => {
             ),
         ),
       );
-      await interaction.reply({
+      await interaction.editReply({
         content:
           "🃏 **Marca las cartas que te SOBRAN** (repetidas).\n" +
           "Se guarda categoría por categoría; para quitar una, desmárcala.\n" +
           (mine.size > 0 ? `Ahora tienes publicadas **${mine.size}**.` : ""),
         components: rows,
-        flags: eph,
       });
       return;
     }
     if (interaction.commandName === "cartas") {
       const quien = interaction.options.getUser("usuario");
       if (quien) {
+        await interaction.deferReply({ flags: eph });
         const suyas = await cards.cardsOf(db, quien.id);
-        await interaction.reply({
+        await interaction.editReply({
           content:
             suyas.length > 0
               ? `🃏 **${quien.username}** tiene repetidas (${suyas.length}):\n${suyas.map((c) => `• ${c}`).join("\n")}\n\nPídele una con \`/cambiar\`.`
               : `**${quien.username}** no tiene cartas publicadas ahora mismo.`,
-          flags: eph,
         });
         return;
       }
-      await interaction.reply(cards.renderBoard(await cards.getOffers(db)));
+      await interaction.deferReply();
+      await interaction.editReply(cards.renderBoard(await cards.getOffers(db)));
       return;
     }
     if (interaction.commandName === "cambiar") {
@@ -733,9 +752,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
   } catch (err) {
-    console.error("Error en interacción:", err);
-    if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
-      await interaction.reply({ content: "⚠️ Ha ocurrido un error. Inténtalo de nuevo.", flags: eph }).catch(() => {});
+    logError(`interacción /${interaction.commandName ?? "?"}`, err);
+    const aviso = "⚠️ Ha ocurrido un error. Inténtalo de nuevo.";
+    if (!interaction.isRepliable()) return;
+    // Si ya se hizo deferReply hay que EDITAR: un reply nuevo fallaría y la
+    // interacción se quedaría colgada en "Enviando comando…".
+    if (interaction.deferred && !interaction.replied) {
+      await interaction.editReply({ content: aviso, components: [] }).catch(() => {});
+    } else if (!interaction.replied) {
+      await interaction.reply({ content: aviso, flags: eph }).catch(() => {});
     }
   }
 });
@@ -971,6 +996,7 @@ function healthJson() {
     clan: lastClan
       ? { name: lastClan.name, level: lastClan.clanLevel, members: lastClan.members }
       : null,
+    errors: recentErrors,
   };
 }
 
