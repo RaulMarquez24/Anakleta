@@ -100,6 +100,14 @@ export const CATEGORIES = [
 
 export const ALL_CARDS = CATEGORIES.flatMap((c) => c.cards);
 export const categoryOf = (key) => CATEGORIES.find((c) => c.key === key) ?? null;
+// El juego solo permite cambiar una carta por otra de la MISMA sección, así que
+// hay que saber a qué categoría pertenece cada una.
+export const categoryOfCard = (card) => CATEGORIES.find((c) => c.cards.includes(card)) ?? null;
+export const sameCategory = (a, b) => {
+  const ca = categoryOfCard(a);
+  const cb = categoryOfCard(b);
+  return ca != null && cb != null && ca.key === cb.key;
+};
 
 // --- Config ---
 export async function getConfig(db) {
@@ -259,7 +267,8 @@ _Cambiar cartas por el juego es un rollo: aquí ves de un vistazo quién tiene l
 • \`/cartas\` te lo enseña cuando quieras · \`/cartas @alguien\` muestra solo las suyas.
 
 🔄 **3. Pide la carta y cierra el trato**
-• \`/cambiar @jugador <carta>\` → el bot le avisa y le enseña **tus repetidas**.
+• ⚠️ Solo se puede cambiar una carta por **otra de la misma sección** (Elixir por Elixir, etc.). El bot ya te ofrece solo las válidas.
+• \`/cambiar @jugador <carta>\` → el bot le avisa y le enseña **tus repetidas de esa sección**.
 • Él elige en el desplegable la que le falte y **el trato queda cerrado**.
 • Las dos cartas salen del tablón automáticamente.
 
@@ -303,6 +312,10 @@ export async function cardsOf(db, discordId) {
 // Cierra un trato: cada uno deja de ofrecer la carta que entrega y se guarda en
 // el historial. El intercambio real se hace en el juego.
 export async function closeTrade(db, { asker, owner, askedCard, givenCard }) {
+  // Doble comprobación: el juego solo permite cambiar dentro de la misma sección.
+  if (!sameCategory(askedCard, givenCard)) {
+    throw new Error("Las dos cartas deben ser de la misma sección");
+  }
   await db
     .from("card_offers")
     .delete()

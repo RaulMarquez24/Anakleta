@@ -691,10 +691,23 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
         return;
       }
-      const mias = await cards.cardsOf(db, id);
-      if (mias.length === 0) {
+      const todasMias = await cards.cardsOf(db, id);
+      if (todasMias.length === 0) {
         await interaction.reply({
           content: "Primero publica tus repetidas con `/repetidas` para tener algo que ofrecer.",
+          flags: eph,
+        });
+        return;
+      }
+      // El juego solo permite cambiar por una carta de la MISMA sección.
+      const cat = cards.categoryOfCard(pedida);
+      const mias = todasMias.filter((c) => cat?.cards.includes(c));
+      if (mias.length === 0) {
+        await interaction.reply({
+          content:
+            `Solo se puede cambiar por cartas de la misma sección, y no tienes repetidas de ` +
+            `${cat ? `${cat.emoji} **${cat.label}**` : "esa sección"}.\n` +
+            `Marca alguna con \`/repetidas\` o pídele otra carta.`,
           flags: eph,
         });
         return;
@@ -712,7 +725,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await interaction.reply({
         content:
           `🔄 <@${target.id}>, <@${id}> quiere tu **${pedida}**.\n` +
-          `A cambio te ofrece: ${mias.slice(0, 24).join(" · ")}\n` +
+          `A cambio te ofrece ${cat ? `de ${cat.emoji} **${cat.label}**` : ""}: ${mias.slice(0, 24).join(" · ")}\n` +
           `_Elige abajo la que te falte y el trato queda cerrado._`,
         components: [row],
         allowedMentions: { users: [target.id] },
