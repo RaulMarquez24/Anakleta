@@ -175,14 +175,30 @@ function opponentByTag(them?: CocWarSide): Map<string, CocWarMember> {
   return map;
 }
 
+// Posición REAL en el mapa (1..N). La API —sobre todo en CWL— no devuelve
+// mapPosition consecutivo: trae un índice interno con huecos (26, 31, 33…), así
+// que hay que ordenar y renumerar. Sin esto, comparar la posición propia con la
+// del defensor da falsos "fuera de espejo".
+function positionsOf(side?: CocWarSide): Map<string, number> {
+  const out = new Map<string, number>();
+  const sorted = [...(side?.members ?? [])].sort(
+    (a, b) => (a.mapPosition ?? 0) - (b.mapPosition ?? 0),
+  );
+  sorted.forEach((m, i) => out.set(m.tag, i + 1));
+  return out;
+}
+
 // Detalle de un ataque: objetivo (nombre/posición/TH), duración y espejo.
 function attackView(
   a: CocWarAttack,
   attacker: CocWarMember,
   oppByTag: Map<string, CocWarMember>,
+  usPos: Map<string, number>,
+  themPos: Map<string, number>,
 ): AttackView {
   const d = oppByTag.get(a.defenderTag);
-  const defenderPosition = d?.mapPosition ?? null;
+  const defenderPosition = themPos.get(a.defenderTag) ?? null;
+  const attackerPos = usPos.get(attacker.tag) ?? null;
   return {
     stars: a.stars ?? 0,
     destruction: a.destructionPercentage ?? 0,
@@ -191,7 +207,7 @@ function attackView(
     defenderName: d?.name ?? null,
     defenderPosition,
     defenderTh: d?.townhallLevel ?? null,
-    isMirror: defenderPosition != null && defenderPosition === attacker.mapPosition,
+    isMirror: defenderPosition != null && defenderPosition === attackerPos,
     mirrorStatus: null, // lo fija classifyMirror() con el contexto de la guerra
     stolenFrom: null,
     attackNo: 0, // se fija al ordenar los ataques del jugador
@@ -229,6 +245,9 @@ function buildView(
   const warCompleted = remainingThs.length === 0;
 
   const oppByTag = opponentByTag(them);
+  // Posiciones reales del mapa (1..N) de cada lado: la API no las da así.
+  const usPos = positionsOf(us);
+  const themPos = positionsOf(them);
   // Contexto para clasificar espejo/remate/robo: primer ataque a cada base +
   // nuestras posiciones (para nombrar a quién se le robó el espejo). En vivo no
   // hay hora por ataque: usamos "ahora" como referencia de las últimas 5h (si
@@ -238,7 +257,10 @@ function buildView(
   );
   const firstOrderByDefender = firstOrderByDefenderMap(allAttacks);
   const nameByPosition = new Map<number, string>();
-  for (const m of us?.members ?? []) nameByPosition.set(m.mapPosition, m.name);
+  for (const m of us?.members ?? []) {
+    const pos = usPos.get(m.tag);
+    if (pos != null) nameByPosition.set(pos, m.name);
+  }
   const endMs = raw.endTime ? Date.parse(parseCocTime(raw.endTime) ?? "") : NaN;
   const endMsOrNull = Number.isNaN(endMs) ? null : endMs;
   const nowMs = Date.now();
@@ -260,14 +282,14 @@ function buildView(
         tag: m.tag,
         name: m.name,
         townHall: m.townhallLevel,
-        mapPosition: m.mapPosition,
+        mapPosition: usPos.get(m.tag) ?? m.mapPosition,
         attacksUsed,
         attacksPending,
         stars: atks.reduce((n, a) => n + (a.stars ?? 0), 0),
         destruction: atks.reduce((n, a) => n + (a.destructionPercentage ?? 0), 0),
         attacks: atks
           .map((a) => {
-            const v = attackView(a, m, oppByTag);
+            const v = attackView(a, m, oppByTag, usPos, themPos);
             const fresh = firstOrderByDefender.get(a.defenderTag) === (a.order ?? 0);
             v.mirrorStatus = classifyAttackStatus({
               isMirror: v.isMirror,
@@ -298,7 +320,7 @@ function buildView(
       tag: m.tag,
       name: m.name,
       townHall: m.townhallLevel,
-      mapPosition: m.mapPosition,
+      mapPosition: themPos.get(m.tag) ?? m.mapPosition,
       starsTaken: m.bestOpponentAttack?.stars ?? 0,
       destructionTaken: m.bestOpponentAttack?.destructionPercentage ?? 0,
     }))
@@ -511,9 +533,13 @@ function toRecord(
     result = cs > os ? "win" : cs < os ? "lose" : cd > od ? "win" : cd < od ? "lose" : "tie";
   }
   const oppByTag = opponentByTag(them);
+  // Posiciones reales del mapa (1..N): la API no las da consecutivas, sobre todo
+  // en CWL. Sin normalizar, el espejo se calcularía con escalas distintas.
+  const usPos = positionsOf(us);
+  const themPos = positionsOf(them);
   const attacks = (us?.members ?? []).flatMap((m) =>
     (m.attacks ?? []).map((a) => {
-      const v = attackView(a, m, oppByTag);
+      const v = attackView(a, m, oppByTag, usPos, themPos);
       return {
         attackerTag: a.attackerTag,
         defenderTag: a.defenderTag,
@@ -524,7 +550,7 @@ function toRecord(
         defenderName: v.defenderName,
         defenderPosition: v.defenderPosition,
         defenderTh: v.defenderTh,
-        attackerPosition: m.mapPosition ?? null,
+        attackerPosition: usPos.get(m.tag) ?? m.mapPosition ?? null,
         isMirror: v.isMirror,
       };
     }),
@@ -534,7 +560,7 @@ function toRecord(
     return {
       tag: m.tag,
       name: m.name,
-      mapPosition: m.mapPosition,
+      mapPosition: usPos.get(m.tag) ?? m.mapPosition,
       townHall: m.townhallLevel,
       attacksUsed: atks.length,
       stars: atks.reduce((n, a) => n + (a.stars ?? 0), 0),

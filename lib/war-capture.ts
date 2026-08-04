@@ -19,9 +19,13 @@ export interface WarCaptureResult {
 // Graba en wars + war_attacks la guerra normal actual o TODAS las guerras de
 // CWL (una por ronda). Idempotente: upsert por war_tag y reescribe los ataques.
 // Resiliente: si algo falla (war log privado, etc.), se maneja arriba.
+// `redoCwl`: vuelve a bajar TODAS las rondas de CWL (incluso las ya terminadas)
+// y reescribe sus ataques. Sirve para corregir datos mal guardados (p. ej. las
+// posiciones del mapa) conservando la hora de la primera detección.
 export async function captureWar(
   supabase: SupabaseClient,
   capturedAt: string,
+  opts?: { redoCwl?: boolean },
 ): Promise<WarCaptureResult> {
   // Rondas de CWL ya guardadas como terminadas: no hace falta volver a bajarlas
   // ni reescribirlas (una guerra cerrada ya no cambia).
@@ -30,9 +34,9 @@ export async function captureWar(
     .select("war_tag")
     .eq("state", "warEnded")
     .eq("is_cwl", true);
-  const finalizedTags = new Set(
-    (finalized ?? []).map((w) => w.war_tag as string).filter(Boolean),
-  );
+  const finalizedTags = opts?.redoCwl
+    ? new Set<string>() // recaptura: se bajan también las rondas ya cerradas
+    : new Set((finalized ?? []).map((w) => w.war_tag as string).filter(Boolean));
 
   const records = await getWarRecords(undefined, finalizedTags);
   const win = stealWindowMs((await getRulesConfig()).stealWindowHours);
@@ -69,6 +73,21 @@ export async function captureWar(
     if (warErr) throw warErr;
     const warId = warRow.id as number;
 
+    // Hora de la primera detección de cada ataque ya registrado: se conserva
+    // (aunque se reescriba la fila) para no falsear cuándo se hizo.
+    const prevSeen = new Map<number, string>();
+    try {
+      const { data: prev } = await supabase
+        .from("war_attacks")
+        .select("attack_order, first_seen_at")
+        .eq("war_id", warId);
+      for (const p of prev ?? []) {
+        if (p.first_seen_at) prevSeen.set(p.attack_order as number, p.first_seen_at as string);
+      }
+    } catch {
+      /* columna first_seen_at aún sin migrar */
+    }
+
     // Primer ataque a cada base (para saber si estaba "fresca") en esta captura.
     const firstOrderByDefender = new Map<string, number>();
     for (const a of rec.attacks) {
@@ -81,16 +100,21 @@ export async function captureWar(
     // Estado de espejo CONGELADO al capturar: se calcula con la hora de ESTA
     // captura (1ª vez que se ve el ataque). Como el ataque se INSERTA una sola
     // vez (nunca se sobrescribe), este estado queda inmóvil para siempre.
-    const statusFor = (a: (typeof rec.attacks)[number]): MirrorStatus | null =>
-      classifyAttackStatus({
+    // Se usa la hora de la PRIMERA detección si ya existía (así una recaptura
+    // corrige posiciones sin falsear la hora ni degradar un robo a "libre").
+    const statusFor = (a: (typeof rec.attacks)[number]): MirrorStatus | null => {
+      const seenIso = prevSeen.get(a.order);
+      const seenMs = seenIso ? Date.parse(seenIso) : capturedMs;
+      return classifyAttackStatus({
         isMirror: a.isMirror,
         defenderPosition: a.defenderPosition,
         fresh: firstOrderByDefender.get(a.defenderTag) === a.order,
         isCwl: rec.isCwl,
         endMs,
-        seenMs: capturedMs,
+        seenMs,
         stealWindowMs: win,
       });
+    };
 
     // INMUTABLE: inserta cada ataque una sola vez (on conflict do nothing). Un
     // ataque ya registrado NO se toca nunca más → su clasificación y su hora no
@@ -111,10 +135,12 @@ export async function captureWar(
           defender_th: a.defenderTh,
           attacker_position: a.attackerPosition,
           is_mirror: a.isMirror,
-          first_seen_at: capturedAt,
+          first_seen_at: prevSeen.get(a.order) ?? capturedAt,
           mirror_status: statusFor(a),
         })),
-        { onConflict: "war_id,attack_order", ignoreDuplicates: true },
+        // Normal: no se toca un ataque ya registrado (inmutable). Recaptura: se
+        // reescribe para corregir datos, conservando su first_seen_at original.
+        { onConflict: "war_id,attack_order", ignoreDuplicates: !opts?.redoCwl },
       );
       if (aErr) throw aErr;
     }

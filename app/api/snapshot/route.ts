@@ -53,7 +53,10 @@ export async function POST(req: NextRequest) {
 
   // Modo: "light" = solo la lista del clan (1 llamada, sin enriquecer ni guerra),
   // para refrescar miembros/bajas/donaciones al momento. "full" = todo.
-  const mode = new URL(req.url).searchParams.get("mode") === "light" ? "light" : "full";
+  const params = new URL(req.url).searchParams;
+  const mode = params.get("mode") === "light" ? "light" : "full";
+  // recwl=1: recaptura las rondas de CWL ya cerradas para corregir sus datos.
+  const redoCwl = params.get("recwl") === "1";
 
   try {
     const supabase = createServerClient();
@@ -336,7 +339,7 @@ export async function POST(req: NextRequest) {
     let capitalRaids: number | { error: string } | null = null;
     if (mode === "full") {
       try {
-        war = await captureWar(supabase, capturedAt);
+        war = await captureWar(supabase, capturedAt, { redoCwl });
       } catch (e) {
         war = { error: String(e) };
       }
