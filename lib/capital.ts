@@ -63,6 +63,18 @@ export async function captureCapitalRaids(
     // se conserva lo que ya se guardó (antes se borraba y se perdía el dato).
     const members = s.members ?? [];
     if (members.length > 0) {
+      // Atacar en el asalto SÍ es actividad, pero no mueve ningún contador del
+      // perfil (capital_contributions es el oro donado a las construcciones).
+      // Se marca aquí para que no salgan como inactivos.
+      const attackers = members.filter((m) => (m.attacks ?? 0) > 0).map((m) => m.tag);
+      const seenAt = parseCocTime(s.endTime) ?? parseCocTime(s.startTime);
+      if (attackers.length > 0 && seenAt) {
+        await supabase
+          .from("members")
+          .update({ last_activity_at: seenAt })
+          .in("tag", attackers)
+          .or(`last_activity_at.is.null,last_activity_at.lt.${seenAt}`);
+      }
       await supabase.from("capital_raid_members").delete().eq("raid_id", raidId);
       await supabase.from("capital_raid_members").insert(
         members.map((m) => ({

@@ -136,6 +136,17 @@ export async function captureWar(
       if (mErr) throw mErr;
     }
 
+    // Atacar en guerra es actividad. Se marca aquí porque las estrellas del
+    // perfil pueden tardar en reflejarse (y no suben si el ataque fue de 0⭐).
+    const atacantes = rec.members.filter((m) => m.attacksUsed > 0).map((m) => m.tag);
+    if (atacantes.length > 0) {
+      await supabase
+        .from("members")
+        .update({ last_activity_at: capturedAt })
+        .in("tag", atacantes)
+        .or(`last_activity_at.is.null,last_activity_at.lt.${capturedAt}`);
+    }
+
     recorded++;
     attacks += rec.attacks.length;
   }

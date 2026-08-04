@@ -164,7 +164,7 @@ export async function POST(req: NextRequest) {
       const { data: prevRows } = await supabase
         .from("members")
         .select(
-          "tag, red_since, last_activity_at, last_donation_at, ranked_last_at, ranked_weeks, tracked_weeks, week_key, ranked_this_week, prev_donations, prev_received, prev_attack_wins, prev_war_stars, prev_capital, prev_exp_level, prev_war_pref",
+          "tag, red_since, last_activity_at, last_donation_at, ranked_last_at, ranked_weeks, tracked_weeks, week_key, ranked_this_week, prev_donations, prev_received, prev_attack_wins, prev_war_stars, prev_capital, prev_exp_level, prev_trophies, prev_war_pref",
         )
         .in("tag", currentTagsArr.length > 0 ? currentTagsArr : ["-"]);
       for (const r of prevRows ?? []) prevByTag.set(r.tag as string, r);
@@ -188,13 +188,18 @@ export async function POST(req: NextRequest) {
         return nuevo != null && a != null && nuevo > a; // subió = estuvo jugando
       };
 
-      // ¿Alguna señal real de juego en esta captura?
+      // ¿Alguna señal real de juego en esta captura? Ojo con dos casos que no
+      // mueven los contadores obvios: las copas RANKED (jugar ranked no siempre
+      // sube attack_wins) y los ASALTOS de capital (los ataques del finde no
+      // suben capital_contributions, que es el oro donado a las construcciones;
+      // esos se marcan aparte, al capturar los asaltos).
       const jugo =
         up(m.donations, prev.prev_donations) ||
         up(m.donationsReceived, prev.prev_received) ||
         up(p?.attackWins, prev.prev_attack_wins) ||
         up(p?.warStars, prev.prev_war_stars) ||
         up(p?.clanCapitalContributions, prev.prev_capital) ||
+        up(m.trophies, prev.prev_trophies) ||
         up(m.expLevel, prev.prev_exp_level);
       const dono = up(m.donations, prev.prev_donations);
 
@@ -245,6 +250,7 @@ export async function POST(req: NextRequest) {
         prev_war_stars: p?.warStars ?? null,
         prev_capital: p?.clanCapitalContributions ?? null,
         prev_exp_level: m.expLevel ?? null,
+        prev_trophies: m.trophies ?? null,
         prev_war_pref: pref,
       };
     });

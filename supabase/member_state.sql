@@ -23,6 +23,7 @@ alter table members add column if not exists prev_attack_wins int;
 alter table members add column if not exists prev_war_stars   int;
 alter table members add column if not exists prev_capital     bigint;
 alter table members add column if not exists prev_exp_level   int;
+alter table members add column if not exists prev_trophies    int;
 alter table members add column if not exists prev_war_pref    text;
 
 -- ───────────────────────────────────────────────────────────────────────────
@@ -45,6 +46,7 @@ update members m set
   prev_war_stars   = u.war_stars,
   prev_capital     = u.capital_contributions,
   prev_exp_level   = u.exp_level,
+  prev_trophies    = u.trophies,
   prev_war_pref    = u.war_preference
 from ult u where m.tag = u.member_tag;
 
@@ -56,7 +58,8 @@ with dif as (
     attack_wins           - lag(attack_wins)           over w as d_atk,
     war_stars             - lag(war_stars)             over w as d_war,
     capital_contributions - lag(capital_contributions) over w as d_cap,
-    exp_level             - lag(exp_level)             over w as d_exp
+    exp_level             - lag(exp_level)             over w as d_exp,
+    trophies              - lag(trophies)              over w as d_tro
   from member_snapshots
   window w as (partition by member_tag order by captured_at)
 ), act as (
@@ -64,10 +67,36 @@ with dif as (
   from dif
   where coalesce(d_don,0) > 0 or coalesce(d_rec,0) > 0 or coalesce(d_atk,0) > 0
      or coalesce(d_war,0) > 0 or coalesce(d_cap,0) > 0 or coalesce(d_exp,0) > 0
+     or coalesce(d_tro,0) > 0
   group by member_tag
 )
 update members m set last_activity_at = a.at
 from act a where m.tag = a.member_tag;
+
+-- 2b) Actividad por ASALTOS DE CAPITAL: atacar en el finde no mueve ningún
+--     contador del perfil, así que se marca desde la participación guardada.
+with raid as (
+  select crm.tag, max(coalesce(cr.end_time, cr.start_time)) as at
+  from capital_raid_members crm
+  join capital_raids cr on cr.id = crm.raid_id
+  where coalesce(crm.attacks, 0) > 0
+  group by crm.tag
+)
+update members m set last_activity_at = r.at
+from raid r
+where m.tag = r.tag and (m.last_activity_at is null or m.last_activity_at < r.at);
+
+-- 2c) Actividad por ATAQUES DE GUERRA (por si las estrellas no lo reflejaron).
+with wa as (
+  select wm.tag, max(coalesce(w.end_time, w.start_time)) as at
+  from war_members wm
+  join wars w on w.id = wm.war_id
+  where coalesce(wm.attacks_used, 0) > 0
+  group by wm.tag
+)
+update members m set last_activity_at = wa.at
+from wa
+where m.tag = wa.tag and (m.last_activity_at is null or m.last_activity_at < wa.at);
 
 -- 3) Última donación (última captura en la que subió el contador de donaciones).
 with dif as (
