@@ -128,16 +128,27 @@ export async function setParticipants(
         .in("discord_id", ids);
     }
   } else {
-    const { error } = await svc.from("clan_event_participants").upsert(
-      list.map((tag) => ({
-        event_id: eventId,
-        member_tag: tag,
-        source: "manual",
-        added_by: user.email ?? null,
-      })),
-      { onConflict: "event_id,member_tag" },
-    );
-    if (error) return { ok: false, error: error.message };
+    // Se insertan solo los que falten: los índices únicos de la tabla son
+    // PARCIALES (member_tag not null) y Postgres no los admite en un ON CONFLICT
+    // (error 42P10), así que un upsert aquí fallaría siempre.
+    const { data: ya } = await svc
+      .from("clan_event_participants")
+      .select("member_tag")
+      .eq("event_id", eventId)
+      .in("member_tag", list);
+    const puestos = new Set((ya ?? []).map((r) => r.member_tag as string));
+    const nuevos = list.filter((t) => !puestos.has(t));
+    if (nuevos.length > 0) {
+      const { error } = await svc.from("clan_event_participants").insert(
+        nuevos.map((tag) => ({
+          event_id: eventId,
+          member_tag: tag,
+          source: "manual",
+          added_by: user.email ?? null,
+        })),
+      );
+      if (error) return { ok: false, error: error.message };
+    }
   }
   revalidatePath("/eventos");
   revalidatePath(`/eventos/${eventId}`);

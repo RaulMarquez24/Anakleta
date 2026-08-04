@@ -368,27 +368,37 @@ async function markEventParticipation(db, discordIds) {
       .in("discord_id", discordIds);
     const tagOf = new Map((links ?? []).map((m) => [m.discord_id, m.tag]));
 
-    const rows = discordIds.map((id) => ({
-      event_id: ev.id,
-      member_tag: tagOf.get(id) ?? null,
-      discord_id: id,
-      source: "cards",
-    }));
-    const conTag = rows.filter((r) => r.member_tag);
-    const sinTag = rows.filter((r) => !r.member_tag);
-    if (conTag.length > 0) {
-      await db
-        .from("clan_event_participants")
-        .upsert(conTag, { onConflict: "event_id,member_tag" });
+    // Se mira lo que ya hay y se insertan solo los que faltan. No se usa upsert
+    // porque los índices únicos de la tabla son PARCIALES (member_tag not null)
+    // y Postgres no los acepta en un ON CONFLICT (error 42P10).
+    const { data: ya } = await db
+      .from("clan_event_participants")
+      .select("member_tag, discord_id")
+      .eq("event_id", ev.id)
+      .limit(1000);
+    const tagsPuestos = new Set((ya ?? []).map((r) => r.member_tag).filter(Boolean));
+    const discordsPuestos = new Set((ya ?? []).map((r) => r.discord_id).filter(Boolean));
+
+    const rows = discordIds
+      .filter((id) => !discordsPuestos.has(id) && !tagsPuestos.has(tagOf.get(id)))
+      .map((id) => ({
+        event_id: ev.id,
+        member_tag: tagOf.get(id) ?? null,
+        discord_id: id,
+        source: "cards",
+      }));
+    if (rows.length === 0) return 0;
+    const { error } = await db.from("clan_event_participants").insert(rows);
+    if (error) {
+      console.error("No se pudo marcar la participación en el evento:", error.message);
+      return 0;
     }
-    if (sinTag.length > 0) {
-      await db
-        .from("clan_event_participants")
-        .upsert(sinTag, { onConflict: "event_id,discord_id" });
-    }
-  } catch {
-    /* tabla de eventos sin migrar: el trato sigue cerrándose igual */
+    return rows.length;
+  } catch (err) {
+    // Tabla de eventos sin migrar: el trato sigue cerrándose igual.
+    console.error("Participación del evento:", err?.message ?? err);
   }
+  return 0;
 }
 
 // Al arrancar: da por participantes a todos los que ya tienen cartas publicadas.
@@ -396,8 +406,10 @@ async function markEventParticipation(db, discordIds) {
 export async function syncParticipation(db) {
   const offers = await getOffers(db);
   const ids = [...new Set(offers.map((o) => o.discord_id))];
-  if (ids.length > 0) await markEventParticipation(db, ids);
-  return ids.length;
+  if (ids.length === 0) return 0;
+  const n = await markEventParticipation(db, ids);
+  if (n > 0) console.log(`Evento: ${n} participante(s) nuevos por tener cartas publicadas.`);
+  return n;
 }
 
 // Ranking de quién ha ayudado más (cartas entregadas), para el resumen.
