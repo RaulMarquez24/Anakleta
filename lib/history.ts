@@ -2,6 +2,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import { donationsNegative } from "@/lib/dashboard";
 import { getActiveWarnCounts, getWarnConfig } from "@/lib/warns";
 import { getActiveSanctions } from "@/lib/sanctions";
+import { getActiveEvent, getParticipantTags } from "@/lib/events";
 import { classifyAttackStatus } from "@/lib/war";
 import { getRulesConfig, stealWindowMs } from "@/lib/rules";
 
@@ -184,6 +185,8 @@ export interface ActivityRow {
   warStolen: number; // robos de espejo (infracción) en el periodo
   capitalParticipated: number; // findes de capital en los que atacó
   capitalWeekends: number; // findes de capital registrados en el periodo (clan)
+  // Evento del momento: si hay uno activo, si participó (solo suma, no resta).
+  event: { name: string; participated: boolean } | null;
   category: ActivityCategory;
   categoryReasons: string[]; // por qué está en esa categoría (motivos con cifras)
   // Expulsión ya conmutada por otra sanción (mientras esté vigente).
@@ -553,6 +556,11 @@ export async function getActivityReport(): Promise<ActivityReport> {
 
   const [warnCounts, warnCfg] = await Promise.all([getActiveWarnCounts(), getWarnConfig()]);
 
+  // Evento del momento: quien participó se lleva un plus (nunca penaliza a los
+  // demás). La participación llega de Discord (p. ej. cartas) o a mano.
+  const activeEvent = await getActiveEvent();
+  const eventTags = activeEvent ? await getParticipantTags(activeEvent.id) : new Set<string>();
+
   const rowsOut: ActivityRow[] = active.map((m) => {
     const tag = m.tag as string;
     const role = (m.role as string | null) ?? null;
@@ -855,8 +863,15 @@ export async function getActivityReport(): Promise<ActivityReport> {
       categoryReasons,
       compensated,
       kickScore,
-      // Participación (para ascensos): donaciones + estrellas + ataques, penaliza fallos.
-      participationScore: (donations ?? 0) + w.stars * 100 + w.attacks * 50 - w.missed * 300,
+      // Participación (para ascensos): donaciones + estrellas + ataques, penaliza
+      // fallos y suma el plus del evento del momento si participó.
+      participationScore:
+        (donations ?? 0) +
+        w.stars * 100 +
+        w.attacks * 50 -
+        w.missed * 300 +
+        (eventTags.has(tag) ? rules.eventBonus : 0),
+      event: activeEvent ? { name: activeEvent.name, participated: eventTags.has(tag) } : null,
       flags,
       activeWarns,
     };

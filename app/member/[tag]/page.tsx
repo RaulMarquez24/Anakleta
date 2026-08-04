@@ -19,6 +19,7 @@ import { MemberNote } from "@/components/MemberNote";
 import { MemberWarns } from "@/components/MemberWarns";
 import { MemberSanction } from "@/components/MemberSanction";
 import { getMemberSanctions } from "@/lib/sanctions";
+import { getMemberEvents } from "@/lib/events";
 import { Section } from "@/components/Section";
 import { ReturneeBanner } from "@/components/ReturneeBanner";
 import { AccountLinker } from "@/components/AccountLinker";
@@ -96,6 +97,8 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
 
   // Sanciones que compensan su expulsión (vigente + historial).
   const sanctions = await getMemberSanctions(decoded).catch(() => []);
+  // Eventos en los que ha participado (constancia para ascensos).
+  const misEventos = await getMemberEvents(decoded, history.discordId).catch(() => []);
   const activeSanction = sanctions.find((s) => s.active) ?? null;
 
   // Resumen de temporada: capital (desde su alta), donaciones (última captura =
@@ -401,6 +404,34 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
           warnsVigentes={warns.vigentes.length}
         />
       </Section>
+
+      {/* Eventos en los que ha participado (solo suma; sirve para ascensos) */}
+      {misEventos.length > 0 && (
+        <Section
+          title="🎉 Eventos"
+          summary={
+            <span className="text-grass">
+              {misEventos.length} participación{misEventos.length === 1 ? "" : "es"}
+            </span>
+          }
+          defaultOpen={false}
+        >
+          <ul className="space-y-1.5">
+            {misEventos.map(({ event, source }) => (
+              <li
+                key={event.id}
+                className="flex items-center justify-between gap-2 rounded-xl border border-line px-3 py-2"
+              >
+                <span className="min-w-0 truncate text-sm font-bold text-ink">{event.name}</span>
+                <span className="flex-none text-[11px] font-semibold text-ink-soft">
+                  {event.active ? "en curso" : fmtDate(event.endsAt ?? event.createdAt)}
+                  {source !== "manual" ? ` · ${source}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
 
       <Section
         title="Cuentas del jugador"

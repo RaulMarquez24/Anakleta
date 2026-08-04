@@ -311,6 +311,21 @@ export default async function ClanHomePage({
         <span aria-hidden className="text-ink-soft">›</span>
       </Link>
 
+      {/* Eventos del clan (constancia de participación + plus para ascensos) */}
+      <Link
+        href="/eventos"
+        className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 hover:bg-surface-2/60"
+      >
+        <span className="text-2xl">🎉</span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-extrabold text-ink">Eventos</span>
+          <span className="block text-xs text-ink-soft">
+            El evento del momento y quién ha participado
+          </span>
+        </span>
+        <span aria-hidden className="text-ink-soft">›</span>
+      </Link>
+
       {/* Normas del clan (texto + publicar en Discord + ajustes) */}
       <Link
         href="/normas"

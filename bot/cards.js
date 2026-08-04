@@ -334,7 +334,53 @@ export async function closeTrade(db, { asker, owner, askedCard, givenCard }) {
     asked_card: askedCard,
     given_card: givenCard,
   });
+  // Cerrar un trato = haber participado en el evento (si el evento del momento
+  // se alimenta de las cartas). Queda como constancia y da su plus en la app.
+  await markEventParticipation(db, [asker.id, owner.id]);
   await refreshBoard(db);
+}
+
+// Marca a estos usuarios de Discord como participantes del evento activo, pero
+// solo si ese evento se nutre de las cartas (auto_source = 'cards').
+async function markEventParticipation(db, discordIds) {
+  try {
+    const { data: evs } = await db
+      .from("clan_events")
+      .select("id, auto_source")
+      .eq("active", true)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const ev = evs?.[0];
+    if (!ev || ev.auto_source !== "cards") return;
+
+    // Si el jugador tiene su cuenta vinculada, se guarda con su tag.
+    const { data: links } = await db
+      .from("members")
+      .select("tag, discord_id")
+      .in("discord_id", discordIds);
+    const tagOf = new Map((links ?? []).map((m) => [m.discord_id, m.tag]));
+
+    const rows = discordIds.map((id) => ({
+      event_id: ev.id,
+      member_tag: tagOf.get(id) ?? null,
+      discord_id: id,
+      source: "cards",
+    }));
+    const conTag = rows.filter((r) => r.member_tag);
+    const sinTag = rows.filter((r) => !r.member_tag);
+    if (conTag.length > 0) {
+      await db
+        .from("clan_event_participants")
+        .upsert(conTag, { onConflict: "event_id,member_tag" });
+    }
+    if (sinTag.length > 0) {
+      await db
+        .from("clan_event_participants")
+        .upsert(sinTag, { onConflict: "event_id,discord_id" });
+    }
+  } catch {
+    /* tabla de eventos sin migrar: el trato sigue cerrándose igual */
+  }
 }
 
 // Ranking de quién ha ayudado más (cartas entregadas), para el resumen.
