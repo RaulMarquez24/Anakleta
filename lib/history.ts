@@ -399,20 +399,31 @@ export async function getActivityReport(): Promise<ActivityReport> {
   // penaliza (aún queda tiempo).
   const { data: warRows } = await supabase
     .from("wars")
-    .select("id, state, round, end_time, is_cwl")
+    .select("id, state, round, start_time, end_time, is_cwl")
     .gte("start_time", since);
   const warIds = (warRows ?? []).map((w) => w.id as number);
   const warsInPeriod = warIds.length;
   const warState = new Map<number, string>();
   const warRound = new Map<number, number | null>();
   const warEndMs = new Map<number, number | null>();
+  const warStartMs = new Map<number, number | null>();
   const warIsCwl = new Map<number, boolean>();
   for (const w of warRows ?? []) {
     warState.set(w.id as number, (w.state as string) ?? "");
     warRound.set(w.id as number, (w.round as number | null) ?? null);
     warEndMs.set(w.id as number, w.end_time ? Date.parse(w.end_time as string) : null);
+    warStartMs.set(w.id as number, w.start_time ? Date.parse(w.start_time as string) : null);
     warIsCwl.set(w.id as number, Boolean(w.is_cwl));
   }
+  // Una guerra solo se le puede exigir a quien ya estaba en el clan cuando se
+  // hizo la alineación, es decir al empezar la PREPARACIÓN (~24h antes del
+  // inicio). Si llegó después, esa guerra no era suya.
+  const warEraSuya = (wid: number, cut: number | null): boolean => {
+    if (cut == null) return true;
+    const start = warStartMs.get(wid) ?? warEndMs.get(wid) ?? null;
+    if (start == null) return false;
+    return start - DAY_MS >= cut;
+  };
 
   interface WarStat {
     played: number;
@@ -431,9 +442,9 @@ export async function getActivityReport(): Promise<ActivityReport> {
     for (const m of wm ?? []) {
       const tag = m.tag as string;
       const wid = m.war_id as number;
-      // Punto y aparte: las guerras terminadas ANTES del corte no cuentan.
-      const cut = cutOf(tag);
-      if (cut != null && (warEndMs.get(wid) ?? 0) < cut) continue;
+      // Solo cuentan las guerras que ya eran suyas (posteriores a su alta o al
+      // punto y aparte).
+      if (!warEraSuya(wid, cutOf(tag))) continue;
       if (!warStat.has(tag)) warStat.set(tag, { played: 0, attacks: 0, missed: 0, missedRounds: [], stars: 0 });
       const s = warStat.get(tag)!;
       const used = (m.attacks_used as number | null) ?? 0;
@@ -490,9 +501,8 @@ export async function getActivityReport(): Promise<ActivityReport> {
           });
         if (st === "stolen") {
           const tag = a.attacker_tag as string;
-          // Punto y aparte: los robos de guerras anteriores al corte no cuentan.
-          const cut = cutOf(tag);
-          if (cut != null && (warEndMs.get(wid) ?? 0) < cut) continue;
+          // Los robos de guerras que no eran suyas (o perdonadas) no cuentan.
+          if (!warEraSuya(wid, cutOf(tag))) continue;
           stolenByTag.set(tag, (stolenByTag.get(tag) ?? 0) + 1);
         }
       }
@@ -502,17 +512,17 @@ export async function getActivityReport(): Promise<ActivityReport> {
   // Participación en asaltos de capital durante el periodo (findes registrados).
   const capitalParticipated = new Map<string, number>();
   let capitalWeekends = 0;
-  const capitalRaidEnds: number[] = []; // fin de cada finde CON datos (para filtrar por alta)
+  const capitalRaidStarts: number[] = []; // inicio de cada finde CON datos (para filtrar por alta)
   {
     const { data: raids } = await supabase
       .from("capital_raids")
       .select("id, start_time, end_time")
       .gte("start_time", since);
     const raidIds = (raids ?? []).map((r) => r.id as number);
-    const endById = new Map<number, number>();
+    const startById = new Map<number, number>();
     for (const r of raids ?? []) {
-      const iso = (r.end_time as string | null) ?? (r.start_time as string | null);
-      if (iso) endById.set(r.id as number, Date.parse(iso));
+      const iso = (r.start_time as string | null) ?? (r.end_time as string | null);
+      if (iso) startById.set(r.id as number, Date.parse(iso));
     }
     if (raidIds.length > 0) {
       const { data: crm } = await supabase
@@ -526,8 +536,8 @@ export async function getActivityReport(): Promise<ActivityReport> {
       for (const id of raidIds) {
         if (!raidsWithData.has(id)) continue;
         capitalWeekends++;
-        const e = endById.get(id);
-        if (e != null) capitalRaidEnds.push(e);
+        const s = startById.get(id);
+        if (s != null) capitalRaidStarts.push(s);
       }
       const seen = new Set<string>(); // tag+raid, por si hubiera duplicados
       for (const r of crm ?? []) {
@@ -656,11 +666,10 @@ export async function getActivityReport(): Promise<ActivityReport> {
     // Guerras y findes que SÍ le corresponden: los posteriores a su corte (alta
     // en el clan o punto y aparte). Un recién llegado no falló lo de antes.
     const warsEligible =
-      cut == null
-        ? warsInPeriod
-        : warIds.filter((id) => (warEndMs.get(id) ?? 0) >= cut).length;
+      cut == null ? warsInPeriod : warIds.filter((id) => warEraSuya(id, cut)).length;
+    // Un finde de capital solo cuenta si empezó estando ya en el clan.
     const capitalEligible =
-      cut == null ? capitalWeekends : capitalRaidEnds.filter((e) => e >= cut).length;
+      cut == null ? capitalWeekends : capitalRaidStarts.filter((s) => s >= cut).length;
 
     const fs = m.first_seen_at ? new Date(m.first_seen_at as string).getTime() : null;
     const isNew = fs != null && now - fs < 7 * DAY_MS && fs - baseline > 12 * 3_600_000;
