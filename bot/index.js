@@ -278,6 +278,11 @@ const CARD_COMMANDS = [
   },
 ];
 
+// Diagnóstico por HTTP (/health): últimas interacciones recibidas y comandos
+// realmente registrados. Sirve para distinguir "no me llega" de "falla mi código".
+const recentInteractions = [];
+let registeredCommands = [];
+
 // Últimos errores, para poder diagnosticar desde /health sin abrir `fly logs`.
 const recentErrors = [];
 function logError(where, err) {
@@ -406,6 +411,7 @@ async function registerCommands(c) {
     const list = enabled ? [...COMMANDS, ...CARD_COMMANDS] : COMMANDS;
     const set = await c.application.commands.set(list);
     cardsRegistered = enabled;
+    registeredCommands = set.map((cmd) => cmd.name);
     // Al encenderlo, publica el manual y el tablón en su canal.
     if (enabled) await cards.refreshBoard(db).catch(() => {});
     const names = set.map((cmd) => `/${cmd.name}`).join(", ");
@@ -419,6 +425,14 @@ async function registerCommands(c) {
 
 client.on(Events.InteractionCreate, async (interaction) => {
   const eph = MessageFlags.Ephemeral;
+  // Traza de diagnóstico: qué llega exactamente (visible en /health).
+  recentInteractions.unshift({
+    at: new Date().toISOString(),
+    type: interaction.type,
+    name: interaction.commandName ?? interaction.customId ?? null,
+    user: interaction.user?.username ?? null,
+  });
+  if (recentInteractions.length > 20) recentInteractions.pop();
 
   // Menú de selección de cuentas ("me apunto" con varias cuentas).
   if (interaction.isStringSelectMenu() && interaction.customId.startsWith("cwl_pick:")) {
@@ -996,6 +1010,9 @@ function healthJson() {
     clan: lastClan
       ? { name: lastClan.name, level: lastClan.clanLevel, members: lastClan.members }
       : null,
+    commands: registeredCommands,
+    cards_enabled: cardsRegistered,
+    interactions: recentInteractions,
     errors: recentErrors,
   };
 }
