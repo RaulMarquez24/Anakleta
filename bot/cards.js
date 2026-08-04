@@ -223,10 +223,7 @@ async function postMessage(channelId, content, opts = {}) {
       headers: { Authorization: `Bot ${TOKEN}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         content,
-        allowed_mentions: {
-          parse: opts.everyone ? ["everyone"] : [],
-          ...(opts.users ? { users: opts.users } : {}),
-        },
+        allowed_mentions: { parse: opts.everyone ? ["everyone"] : [] },
       }),
     });
     if (!res.ok) return null;
@@ -256,17 +253,6 @@ async function editMessage(channelId, messageId, content, opts = {}) {
   }
 }
 
-// Aviso puntual en un canal, mencionando de verdad a quien toque (se usa cuando
-// alguien tiene los MD cerrados y no se le puede avisar en privado).
-export async function notify(channelId, content, userIds = []) {
-  return postMessage(channelId, content, { users: userIds });
-}
-
-// Reescribe un mensaje ya publicado (el aviso público de un cambio en curso).
-export async function updateMessage(channelId, messageId, content) {
-  return editMessage(channelId, messageId, content);
-}
-
 const DIV = "━━━━━━━━━━━━━━━━━━━━━━━━";
 
 // Manual del evento: se publica una vez al activar y luego se mantiene editado.
@@ -287,9 +273,9 @@ _Cambiar cartas por el juego es un rollo: aquí ves de un vistazo quién tiene l
 
 🔄 **3. Pide la carta y cierra el trato**
 • ⚠️ Solo se puede cambiar una carta por **otra de la misma sección** (Elixir por Elixir, etc.). El bot ya te ofrece solo las válidas.
-• \`/cambiar @jugador <carta>\` → al canal sale el aviso y a **él le llega un privado** con tus repetidas de esa sección.
-• **Solo él puede responder** (el desplegable está en su privado, nadie contesta por nadie): elige la que le falte y **el trato queda cerrado**.
-• Te llega un aviso por privado con el **sí o el no**, y las dos cartas salen del tablón automáticamente.
+• \`/cambiar @jugador <carta>\` → el bot le avisa y le enseña **tus repetidas de esa sección**.
+• **Solo puede responder él** (si contesta otro, el bot lo rechaza): elige en el desplegable la que le falte y **el trato queda cerrado**.
+• Al responder **te menciona** con el sí o el no, y las dos cartas salen del tablón automáticamente.
 
 ⚔️ **4. Haced el intercambio dentro del juego**
 El bot solo os pone de acuerdo; el cambio se hace en Clash como siempre.

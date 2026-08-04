@@ -423,27 +423,6 @@ async function registerCommands(c) {
   }
 }
 
-// Aviso privado. Si tiene los MD cerrados, se le menciona en el canal del cambio
-// (así se entera igual, aunque sea en público).
-async function avisarUsuario(userId, texto, canalFallback) {
-  try {
-    const u = await client.users.fetch(userId);
-    await u.send(texto);
-    return true;
-  } catch {
-    if (canalFallback && canalFallback !== "-") {
-      await cards.notify(canalFallback, `<@${userId}> ${texto}`, [userId]).catch(() => {});
-    }
-    return false;
-  }
-}
-
-// Reescribe el aviso público del cambio con el resultado (si lo hubo).
-async function reescribirAviso(canalId, mensajeId, texto) {
-  if (!canalId || canalId === "-" || !mensajeId || mensajeId === "-") return;
-  await cards.updateMessage(canalId, mensajeId, texto).catch(() => {});
-}
-
 client.on(Events.InteractionCreate, async (interaction) => {
   const eph = MessageFlags.Ephemeral;
   // Traza de diagnóstico: qué llega exactamente (visible en /health).
@@ -539,11 +518,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  // El dueño responde (normalmente desde su privado) → trato cerrado o rechazado.
+  // El dueño elige qué carta acepta a cambio → trato cerrado (o rechazado).
   if (interaction.isStringSelectMenu() && interaction.customId.startsWith("cd:")) {
-    const [, askerId, ownerId, idx, chanId, msgId] = interaction.customId.split(":");
+    const [, askerId, ownerId, idx] = interaction.customId.split(":");
     const askedCard = cards.ALL_CARDS[Number(idx)];
-    // Por si el menú acabó en el canal (MD cerrados): solo decide el dueño.
+    // El menú lo ve el canal entero, pero solo lo cierra a quien se le pidió.
     if (interaction.user.id !== ownerId || !askedCard) {
       await interaction
         .reply({ content: "Este cambio no es para ti 🙂", flags: eph })
@@ -551,28 +530,24 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
     const elegida = interaction.values[0];
-    // Al responder desde el privado no hay `member`, así que se tira del nombre
-    // global de Discord antes que del @ interno.
-    const dueño =
-      interaction.member?.displayName ?? interaction.user.globalName ?? interaction.user.username;
+    const dueño = interaction.member?.displayName ?? interaction.user.username;
+    // El aviso al que pidió va aparte y MENCIONÁNDOLE: editar un mensaje no
+    // notifica a nadie, así que si no se le menciona no se entera.
+    const avisar = (texto) =>
+      interaction
+        .followUp({ content: `<@${askerId}> ${texto}`, allowedMentions: { users: [askerId] } })
+        .catch(() => {});
     try {
-      // Avisar y cerrar lleva varias llamadas: se acusa recibo primero.
+      // Cerrar el trato lleva varias llamadas: se acusa recibo primero.
       await interaction.deferUpdate();
 
       if (elegida === "__none__") {
         await interaction.editReply({
-          content: `❌ Has dicho que **no te sirve ninguna** por tu **${askedCard}**. Ya se lo he dicho.`,
+          content: `🔄 <@${askerId}> pedía **${askedCard}** a <@${ownerId}>.\n❌ No le sirve ninguna de las ofrecidas.`,
           components: [],
         });
-        await avisarUsuario(
-          askerId,
-          `❌ **${dueño}** no necesita ninguna de las cartas que le ofreciste por **${askedCard}**.`,
-          chanId,
-        );
-        await reescribirAviso(
-          chanId,
-          msgId,
-          `🔄 <@${askerId}> pedía **${askedCard}** a <@${ownerId}>.\n❌ No le sirve ninguna de las ofrecidas.`,
+        await avisar(
+          `❌ **${dueño}** ha **rechazado** el cambio: no le sirve ninguna de las que le ofreciste por **${askedCard}**.`,
         );
         return;
       }
@@ -586,7 +561,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await interaction.editReply({
           content:
             `⚠️ Este cambio ya no vale: **${!suyas.includes(askedCard) ? askedCard : elegida}** ` +
-            `ya no está en el tablón (se cambió antes). Mira el tablón y volved a pedirla.`,
+            `ya no está en el tablón (se cambió antes). Mirad el tablón y volved a pedirla.`,
           components: [],
         });
         return;
@@ -595,7 +570,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await interaction.editReply({
         content:
           `✅ **Trato cerrado**\n` +
-          `Tú das **${askedCard}** · te da **${elegida}**\n` +
+          `<@${ownerId}> da **${askedCard}** · <@${askerId}> da **${elegida}**\n` +
           `_Haced el intercambio dentro del juego. Ambas cartas salen ya del tablón._`,
         components: [],
       });
@@ -605,18 +580,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
         askedCard,
         givenCard: elegida,
       });
-      await avisarUsuario(
-        askerId,
-        `✅ **${dueño}** acepta el cambio: te da **${askedCard}** y tú le das **${elegida}**. ` +
+      await avisar(
+        `✅ **${dueño}** ha **aceptado**: te da **${askedCard}** y tú le das **${elegida}**. ` +
           `Haced el intercambio dentro del juego ⚔️`,
-        chanId,
-      );
-      await reescribirAviso(
-        chanId,
-        msgId,
-        `✅ **Trato cerrado**\n` +
-          `<@${ownerId}> da **${askedCard}** · <@${askerId}> da **${elegida}**\n` +
-          `_El intercambio se hace dentro del juego. Ambas cartas salen ya del tablón._`,
       );
     } catch (err) {
       logError("cards deal", err);
@@ -829,57 +795,27 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
         return;
       }
-      // Aviso público SIN desplegable: en el canal solo se ve que hay un cambio
-      // pendiente. Quien decide es el dueño, y lo hace en su privado.
+      // El dueño elige de un desplegable cuál le sirve → cierra el trato. Lo ve
+      // todo el canal, pero solo cuenta si lo pulsa él (se comprueba al responder).
       const ofrecidas = mias.slice(0, 24);
-      const cabecera =
-        `🔄 <@${id}> le pide **${pedida}** a <@${target.id}>.\n` +
-        `A cambio le ofrece${cat ? ` de ${cat.emoji} **${cat.label}**` : ""}: ${ofrecidas.join(" · ")}`;
+      const idx = cards.ALL_CARDS.indexOf(pedida);
+      const row = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`cd:${id}:${target.id}:${idx}`)
+          .setPlaceholder("Elige la que te sirva y queda cerrado")
+          .addOptions([
+            ...ofrecidas.map((c) => ({ label: c, value: c })),
+            { label: "Ninguna me sirve", value: "__none__" },
+          ]),
+      );
       await interaction.reply({
-        content: `${cabecera}\n_Esperando su respuesta…_`,
+        content:
+          `🔄 <@${target.id}>, <@${id}> quiere tu **${pedida}**.\n` +
+          `A cambio te ofrece ${cat ? `de ${cat.emoji} **${cat.label}**` : ""}: ${ofrecidas.join(" · ")}\n` +
+          `_Elige abajo la que te falte y el trato queda cerrado (solo respondes tú)._`,
+        components: [row],
         allowedMentions: { users: [target.id] },
       });
-      const publico = await interaction.fetchReply().catch(() => null);
-
-      // El menú va al privado del dueño: así nadie puede responder por él. En el
-      // customId van los IDs y el mensaje público (para reescribirlo al cerrar).
-      const idx = cards.ALL_CARDS.indexOf(pedida);
-      const opciones = [
-        ...ofrecidas.map((c) => ({ label: c, value: c })),
-        { label: "Ninguna me sirve", value: "__none__" },
-      ];
-      const menu = (ref) =>
-        new ActionRowBuilder().addComponents(
-          new StringSelectMenuBuilder()
-            .setCustomId(`cd:${id}:${target.id}:${idx}:${ref}`)
-            .setPlaceholder("Elige la que te sirva y queda cerrado")
-            .addOptions(opciones),
-        );
-      const row = menu(publico ? `${publico.channelId}:${publico.id}` : "-:-");
-      const quien =
-        interaction.member?.displayName ?? interaction.user.globalName ?? interaction.user.username;
-      let porPrivado = true;
-      try {
-        await target.send({
-          content:
-            `🔄 **${quien} quiere tu ${pedida}**\n` +
-            `Te ofrece a cambio${cat ? ` de ${cat.emoji} **${cat.label}**` : ""}: ${ofrecidas.join(" · ")}\n` +
-            `_Elige la que te falte y el trato queda cerrado (se le avisa solo)._`,
-          components: [row],
-        });
-      } catch {
-        porPrivado = false;
-      }
-      if (!porPrivado) {
-        // MD cerrados: el menú se queda en el canal, pero solo responde el dueño.
-        await interaction.editReply({
-          content:
-            `${cabecera}\n` +
-            `⚠️ <@${target.id}> tiene los mensajes privados cerrados: responde aquí abajo ` +
-            `(_solo tú puedes_).`,
-          components: [menu("-:-")],
-        });
-      }
       return;
     }
   } catch (err) {
