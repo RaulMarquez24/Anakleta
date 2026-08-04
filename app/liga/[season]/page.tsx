@@ -33,12 +33,16 @@ export default async function LigaPage({
 
   const { season } = await params;
   const decoded = decodeURIComponent(season);
-  const [wars, summary, channels, defaultChannel, list, discordMembers] = await Promise.all([
-    getSeasonWars(decoded),
-    getSeasonSummary(decoded),
+  // La lista de inscripciones puede tener otra clave que la temporada de la API
+  // (la crea el cron por calendario, antes de que la liga arranque). Se busca
+  // por cualquiera de las dos y luego cada cosa usa la suya.
+  const list = await getList(decoded);
+  const warsSeason = list?.coc_season || decoded; // guerras: temporada de la API
+  const [wars, summary, channels, defaultChannel, discordMembers] = await Promise.all([
+    getSeasonWars(warsSeason),
+    getSeasonSummary(warsSeason),
     getGuildChannels().catch(() => []),
     getDefaultChannelId().catch(() => null),
-    getList(decoded),
     getGuildMembers().catch(() => []),
   ]);
 
@@ -64,7 +68,8 @@ export default async function LigaPage({
   let left: CwlEntryView[] = [];
   let cutoff: number | null = null;
   if (list) {
-    const part = partition(list, await getSignups(decoded));
+    // Las inscripciones van por la clave de la LISTA, no por la de la URL.
+    const part = partition(list, await getSignups(list.season));
     inside = part.inside.map(toView);
     queue = part.queue.map(toView);
     secondaries = part.secondaries.map(toView);
