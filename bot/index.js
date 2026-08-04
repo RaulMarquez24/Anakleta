@@ -1010,6 +1010,12 @@ function healthJson() {
     clan: lastClan
       ? { name: lastClan.name, level: lastClan.clanLevel, members: lastClan.members }
       : null,
+    // Identidad de la máquina/sesión: si hay más de una instancia con el mismo
+    // token, Discord entrega las interacciones a solo una de ellas.
+    machine: process.env.FLY_MACHINE_ID ?? process.env.FLY_ALLOC_ID ?? "local",
+    region: process.env.FLY_REGION ?? null,
+    ws_status: client.ws.status,
+    session: client.ws.shards?.first?.()?.id ?? null,
     commands: registeredCommands,
     cards_enabled: cardsRegistered,
     interactions: recentInteractions,
