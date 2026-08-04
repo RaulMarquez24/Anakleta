@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentWar } from "@/lib/war";
+import { getCurrentWarFresh } from "@/lib/war";
 import { captureWar } from "@/lib/war-capture";
 import { discordConfigured } from "@/lib/discord";
 import { sendPendingWarNotice } from "@/lib/war-notify";
@@ -36,7 +36,12 @@ export async function POST(req: NextRequest) {
 
   if (!discordConfigured) return NextResponse.json({ capture, skip: "discord no configurado" });
 
-  const war = await getCurrentWar().catch(() => null);
+  // SIN caché y lo último que se hace antes de decidir: el aviso menciona a
+  // gente, así que la lista de pendientes tiene que ser la del instante en que
+  // se envía. Con la versión cacheada (revalidate 120s + stale-while-revalidate)
+  // se colaba quien acababa de atacar.
+  const war = await getCurrentWarFresh().catch(() => null);
+  const leidoEn = new Date().toISOString();
   if (!war || war.state !== "inWar")
     return NextResponse.json({ capture, skip: "sin guerra en curso" });
   // Guerras normales: sin ping automático (no se exige Discord para ellas; el
@@ -78,6 +83,8 @@ export async function POST(req: NextRequest) {
     tier,
     hoursLeft: Number(hoursLeft.toFixed(1)),
     pending: war.pending.length,
+    // Para poder comprobar después que el aviso salió con datos del momento.
+    pendingAt: leidoEn,
     pinged: r.pinged,
     unlinked: r.unlinked,
     capture,
