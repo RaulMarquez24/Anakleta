@@ -289,14 +289,43 @@ let botBannerUrl = null; // banner del perfil del bot
 // --- Estado dinámico (lo que se ve bajo el nombre del bot) ---
 // En guerra: "⚔️ En guerra vs X". Preparación: "🛡️ Preparando guerra".
 // Si no: "👀 Añakleta · N/50". Se refresca solo cada pocos minutos.
+// Guerra en curso según la BD (la comparte con la app). Cubre también la CWL,
+// que /currentwar NO devuelve: durante la liga ese endpoint dice "notInWar".
+async function currentWarFromDb() {
+  try {
+    const { data } = await db
+      .from("wars")
+      .select("is_cwl, round, state, opponent_name, clan_stars, opponent_stars, end_time")
+      .gt("end_time", new Date().toISOString())
+      .order("end_time", { ascending: true })
+      .limit(1);
+    return data?.[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function updatePresence(c) {
   try {
-    const [war, clan] = await Promise.all([
+    const [war, clan, dbWar] = await Promise.all([
       coc.getCurrentWar().catch(() => null),
       coc.getClan().catch(() => null),
+      currentWarFromDb(),
     ]);
     if (clan) lastClan = clan;
-    lastWar = war;
+    // Para la landing, la guerra normal de la API; si no hay, la de la BD (CWL).
+    lastWar =
+      war && war.state !== "notInWar"
+        ? war
+        : dbWar
+          ? {
+              state: dbWar.state,
+              isCwl: dbWar.is_cwl,
+              round: dbWar.round,
+              clan: { stars: dbWar.clan_stars },
+              opponent: { name: dbWar.opponent_name, stars: dbWar.opponent_stars },
+            }
+          : war;
     let text;
     if (war?.state === "inWar" && war.opponent?.name) {
       const cs = war.clan?.stars ?? 0;
@@ -304,6 +333,15 @@ async function updatePresence(c) {
       text = `⚔️ Guerra vs ${war.opponent.name} (${cs}-${os})`;
     } else if (war?.state === "preparation") {
       text = `🛡️ Preparando la guerra`;
+    } else if (dbWar?.state === "inWar") {
+      const cs = dbWar.clan_stars ?? 0;
+      const os = dbWar.opponent_stars ?? 0;
+      const quien = dbWar.opponent_name ? ` vs ${dbWar.opponent_name}` : "";
+      text = dbWar.is_cwl
+        ? `🏆 CWL${dbWar.round ? ` R${dbWar.round}` : ""}${quien} (${cs}-${os})`
+        : `⚔️ Guerra${quien} (${cs}-${os})`;
+    } else if (dbWar?.state === "preparation") {
+      text = dbWar.is_cwl ? `🏆 CWL: preparando la ronda` : `🛡️ Preparando la guerra`;
     } else if (clan?.members != null) {
       text = `👀 ${clan.name ?? "Añakleta"} · ${clan.members}/50`;
     } else {
@@ -937,11 +975,15 @@ function renderLanding() {
 
   let warLine = "";
   let warTone = "calm";
-  if (w?.state === "inWar" && w.opponent?.name) {
-    warLine = `⚔️ En guerra vs <b>${esc(w.opponent.name)}</b> · ${w.clan?.stars ?? 0}–${w.opponent?.stars ?? 0} ⭐`;
+  // `isCwl`/`round` solo vienen cuando la guerra sale de la BD (ronda de liga).
+  const cwlTag = w?.isCwl ? `🏆 CWL${w.round ? ` · Ronda ${w.round}` : ""}` : null;
+  if (w?.state === "inWar") {
+    const rival = w.opponent?.name ? ` vs <b>${esc(w.opponent.name)}</b>` : "";
+    const marcador = `${w.clan?.stars ?? 0}–${w.opponent?.stars ?? 0} ⭐`;
+    warLine = cwlTag ? `${cwlTag}${rival} · ${marcador}` : `⚔️ En guerra${rival} · ${marcador}`;
     warTone = "hot";
   } else if (w?.state === "preparation") {
-    warLine = "🛡️ Preparando la próxima guerra";
+    warLine = cwlTag ? `${cwlTag} · preparando la ronda` : "🛡️ Preparando la próxima guerra";
     warTone = "prep";
   } else {
     warLine = "🕊️ Sin guerra ahora mismo";
