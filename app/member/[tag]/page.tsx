@@ -7,6 +7,7 @@ import { getMemberCapital, summarizeCapital } from "@/lib/capital";
 import { getRulesConfig } from "@/lib/rules";
 import { PlayerSeasonSummary } from "@/components/PlayerSeasonSummary";
 import { getMemberWarns, getWarnConfig } from "@/lib/warns";
+import { getMemberPositives } from "@/lib/positives";
 import { getMyPlayerTag } from "@/lib/profile";
 import { getAccountLinks, accountGroup } from "@/lib/accounts";
 import { getGuildMembers } from "@/lib/discord";
@@ -17,6 +18,7 @@ import { ThImage } from "@/components/ThImage";
 import { CopyTag } from "@/components/CopyTag";
 import { MemberNote } from "@/components/MemberNote";
 import { MemberWarns } from "@/components/MemberWarns";
+import { MemberPositives } from "@/components/MemberPositives";
 import { MemberSanction } from "@/components/MemberSanction";
 import { getMemberSanctions } from "@/lib/sanctions";
 import { getMemberEvents } from "@/lib/events";
@@ -99,6 +101,8 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
   const sanctions = await getMemberSanctions(decoded).catch(() => []);
   // Eventos en los que ha participado (constancia para ascensos).
   const misEventos = await getMemberEvents(decoded, history.discordId).catch(() => []);
+  // Positivos (méritos anotados a mano): suman para subir de rango.
+  const positivos = await getMemberPositives(decoded).catch(() => []);
   const activeSanction = sanctions.find((s) => s.active) ?? null;
 
   // Resumen de temporada: capital (desde su alta), donaciones (última captura =
@@ -376,6 +380,34 @@ export default async function MemberPage({ params }: { params: Promise<{ tag: st
         }
       >
         <MemberWarns tag={history.tag} threshold={warnCfg.threshold} initial={warns} />
+      </Section>
+
+      {/* Positivos: lo contrario de un warn, solo suman (para ascensos) */}
+      <Section
+        title="👍 Positivos"
+        defaultOpen={false}
+        summary={
+          positivos.length === 0 ? (
+            <span className="text-ink-soft">Sin positivos anotados</span>
+          ) : (
+            <span>
+              <span className="font-bold text-gold">
+                +{positivos.filter((p) => p.vigente).reduce((n, p) => n + p.points, 0)} puntos
+              </span>
+              <span className="text-ink-soft">
+                {" "}
+                · {positivos.length} anotado{positivos.length === 1 ? "" : "s"}
+              </span>
+            </span>
+          )
+        }
+      >
+        <MemberPositives
+          tag={history.tag}
+          base={rules.positivePoints}
+          days={rules.positivesDays}
+          initial={positivos}
+        />
       </Section>
 
       {/* Compensar la expulsión (venga de warns o de cualquier otro motivo) */}

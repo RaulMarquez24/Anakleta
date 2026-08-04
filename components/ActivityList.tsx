@@ -255,6 +255,14 @@ export function ActivityList({
                     🎉 evento
                   </span>
                 )}
+                {m.positives.count > 0 && (
+                  <span
+                    className="flex-none rounded-full bg-gold/15 px-2 py-0.5 text-[10px] font-extrabold text-gold"
+                    title={`${m.positives.count} positivo(s) anotados: +${m.positives.points} puntos de participación`}
+                  >
+                    👍 {m.positives.count} · +{m.positives.points}
+                  </span>
+                )}
                 {m.compensated && (
                   <span
                     className="flex-none rounded-full bg-sky/15 px-2 py-0.5 text-[10px] font-extrabold text-sky"

@@ -3,6 +3,7 @@ import { donationsNegative } from "@/lib/dashboard";
 import { getActiveWarnCounts, getWarnConfig } from "@/lib/warns";
 import { getActiveSanctions } from "@/lib/sanctions";
 import { getActiveEvent, getParticipantTags } from "@/lib/events";
+import { getPositiveTotals } from "@/lib/positives";
 import { classifyAttackStatus } from "@/lib/war";
 import { getRulesConfig, stealWindowMs } from "@/lib/rules";
 
@@ -187,6 +188,8 @@ export interface ActivityRow {
   capitalWeekends: number; // findes de capital registrados en el periodo (clan)
   // Evento del momento: si hay uno activo, si participó (solo suma, no resta).
   event: { name: string; participated: boolean } | null;
+  // Positivos (méritos) vigentes: los apunta un colíder y solo suman.
+  positives: { count: number; points: number };
   category: ActivityCategory;
   categoryReasons: string[]; // por qué está en esa categoría (motivos con cifras)
   // Expulsión ya conmutada por otra sanción (mientras esté vigente).
@@ -561,6 +564,9 @@ export async function getActivityReport(): Promise<ActivityReport> {
   const activeEvent = await getActiveEvent();
   const eventTags = activeEvent ? await getParticipantTags(activeEvent.id) : new Set<string>();
 
+  // Positivos: méritos anotados a mano por un colíder. Solo suman participación.
+  const positiveTotals = await getPositiveTotals();
+
   const rowsOut: ActivityRow[] = active.map((m) => {
     const tag = m.tag as string;
     const role = (m.role as string | null) ?? null;
@@ -864,14 +870,16 @@ export async function getActivityReport(): Promise<ActivityReport> {
       compensated,
       kickScore,
       // Participación (para ascensos): donaciones + estrellas + ataques, penaliza
-      // fallos y suma el plus del evento del momento si participó.
+      // fallos y suma los plus que solo aportan (evento del momento y positivos).
       participationScore:
         (donations ?? 0) +
         w.stars * 100 +
         w.attacks * 50 -
         w.missed * 300 +
-        (eventTags.has(tag) ? rules.eventBonus : 0),
+        (eventTags.has(tag) ? rules.eventBonus : 0) +
+        (positiveTotals.get(tag)?.points ?? 0),
       event: activeEvent ? { name: activeEvent.name, participated: eventTags.has(tag) } : null,
+      positives: positiveTotals.get(tag) ?? { count: 0, points: 0 },
       flags,
       activeWarns,
     };
