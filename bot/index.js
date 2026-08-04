@@ -359,6 +359,8 @@ async function registerCommands(c) {
     const list = enabled ? [...COMMANDS, ...CARD_COMMANDS] : COMMANDS;
     const set = await c.application.commands.set(list);
     cardsRegistered = enabled;
+    // Al encenderlo, publica el manual y el tablón en su canal.
+    if (enabled) await cards.refreshBoard(db).catch(() => {});
     const names = set.map((cmd) => `/${cmd.name}`).join(", ");
     console.log(
       `Slash commands registrados globalmente (cartas: ${enabled ? "ON" : "oculto"}): ${names}`,

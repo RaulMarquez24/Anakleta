@@ -106,12 +106,18 @@ export async function getConfig(db) {
   const { data } = await db
     .from("settings")
     .select("key, value")
-    .in("key", ["cards_enabled", "cards_channel_id", "cards_message_id"]);
+    .in("key", [
+      "cards_enabled",
+      "cards_channel_id",
+      "cards_message_id",
+      "cards_help_message_id",
+    ]);
   const map = new Map((data ?? []).map((r) => [r.key, r.value]));
   return {
     enabled: map.get("cards_enabled") === "1",
     channelId: map.get("cards_channel_id") || null,
     messageId: map.get("cards_message_id") || null,
+    helpMessageId: map.get("cards_help_message_id") || null,
   };
 }
 
@@ -222,10 +228,44 @@ async function editMessage(channelId, messageId, content) {
   }
 }
 
+// Manual del evento: se publica una vez al activar y luego se mantiene editado.
+export const HELP_TEXT = `🃏 **INTERCAMBIO DE CARTAS — CLASHIVERSARIO**
+_Cambiar cartas por el juego es un rollo: aquí ves de un vistazo quién tiene lo que te falta y cierras el cambio en un clic._
+
+📌 **1. Publica lo que te SOBRA**
+• Escribe \`/repetidas\` y marca en los desplegables tus cartas repetidas (⚗️ Elixir · 🖤 Oscuro · 🔨 Constructor · ⭐ Supertropas).
+• Se guarda solo, sin botones. Al volver a abrirlo salen ya marcadas: para quitar una, la desmarcas.
+• **No hace falta decir lo que te falta**: eso lo ves en tu álbum.
+
+📋 **2. Mira quién tiene lo que buscas**
+• Debajo hay un **tablón** con todas las repetidas del clan, agrupadas por carta. Se actualiza solo.
+• \`/cartas\` te lo enseña cuando quieras · \`/cartas @alguien\` muestra solo las suyas.
+
+🔄 **3. Pide la carta y cierra el trato**
+• \`/cambiar @jugador <carta>\` → el bot le avisa y le enseña **tus repetidas**.
+• Él elige en el desplegable la que le falte y **el trato queda cerrado**.
+• Las dos cartas salen del tablón automáticamente.
+
+⚔️ **4. Haced el intercambio dentro del juego**
+El bot solo os pone de acuerdo; el cambio se hace en Clash como siempre.
+
+💡 Si te vuelve a salir repetida una carta que ya cambiaste, márcala otra vez con \`/repetidas\`.`;
+
+async function ensureHelpMessage(db, cfg) {
+  if (cfg.helpMessageId) {
+    const ok = await editMessage(cfg.channelId, cfg.helpMessageId, HELP_TEXT);
+    if (ok) return;
+  }
+  const id = await postMessage(cfg.channelId, HELP_TEXT);
+  if (id) await setSetting(db, "cards_help_message_id", id);
+}
+
 // Publica o actualiza el tablón en su canal. Sin canal configurado no hace nada.
 export async function refreshBoard(db) {
   const cfg = await getConfig(db);
   if (!cfg.enabled || !cfg.channelId) return;
+  // El manual va primero (una sola vez); el tablón queda debajo.
+  await ensureHelpMessage(db, cfg);
   const content = renderBoard(await getOffers(db));
   const edited = cfg.messageId ? await editMessage(cfg.channelId, cfg.messageId, content) : false;
   if (!edited) {
