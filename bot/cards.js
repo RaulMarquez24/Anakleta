@@ -234,6 +234,52 @@ export async function refreshBoard(db) {
   }
 }
 
+// Cartas que ofrece un usuario concreto (para ver qué tiene antes de pedirle).
+export async function cardsOf(db, discordId) {
+  const { data } = await db.from("card_offers").select("card").eq("discord_id", discordId);
+  const set = new Set((data ?? []).map((r) => r.card));
+  // Devueltas en el orden del álbum, no el de inserción.
+  return ALL_CARDS.filter((c) => set.has(c));
+}
+
+// Cierra un trato: cada uno deja de ofrecer la carta que entrega y se guarda en
+// el historial. El intercambio real se hace en el juego.
+export async function closeTrade(db, { asker, owner, askedCard, givenCard }) {
+  await db
+    .from("card_offers")
+    .delete()
+    .eq("discord_id", owner.id)
+    .eq("card", askedCard); // el dueño ya no la tiene de sobra
+  await db
+    .from("card_offers")
+    .delete()
+    .eq("discord_id", asker.id)
+    .eq("card", givenCard); // el que pide entrega la suya
+  await db.from("card_trades").insert({
+    asker_id: asker.id,
+    asker_name: asker.name ?? null,
+    owner_id: owner.id,
+    owner_name: owner.name ?? null,
+    asked_card: askedCard,
+    given_card: givenCard,
+  });
+  await refreshBoard(db);
+}
+
+// Ranking de quién ha ayudado más (cartas entregadas), para el resumen.
+export async function topTraders(db, limit = 10) {
+  const { data } = await db.from("card_trades").select("asker_id, owner_id").limit(5000);
+  const count = new Map();
+  for (const t of data ?? []) {
+    count.set(t.owner_id, (count.get(t.owner_id) ?? 0) + 1);
+    count.set(t.asker_id, (count.get(t.asker_id) ?? 0) + 1);
+  }
+  return [...count.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([id, n]) => ({ discordId: id, trades: n }));
+}
+
 // Quién ofrece las cartas indicadas (para avisar de coincidencias).
 export function offerersOf(offers, cards) {
   const set = new Set(cards);

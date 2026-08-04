@@ -15,6 +15,23 @@ create index if not exists card_offers_card_idx on card_offers (card);
 grant all privileges on table card_offers to service_role;
 grant usage, select on sequence card_offers_id_seq to service_role;
 
+-- Tratos cerrados: quién da qué a quién (para el historial y el "quién más
+-- ayuda"). El intercambio en sí se hace dentro del juego.
+create table if not exists card_trades (
+  id          bigint generated always as identity primary key,
+  asker_id    text not null,   -- quien pidió
+  asker_name  text,
+  owner_id    text not null,   -- quien tenía la carta pedida
+  owner_name  text,
+  asked_card  text not null,   -- la carta que pidió
+  given_card  text not null,   -- la que ofrece a cambio
+  created_at  timestamptz not null default now()
+);
+create index if not exists card_trades_time_idx on card_trades (created_at desc);
+
+grant all privileges on table card_trades to service_role;
+grant usage, select on sequence card_trades_id_seq to service_role;
+
 -- Ajustes (se editan desde el panel de Discord de la app):
 --   cards_enabled    '1' para activar el sistema (mientras no lo esté, el
 --                    comando /repetidas ni siquiera aparece en Discord)

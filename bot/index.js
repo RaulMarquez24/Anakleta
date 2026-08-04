@@ -255,7 +255,27 @@ const COMMANDS = [
 // (cards_enabled): mientras esté oculto, ni siquiera aparecen en Discord.
 const CARD_COMMANDS = [
   { name: "repetidas", description: "Marca las cartas que te sobran para intercambiar" },
-  { name: "cartas", description: "Ver quién tiene repetidas las cartas del evento" },
+  {
+    name: "cartas",
+    description: "Ver quién tiene repetidas (o las de alguien en concreto)",
+    options: [
+      { type: 6, name: "usuario", description: "Ver solo las suyas", required: false }, // 6 = USER
+    ],
+  },
+  {
+    name: "cambiar",
+    description: "Pedir una carta a alguien ofreciéndole las tuyas",
+    options: [
+      { type: 6, name: "usuario", description: "A quién se la pides", required: true },
+      {
+        type: 3, // STRING
+        name: "carta",
+        description: "La carta que quieres de él",
+        required: true,
+        autocomplete: true,
+      },
+    ],
+  },
 ];
 
 // Estado compartido para la landing/health (se rellena en updatePresence).
@@ -407,6 +427,63 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  // Autocompletado de /cambiar: solo sugiere cartas que ESA persona ofrece.
+  if (interaction.isAutocomplete?.() && interaction.commandName === "cambiar") {
+    try {
+      const targetId = interaction.options.get("usuario")?.value;
+      const escrito = String(interaction.options.getFocused() ?? "").toLowerCase();
+      const suyas = targetId ? await cards.cardsOf(db, String(targetId)) : [];
+      const opts = suyas
+        .filter((c) => c.toLowerCase().includes(escrito))
+        .slice(0, 25)
+        .map((c) => ({ name: c, value: c }));
+      await interaction.respond(opts);
+    } catch {
+      await interaction.respond([]).catch(() => {});
+    }
+    return;
+  }
+
+  // El dueño elige qué carta acepta a cambio → trato cerrado.
+  if (interaction.isStringSelectMenu() && interaction.customId.startsWith("cards_deal:")) {
+    const [, askerId, ownerId, askedCard] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await interaction
+        .reply({ content: "Este cambio no es para ti 🙂", flags: eph })
+        .catch(() => {});
+      return;
+    }
+    const elegida = interaction.values[0];
+    try {
+      if (elegida === "__none__") {
+        await interaction.update({
+          content: `🔄 <@${askerId}> pedía **${askedCard}** a <@${ownerId}>.\n❌ No le sirve ninguna de las ofrecidas.`,
+          components: [],
+        });
+        return;
+      }
+      await cards.closeTrade(db, {
+        asker: { id: askerId, name: null },
+        owner: { id: ownerId, name: interaction.user.username },
+        askedCard,
+        givenCard: elegida,
+      });
+      await interaction.update({
+        content:
+          `✅ **Trato cerrado**\n` +
+          `<@${ownerId}> da **${askedCard}** · <@${askerId}> da **${elegida}**\n` +
+          `_Haced el intercambio dentro del juego. Ambas cartas salen ya del tablón._`,
+        components: [],
+      });
+    } catch (err) {
+      console.error("[cards] deal:", err?.message ?? err);
+      await interaction
+        .reply({ content: "⚠️ No se pudo cerrar el trato.", flags: eph })
+        .catch(() => {});
+    }
+    return;
+  }
+
   // Cartas del evento: cada menú guarda su categoría al vuelo (sin botón).
   if (interaction.isStringSelectMenu() && interaction.customId.startsWith("cards_pick:")) {
     const [, catKey] = interaction.customId.split(":");
@@ -544,7 +621,62 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
     if (interaction.commandName === "cartas") {
+      const quien = interaction.options.getUser("usuario");
+      if (quien) {
+        const suyas = await cards.cardsOf(db, quien.id);
+        await interaction.reply({
+          content:
+            suyas.length > 0
+              ? `🃏 **${quien.username}** tiene repetidas (${suyas.length}):\n${suyas.map((c) => `• ${c}`).join("\n")}\n\nPídele una con \`/cambiar\`.`
+              : `**${quien.username}** no tiene cartas publicadas ahora mismo.`,
+          flags: eph,
+        });
+        return;
+      }
       await interaction.reply(cards.renderBoard(await cards.getOffers(db)));
+      return;
+    }
+    if (interaction.commandName === "cambiar") {
+      const target = interaction.options.getUser("usuario");
+      const pedida = interaction.options.getString("carta");
+      if (!target || target.id === id) {
+        await interaction.reply({ content: "Elige a otra persona 🙂", flags: eph });
+        return;
+      }
+      const suyas = await cards.cardsOf(db, target.id);
+      if (!suyas.includes(pedida)) {
+        await interaction.reply({
+          content: `**${target.username}** no tiene **${pedida}** publicada. Mira las suyas con \`/cartas @${target.username}\`.`,
+          flags: eph,
+        });
+        return;
+      }
+      const mias = await cards.cardsOf(db, id);
+      if (mias.length === 0) {
+        await interaction.reply({
+          content: "Primero publica tus repetidas con `/repetidas` para tener algo que ofrecer.",
+          flags: eph,
+        });
+        return;
+      }
+      // El dueño elige de un desplegable cuál le sirve → cierra el trato.
+      const row = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`cards_deal:${id}:${target.id}:${pedida}`)
+          .setPlaceholder("Elige la que te sirva y queda cerrado")
+          .addOptions([
+            ...mias.slice(0, 24).map((c) => ({ label: c, value: c })),
+            { label: "Ninguna me sirve", value: "__none__" },
+          ]),
+      );
+      await interaction.reply({
+        content:
+          `🔄 <@${target.id}>, <@${id}> quiere tu **${pedida}**.\n` +
+          `A cambio te ofrece: ${mias.slice(0, 24).join(" · ")}\n` +
+          `_Elige abajo la que te falte y el trato queda cerrado._`,
+        components: [row],
+        allowedMentions: { users: [target.id] },
+      });
       return;
     }
   } catch (err) {
