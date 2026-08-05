@@ -392,6 +392,30 @@ client.once(Events.ClientReady, async (c) => {
 });
 
 // Registra los slash commands. Los del evento de cartas solo si está activado.
+// Pone al día el nombre guardado de cada uno con cartas publicadas usando su
+// apodo actual del servidor. Los que las publicaron antes de guardarse el apodo
+// tenían el @ interno (p. ej. "felizjr17" en vez de "Felizjr 17").
+async function refreshCardNames() {
+  if (!DISCORD_GUILD_ID) return;
+  const ids = await cards.offerDiscordIds(db);
+  if (ids.length === 0) return;
+  const guild = await client.guilds.fetch(DISCORD_GUILD_ID);
+  let n = 0;
+  for (const id of ids) {
+    try {
+      const m = await guild.members.fetch(id);
+      const name = m.displayName ?? m.user.globalName ?? m.user.username;
+      if (name) {
+        await cards.setOfferName(db, id, name);
+        n++;
+      }
+    } catch {
+      /* ya no está en el servidor: se deja el nombre que hubiera */
+    }
+  }
+  if (n > 0) console.log(`Cartas: nombres del tablón puestos al día (${n}).`);
+}
+
 let cardsRegistered = null; // null = aún no se sabe
 async function registerCommands(c) {
   let enabled = false;
@@ -412,9 +436,11 @@ async function registerCommands(c) {
     const set = await c.application.commands.set(list);
     cardsRegistered = enabled;
     registeredCommands = set.map((cmd) => cmd.name);
-    // Al encenderlo, publica el manual y el tablón en su canal, y pone al día la
-    // participación en el evento de quien ya tenía cartas publicadas.
+    // Al encenderlo: pone al día los nombres del tablón con el apodo actual de
+    // cada uno, publica el manual y el tablón, y da por participantes a quien ya
+    // tenía cartas publicadas.
     if (enabled) {
+      await refreshCardNames().catch(() => {});
       await cards.refreshBoard(db).catch(() => {});
       await cards.syncParticipation(db).catch(() => {});
     }

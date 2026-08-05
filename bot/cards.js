@@ -401,6 +401,18 @@ async function markEventParticipation(db, discordIds) {
   return 0;
 }
 
+// IDs de Discord con alguna carta publicada (para refrescar sus nombres).
+export async function offerDiscordIds(db) {
+  const offers = await getOffers(db);
+  return [...new Set(offers.map((o) => o.discord_id))];
+}
+
+// Actualiza el nombre guardado en TODAS las cartas de un usuario.
+export async function setOfferName(db, discordId, username) {
+  if (!username) return;
+  await db.from("card_offers").update({ username }).eq("discord_id", discordId);
+}
+
 // Al arrancar: da por participantes a todos los que ya tienen cartas publicadas.
 // Sirve para los que publicaron antes de que publicar contara como participar.
 export async function syncParticipation(db) {
