@@ -464,6 +464,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
   });
   if (recentInteractions.length > 20) recentInteractions.pop();
 
+  // Botón del tablón de cartas: traerlo al final del canal (borra el de arriba
+  // y lo republica abajo). Cualquiera puede usarlo: solo mueve el mensaje.
+  if (interaction.isButton() && interaction.customId === "cards_bump") {
+    try {
+      await interaction.deferUpdate();
+      await cards.bumpBoard(db);
+    } catch (err) {
+      logError("cards bump", err);
+    }
+    return;
+  }
+
   // Menú de selección de cuentas ("me apunto" con varias cuentas).
   if (interaction.isStringSelectMenu() && interaction.customId.startsWith("cwl_pick:")) {
     const [, season, uid] = interaction.customId.split(":");

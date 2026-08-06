@@ -227,6 +227,7 @@ async function postMessage(channelId, content, opts = {}) {
       body: JSON.stringify({
         content,
         allowed_mentions: { parse: opts.everyone ? ["everyone"] : [] },
+        ...(opts.components ? { components: opts.components } : {}),
       }),
     });
     if (!res.ok) return null;
@@ -248,6 +249,8 @@ async function editMessage(channelId, messageId, content, opts = {}) {
         // Al editar, Discord NO vuelve a notificar; permitirlo mantiene el
         // resaltado de la mención en el manual.
         allowed_mentions: { parse: opts.everyone ? ["everyone"] : [] },
+        // components no se toca si no se pasa (para no borrar el botón al editar).
+        ...(opts.components ? { components: opts.components } : {}),
       }),
     });
     return res.ok;
@@ -255,6 +258,28 @@ async function editMessage(channelId, messageId, content, opts = {}) {
     return false;
   }
 }
+
+async function deleteMessage(channelId, messageId) {
+  if (!TOKEN || !channelId || !messageId) return false;
+  try {
+    const res = await fetch(`${API}/channels/${channelId}/messages/${messageId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bot ${TOKEN}` },
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// Botón del tablón: lo trae al final del canal cuando la conversación lo ha
+// enterrado (se borra el de arriba y se vuelve a publicar abajo).
+const BOARD_BUTTON = [
+  {
+    type: 1,
+    components: [{ type: 2, style: 2, custom_id: "cards_bump", label: "🔄 Traer el tablón abajo" }],
+  },
+];
 
 const DIV = "━━━━━━━━━━━━━━━━━━━━━━━━";
 
@@ -299,14 +324,30 @@ async function ensureHelpMessage(db, cfg) {
 export async function refreshBoard(db) {
   const cfg = await getConfig(db);
   if (!cfg.enabled || !cfg.channelId) return;
-  // El manual va primero (una sola vez); el tablón queda debajo.
+  // El manual va primero (una sola vez); el tablón queda debajo, con su botón.
   await ensureHelpMessage(db, cfg);
   const content = renderBoard(await getOffers(db));
-  const edited = cfg.messageId ? await editMessage(cfg.channelId, cfg.messageId, content) : false;
+  const edited = cfg.messageId
+    ? await editMessage(cfg.channelId, cfg.messageId, content, { components: BOARD_BUTTON })
+    : false;
   if (!edited) {
-    const id = await postMessage(cfg.channelId, content);
+    const id = await postMessage(cfg.channelId, content, { components: BOARD_BUTTON });
     if (id) await setSetting(db, "cards_message_id", id);
   }
+}
+
+// Trae el tablón al final del canal: borra el mensaje de arriba y lo vuelve a
+// publicar abajo (el manual no se toca, para no re-avisar con su @everyone).
+export async function bumpBoard(db) {
+  const cfg = await getConfig(db);
+  if (!cfg.enabled || !cfg.channelId) return;
+  if (cfg.messageId) {
+    await deleteMessage(cfg.channelId, cfg.messageId);
+    await setSetting(db, "cards_message_id", "");
+  }
+  const content = renderBoard(await getOffers(db));
+  const id = await postMessage(cfg.channelId, content, { components: BOARD_BUTTON });
+  if (id) await setSetting(db, "cards_message_id", id);
 }
 
 // Cartas que ofrece un usuario concreto (para ver qué tiene antes de pedirle).
