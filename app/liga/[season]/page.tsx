@@ -185,7 +185,10 @@ export default async function LigaPage({
 
       {/* 3) Inscripción de esta liga */}
       <CwlManager
-        season={decoded}
+        // La clave de la LISTA (la que referencia cwl_signups), no la de la URL:
+        // el cron pudo crearla con una clave de calendario distinta de la
+        // temporada de la API, y apuntar por `decoded` rompía el foreign key.
+        season={list?.season ?? decoded}
         exists={Boolean(list)}
         ended={ended}
         canDelete={!started}
