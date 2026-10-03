@@ -78,6 +78,42 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // 1b) VINCULAR la liga que acaba de arrancar con la lista de inscripciones.
+  // La lista se crea antes, con una clave por calendario; la API reporta su
+  // propia temporada. Si no coinciden, se guarda la de la API en `coc_season`
+  // para que la pantalla de la liga encuentre sus inscritos.
+  if (coc.season) {
+    try {
+      const { data: yaVinculada } = await svc
+        .from("cwl_lists")
+        .select("season")
+        .eq("coc_season", coc.season)
+        .maybeSingle();
+      if (!yaVinculada) {
+        // Candidata: la lista de esa misma clave o, si no, la más reciente sin
+        // vincular (la que se abrió para esta liga).
+        const { data: libres } = await svc
+          .from("cwl_lists")
+          .select("season, coc_season")
+          .is("coc_season", null)
+          .order("season", { ascending: false })
+          .limit(5);
+        const elegida =
+          (libres ?? []).find((l) => l.season === coc.season) ?? (libres ?? [])[0] ?? null;
+        if (elegida) {
+          await svc
+            .from("cwl_lists")
+            .update({ coc_season: coc.season })
+            .eq("season", elegida.season);
+          if (elegida.season !== coc.season)
+            actions.push(`lista ${elegida.season} vinculada a la temporada ${coc.season}`);
+        }
+      }
+    } catch {
+      /* columna coc_season aún sin migrar: no bloquea el resto del cron */
+    }
+  }
+
   // 2) Avisos + cierre sobre la lista candidata (si existe).
   if (list) {
     const starts = list.starts_at ? new Date(list.starts_at) : cand.starts;
@@ -123,7 +159,9 @@ export async function POST(req: NextRequest) {
 
     // Cerrar inscripción individual cuando la liga arranca (API o fecha). Aplica
     // a cualquier lista abierta (también las manuales); si no está abierta, ignora.
-    const started = (coc.active && coc.season === list.season) || nowMs >= starts.getTime();
+    const esSuLiga =
+      coc.season != null && (coc.season === list.season || coc.season === list.coc_season);
+    const started = (coc.active && esSuLiga) || nowMs >= starts.getTime();
     if (list.state === "open" && started) {
       patch.state = "closed";
       actions.push("inscripción cerrada");
@@ -142,9 +180,10 @@ export async function POST(req: NextRequest) {
       .select("*")
       .eq("roles_cleared", false);
     for (const l of (pending ?? []) as CwlList[]) {
+      const suLiga = coc.season != null && (coc.season === l.season || coc.season === l.coc_season);
       const ended =
         (l.ends_at && nowMs > new Date(l.ends_at).getTime()) ||
-        (coc.season === l.season && !coc.active && coc.state === "ended");
+        (suLiga && !coc.active && coc.state === "ended");
       if (!ended) continue;
       if (cfg.cwlRoleId) {
         const { data: rows } = await svc

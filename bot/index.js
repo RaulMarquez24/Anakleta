@@ -21,6 +21,7 @@ import http from "node:http";
 import { createClient } from "@supabase/supabase-js";
 import { classifyIntent } from "./match.js";
 import * as cwl from "./cwl.js";
+import * as cards from "./cards.js";
 import * as coc from "./coc.js";
 
 // Súbelo cuando cambies algo. En `fly logs` verás esta línea al arrancar: si NO
@@ -250,6 +251,47 @@ const COMMANDS = [
   { name: "help", description: "Cómo funciona la inscripción a la CWL" },
 ];
 
+// Comandos del evento de cartas. Solo se registran si está activado en la app
+// (cards_enabled): mientras esté oculto, ni siquiera aparecen en Discord.
+const CARD_COMMANDS = [
+  { name: "repetidas", description: "Marca las cartas que te sobran para intercambiar" },
+  {
+    name: "cartas",
+    description: "Ver quién tiene repetidas (o las de alguien en concreto)",
+    options: [
+      { type: 6, name: "usuario", description: "Ver solo las suyas", required: false }, // 6 = USER
+    ],
+  },
+  {
+    name: "cambiar",
+    description: "Pedir una carta a alguien ofreciéndole las tuyas",
+    options: [
+      { type: 6, name: "usuario", description: "A quién se la pides", required: true },
+      {
+        type: 3, // STRING
+        name: "carta",
+        description: "La carta que quieres de él",
+        required: true,
+        autocomplete: true,
+      },
+    ],
+  },
+];
+
+// Diagnóstico por HTTP (/health): últimas interacciones recibidas y comandos
+// realmente registrados. Sirve para distinguir "no me llega" de "falla mi código".
+const recentInteractions = [];
+let registeredCommands = [];
+
+// Últimos errores, para poder diagnosticar desde /health sin abrir `fly logs`.
+const recentErrors = [];
+function logError(where, err) {
+  const msg = err?.message ?? String(err);
+  console.error(`[${where}]`, err);
+  recentErrors.unshift({ at: new Date().toISOString(), where, msg: msg.slice(0, 300) });
+  if (recentErrors.length > 20) recentErrors.pop();
+}
+
 // Estado compartido para la landing/health (se rellena en updatePresence).
 const BOOT_MS = Date.now();
 let lastPresenceText = "Arrancando…";
@@ -261,14 +303,43 @@ let botBannerUrl = null; // banner del perfil del bot
 // --- Estado dinámico (lo que se ve bajo el nombre del bot) ---
 // En guerra: "⚔️ En guerra vs X". Preparación: "🛡️ Preparando guerra".
 // Si no: "👀 Añakleta · N/50". Se refresca solo cada pocos minutos.
+// Guerra en curso según la BD (la comparte con la app). Cubre también la CWL,
+// que /currentwar NO devuelve: durante la liga ese endpoint dice "notInWar".
+async function currentWarFromDb() {
+  try {
+    const { data } = await db
+      .from("wars")
+      .select("is_cwl, round, state, opponent_name, clan_stars, opponent_stars, end_time")
+      .gt("end_time", new Date().toISOString())
+      .order("end_time", { ascending: true })
+      .limit(1);
+    return data?.[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function updatePresence(c) {
   try {
-    const [war, clan] = await Promise.all([
+    const [war, clan, dbWar] = await Promise.all([
       coc.getCurrentWar().catch(() => null),
       coc.getClan().catch(() => null),
+      currentWarFromDb(),
     ]);
     if (clan) lastClan = clan;
-    lastWar = war;
+    // Para la landing, la guerra normal de la API; si no hay, la de la BD (CWL).
+    lastWar =
+      war && war.state !== "notInWar"
+        ? war
+        : dbWar
+          ? {
+              state: dbWar.state,
+              isCwl: dbWar.is_cwl,
+              round: dbWar.round,
+              clan: { stars: dbWar.clan_stars },
+              opponent: { name: dbWar.opponent_name, stars: dbWar.opponent_stars },
+            }
+          : war;
     let text;
     if (war?.state === "inWar" && war.opponent?.name) {
       const cs = war.clan?.stars ?? 0;
@@ -276,6 +347,15 @@ async function updatePresence(c) {
       text = `⚔️ Guerra vs ${war.opponent.name} (${cs}-${os})`;
     } else if (war?.state === "preparation") {
       text = `🛡️ Preparando la guerra`;
+    } else if (dbWar?.state === "inWar") {
+      const cs = dbWar.clan_stars ?? 0;
+      const os = dbWar.opponent_stars ?? 0;
+      const quien = dbWar.opponent_name ? ` vs ${dbWar.opponent_name}` : "";
+      text = dbWar.is_cwl
+        ? `🏆 CWL${dbWar.round ? ` R${dbWar.round}` : ""}${quien} (${cs}-${os})`
+        : `⚔️ Guerra${quien} (${cs}-${os})`;
+    } else if (dbWar?.state === "preparation") {
+      text = dbWar.is_cwl ? `🏆 CWL: preparando la ronda` : `🛡️ Preparando la guerra`;
     } else if (clan?.members != null) {
       text = `👀 ${clan.name ?? "Añakleta"} · ${clan.members}/50`;
     } else {
@@ -305,6 +385,46 @@ client.once(Events.ClientReady, async (c) => {
   // Estado dinámico: ahora y cada 5 minutos.
   updatePresence(c);
   setInterval(() => updatePresence(c), 5 * 60_000);
+  await registerCommands(c);
+  // El evento de cartas se activa desde la app: se revisa cada 5 min para
+  // (des)registrar sus comandos sin tener que redesplegar el bot.
+  setInterval(() => registerCommands(c).catch(() => {}), 5 * 60_000);
+});
+
+// Registra los slash commands. Los del evento de cartas solo si está activado.
+// Pone al día el nombre guardado de cada uno con cartas publicadas usando su
+// apodo actual del servidor. Los que las publicaron antes de guardarse el apodo
+// tenían el @ interno (p. ej. "felizjr17" en vez de "Felizjr 17").
+async function refreshCardNames() {
+  if (!DISCORD_GUILD_ID) return;
+  const ids = await cards.offerDiscordIds(db);
+  if (ids.length === 0) return;
+  const guild = await client.guilds.fetch(DISCORD_GUILD_ID);
+  let n = 0;
+  for (const id of ids) {
+    try {
+      const m = await guild.members.fetch(id);
+      const name = m.displayName ?? m.user.globalName ?? m.user.username;
+      if (name) {
+        await cards.setOfferName(db, id, name);
+        n++;
+      }
+    } catch {
+      /* ya no está en el servidor: se deja el nombre que hubiera */
+    }
+  }
+  if (n > 0) console.log(`Cartas: nombres del tablón puestos al día (${n}).`);
+}
+
+let cardsRegistered = null; // null = aún no se sabe
+async function registerCommands(c) {
+  let enabled = false;
+  try {
+    enabled = (await cards.getConfig(db)).enabled;
+  } catch {
+    /* tabla/ajuste sin migrar: se queda oculto */
+  }
+  if (cardsRegistered === enabled) return; // nada que cambiar
   try {
     // Registro GLOBAL: así los comandos salen en el perfil del bot ("Comandos")
     // y en todos los servidores. La 1ª vez tarda ~1h en propagarse.
@@ -312,16 +432,49 @@ client.once(Events.ClientReady, async (c) => {
     if (DISCORD_GUILD_ID) {
       await c.application.commands.set([], DISCORD_GUILD_ID).catch(() => {});
     }
-    const set = await c.application.commands.set(COMMANDS);
+    const list = enabled ? [...COMMANDS, ...CARD_COMMANDS] : COMMANDS;
+    const set = await c.application.commands.set(list);
+    cardsRegistered = enabled;
+    registeredCommands = set.map((cmd) => cmd.name);
+    // Al encenderlo: pone al día los nombres del tablón con el apodo actual de
+    // cada uno, publica el manual y el tablón, y da por participantes a quien ya
+    // tenía cartas publicadas.
+    if (enabled) {
+      await refreshCardNames().catch(() => {});
+      await cards.refreshBoard(db).catch(() => {});
+      await cards.syncParticipation(db).catch(() => {});
+    }
     const names = set.map((cmd) => `/${cmd.name}`).join(", ");
-    console.log(`Slash commands registrados globalmente (tardan ~1h la 1ª vez): ${names}`);
+    console.log(
+      `Slash commands registrados globalmente (cartas: ${enabled ? "ON" : "oculto"}): ${names}`,
+    );
   } catch (err) {
     console.error("No se pudieron registrar los slash commands:", err);
   }
-});
+}
 
 client.on(Events.InteractionCreate, async (interaction) => {
   const eph = MessageFlags.Ephemeral;
+  // Traza de diagnóstico: qué llega exactamente (visible en /health).
+  recentInteractions.unshift({
+    at: new Date().toISOString(),
+    type: interaction.type,
+    name: interaction.commandName ?? interaction.customId ?? null,
+    user: interaction.user?.username ?? null,
+  });
+  if (recentInteractions.length > 20) recentInteractions.pop();
+
+  // Botón del tablón de cartas: traerlo al final del canal (borra el de arriba
+  // y lo republica abajo). Cualquiera puede usarlo: solo mueve el mensaje.
+  if (interaction.isButton() && interaction.customId === "cards_bump") {
+    try {
+      await interaction.deferUpdate();
+      await cards.bumpBoard(db);
+    } catch (err) {
+      logError("cards bump", err);
+    }
+    return;
+  }
 
   // Menú de selección de cuentas ("me apunto" con varias cuentas).
   if (interaction.isStringSelectMenu() && interaction.customId.startsWith("cwl_pick:")) {
@@ -375,6 +528,149 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await interaction.update({ content: parts.join(" · ") || "Sin cambios.", components: [] });
     } catch {
       await interaction.reply({ content: "⚠️ No se pudo apuntar. Inténtalo de nuevo.", flags: eph }).catch(() => {});
+    }
+    return;
+  }
+
+  // Autocompletado de /cambiar: solo sugiere cartas que ESA persona ofrece.
+  if (interaction.isAutocomplete?.() && interaction.commandName === "cambiar") {
+    try {
+      const targetId = interaction.options.get("usuario")?.value;
+      const escrito = String(interaction.options.getFocused() ?? "").toLowerCase();
+      const suyas = targetId ? await cards.cardsOf(db, String(targetId)) : [];
+      const opts = suyas
+        .filter((c) => c.toLowerCase().includes(escrito))
+        .slice(0, 25)
+        .map((c) => ({ name: c, value: c }));
+      await interaction.respond(opts);
+    } catch {
+      await interaction.respond([]).catch(() => {});
+    }
+    return;
+  }
+
+  // Menús de cambios de antes de mover la decisión al privado: ya no valen.
+  if (interaction.isStringSelectMenu() && interaction.customId.startsWith("cards_deal:")) {
+    await interaction
+      .reply({
+        content: "Este cambio es de la versión anterior. Vuelve a pedirla con `/cambiar` 🙂",
+        flags: eph,
+      })
+      .catch(() => {});
+    return;
+  }
+
+  // El dueño elige qué carta acepta a cambio → trato cerrado (o rechazado).
+  if (interaction.isStringSelectMenu() && interaction.customId.startsWith("cd:")) {
+    const [, askerId, ownerId, idx] = interaction.customId.split(":");
+    const askedCard = cards.ALL_CARDS[Number(idx)];
+    // El menú lo ve el canal entero, pero solo lo cierra a quien se le pidió.
+    if (interaction.user.id !== ownerId || !askedCard) {
+      await interaction
+        .reply({ content: "Este cambio no es para ti 🙂", flags: eph })
+        .catch(() => {});
+      return;
+    }
+    const elegida = interaction.values[0];
+    const dueño = interaction.member?.displayName ?? interaction.user.username;
+    // El aviso al que pidió va aparte y MENCIONÁNDOLE: editar un mensaje no
+    // notifica a nadie, así que si no se le menciona no se entera.
+    const avisar = (texto) =>
+      interaction
+        .followUp({ content: `<@${askerId}> ${texto}`, allowedMentions: { users: [askerId] } })
+        .catch(() => {});
+    try {
+      // Cerrar el trato lleva varias llamadas: se acusa recibo primero.
+      await interaction.deferUpdate();
+
+      if (elegida === "__none__") {
+        await interaction.editReply({
+          content: `🔄 <@${askerId}> pedía **${askedCard}** a <@${ownerId}>.\n❌ No le sirve ninguna de las ofrecidas.`,
+          components: [],
+        });
+        await avisar(
+          `❌ **${dueño}** ha **rechazado** el cambio: no le sirve ninguna de las que le ofreciste por **${askedCard}**.`,
+        );
+        return;
+      }
+
+      // Pudo cerrarse otro trato con esas mismas cartas mientras decidía.
+      const [suyas, delOtro] = await Promise.all([
+        cards.cardsOf(db, ownerId),
+        cards.cardsOf(db, askerId),
+      ]);
+      if (!suyas.includes(askedCard) || !delOtro.includes(elegida)) {
+        await interaction.editReply({
+          content:
+            `⚠️ Este cambio ya no vale: **${!suyas.includes(askedCard) ? askedCard : elegida}** ` +
+            `ya no está en el tablón (se cambió antes). Mirad el tablón y volved a pedirla.`,
+          components: [],
+        });
+        return;
+      }
+
+      await interaction.editReply({
+        content:
+          `✅ **Trato cerrado**\n` +
+          `<@${ownerId}> da **${askedCard}** · <@${askerId}> da **${elegida}**\n` +
+          `_Haced el intercambio dentro del juego. Ambas cartas salen ya del tablón._`,
+        components: [],
+      });
+      await cards.closeTrade(db, {
+        asker: { id: askerId, name: null },
+        owner: { id: ownerId, name: dueño },
+        askedCard,
+        givenCard: elegida,
+      });
+      await avisar(
+        `✅ **${dueño}** ha **aceptado**: te da **${askedCard}** y tú le das **${elegida}**. ` +
+          `Haced el intercambio dentro del juego ⚔️`,
+      );
+    } catch (err) {
+      logError("cards deal", err);
+      const aviso = "⚠️ No se pudo cerrar el trato. Inténtalo de nuevo.";
+      if (interaction.deferred || interaction.replied) {
+        await interaction.followUp({ content: aviso, flags: eph }).catch(() => {});
+      } else {
+        await interaction.reply({ content: aviso, flags: eph }).catch(() => {});
+      }
+    }
+    return;
+  }
+
+  // Cartas del evento: cada menú guarda su categoría al vuelo (sin botón).
+  if (interaction.isStringSelectMenu() && interaction.customId.startsWith("cards_pick:")) {
+    const [, catKey] = interaction.customId.split(":");
+    try {
+      // Guardar + refrescar el tablón implica varias llamadas: se acusa recibo
+      // primero para no agotar los 3 s de Discord.
+      await interaction.deferReply({ flags: eph });
+      await cards.setCategory(
+        db,
+        interaction.user.id,
+        // El nombre que se ve en el servidor: el tablón lo escribe en texto (no
+        // menciona) y así se reconoce a la gente igual que en el chat.
+        interaction.member?.displayName ?? interaction.user.globalName ?? interaction.user.username,
+        catKey,
+        interaction.values,
+      );
+      const mine = await cards.getMyCards(db, interaction.user.id);
+      await interaction.editReply({
+        content:
+          mine.size > 0
+            ? `✅ Guardado. Tus repetidas (${mine.size}): ${[...mine].join(", ")}`
+            : "✅ Guardado. Ahora mismo no tienes ninguna carta publicada.",
+      });
+      // El tablón se actualiza después: que tarde no debe afectar a la respuesta.
+      await cards.refreshBoard(db);
+    } catch (err) {
+      logError("cards pick", err);
+      const aviso = "⚠️ No se pudo guardar. Inténtalo de nuevo.";
+      if (interaction.deferred && !interaction.replied) {
+        await interaction.editReply({ content: aviso }).catch(() => {});
+      } else if (!interaction.replied) {
+        await interaction.reply({ content: aviso, flags: eph }).catch(() => {});
+      }
     }
     return;
   }
@@ -459,10 +755,121 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await interaction.reply({ content: HELP_TEXT, flags: eph });
       return;
     }
+
+    // --- Evento de cartas ---
+    if (interaction.commandName === "repetidas") {
+      // Se responde en dos pasos: Discord solo da 3 s para el primer acuse, y
+      // construir los 4 menús con su consulta puede pasarse.
+      await interaction.deferReply({ flags: eph });
+      const mine = await cards.getMyCards(db, id);
+      // Un menú por categoría, con lo que ya tenía marcado preseleccionado.
+      const rows = cards.CATEGORIES.map((cat) =>
+        new ActionRowBuilder().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId(`cards_pick:${cat.key}`)
+            .setPlaceholder(`${cat.emoji} ${cat.label}`)
+            .setMinValues(0)
+            .setMaxValues(cat.cards.length)
+            .addOptions(
+              cat.cards.map((c) => ({ label: c, value: c, default: mine.has(c) })),
+            ),
+        ),
+      );
+      await interaction.editReply({
+        content:
+          "🃏 **Marca las cartas que te SOBRAN** (repetidas).\n" +
+          "Se guarda categoría por categoría; para quitar una, desmárcala.\n" +
+          (mine.size > 0 ? `Ahora tienes publicadas **${mine.size}**.` : ""),
+        components: rows,
+      });
+      return;
+    }
+    if (interaction.commandName === "cartas") {
+      const quien = interaction.options.getUser("usuario");
+      if (quien) {
+        await interaction.deferReply({ flags: eph });
+        const suyas = await cards.cardsOf(db, quien.id);
+        await interaction.editReply({
+          content:
+            suyas.length > 0
+              ? `🃏 **${quien.username}** tiene repetidas (${suyas.length}):\n${suyas.map((c) => `• ${c}`).join("\n")}\n\nPídele una con \`/cambiar\`.`
+              : `**${quien.username}** no tiene cartas publicadas ahora mismo.`,
+        });
+        return;
+      }
+      await interaction.deferReply();
+      await interaction.editReply(cards.renderBoard(await cards.getOffers(db)));
+      return;
+    }
+    if (interaction.commandName === "cambiar") {
+      const target = interaction.options.getUser("usuario");
+      const pedida = interaction.options.getString("carta");
+      if (!target || target.id === id) {
+        await interaction.reply({ content: "Elige a otra persona 🙂", flags: eph });
+        return;
+      }
+      const suyas = await cards.cardsOf(db, target.id);
+      if (!suyas.includes(pedida)) {
+        await interaction.reply({
+          content: `**${target.username}** no tiene **${pedida}** publicada. Mira las suyas con \`/cartas @${target.username}\`.`,
+          flags: eph,
+        });
+        return;
+      }
+      const todasMias = await cards.cardsOf(db, id);
+      if (todasMias.length === 0) {
+        await interaction.reply({
+          content: "Primero publica tus repetidas con `/repetidas` para tener algo que ofrecer.",
+          flags: eph,
+        });
+        return;
+      }
+      // El juego solo permite cambiar por una carta de la MISMA sección.
+      const cat = cards.categoryOfCard(pedida);
+      const mias = todasMias.filter((c) => cat?.cards.includes(c));
+      if (mias.length === 0) {
+        await interaction.reply({
+          content:
+            `Solo se puede cambiar por cartas de la misma sección, y no tienes repetidas de ` +
+            `${cat ? `${cat.emoji} **${cat.label}**` : "esa sección"}.\n` +
+            `Marca alguna con \`/repetidas\` o pídele otra carta.`,
+          flags: eph,
+        });
+        return;
+      }
+      // El dueño elige de un desplegable cuál le sirve → cierra el trato. Lo ve
+      // todo el canal, pero solo cuenta si lo pulsa él (se comprueba al responder).
+      const ofrecidas = mias.slice(0, 24);
+      const idx = cards.ALL_CARDS.indexOf(pedida);
+      const row = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`cd:${id}:${target.id}:${idx}`)
+          .setPlaceholder("Elige la que te sirva y queda cerrado")
+          .addOptions([
+            ...ofrecidas.map((c) => ({ label: c, value: c })),
+            { label: "Ninguna me sirve", value: "__none__" },
+          ]),
+      );
+      await interaction.reply({
+        content:
+          `🔄 <@${target.id}>, <@${id}> quiere tu **${pedida}**.\n` +
+          `A cambio te ofrece ${cat ? `de ${cat.emoji} **${cat.label}**` : ""}: ${ofrecidas.join(" · ")}\n` +
+          `_Elige abajo la que te falte y el trato queda cerrado (solo respondes tú)._`,
+        components: [row],
+        allowedMentions: { users: [target.id] },
+      });
+      return;
+    }
   } catch (err) {
-    console.error("Error en interacción:", err);
-    if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
-      await interaction.reply({ content: "⚠️ Ha ocurrido un error. Inténtalo de nuevo.", flags: eph }).catch(() => {});
+    logError(`interacción /${interaction.commandName ?? "?"}`, err);
+    const aviso = "⚠️ Ha ocurrido un error. Inténtalo de nuevo.";
+    if (!interaction.isRepliable()) return;
+    // Si ya se hizo deferReply hay que EDITAR: un reply nuevo fallaría y la
+    // interacción se quedaría colgada en "Enviando comando…".
+    if (interaction.deferred && !interaction.replied) {
+      await interaction.editReply({ content: aviso, components: [] }).catch(() => {});
+    } else if (!interaction.replied) {
+      await interaction.reply({ content: aviso, flags: eph }).catch(() => {});
     }
   }
 });
@@ -698,6 +1105,16 @@ function healthJson() {
     clan: lastClan
       ? { name: lastClan.name, level: lastClan.clanLevel, members: lastClan.members }
       : null,
+    // Identidad de la máquina/sesión: si hay más de una instancia con el mismo
+    // token, Discord entrega las interacciones a solo una de ellas.
+    machine: process.env.FLY_MACHINE_ID ?? process.env.FLY_ALLOC_ID ?? "local",
+    region: process.env.FLY_REGION ?? null,
+    ws_status: client.ws.status,
+    session: client.ws.shards?.first?.()?.id ?? null,
+    commands: registeredCommands,
+    cards_enabled: cardsRegistered,
+    interactions: recentInteractions,
+    errors: recentErrors,
   };
 }
 
@@ -715,11 +1132,15 @@ function renderLanding() {
 
   let warLine = "";
   let warTone = "calm";
-  if (w?.state === "inWar" && w.opponent?.name) {
-    warLine = `⚔️ En guerra vs <b>${esc(w.opponent.name)}</b> · ${w.clan?.stars ?? 0}–${w.opponent?.stars ?? 0} ⭐`;
+  // `isCwl`/`round` solo vienen cuando la guerra sale de la BD (ronda de liga).
+  const cwlTag = w?.isCwl ? `🏆 CWL${w.round ? ` · Ronda ${w.round}` : ""}` : null;
+  if (w?.state === "inWar") {
+    const rival = w.opponent?.name ? ` vs <b>${esc(w.opponent.name)}</b>` : "";
+    const marcador = `${w.clan?.stars ?? 0}–${w.opponent?.stars ?? 0} ⭐`;
+    warLine = cwlTag ? `${cwlTag}${rival} · ${marcador}` : `⚔️ En guerra${rival} · ${marcador}`;
     warTone = "hot";
   } else if (w?.state === "preparation") {
-    warLine = "🛡️ Preparando la próxima guerra";
+    warLine = cwlTag ? `${cwlTag} · preparando la ronda` : "🛡️ Preparando la próxima guerra";
     warTone = "prep";
   } else {
     warLine = "🕊️ Sin guerra ahora mismo";

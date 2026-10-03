@@ -43,10 +43,14 @@ export default async function GuerrasPage({
   ]);
 
   // Ligas = unión de temporadas con datos de guerra + temporadas con inscripción.
+  // Una lista se indexa por su temporada REAL (coc_season) cuando ya está
+  // vinculada: así la liga empezada y sus inscripciones son la misma entrada y
+  // no salen duplicadas (la clave de la lista la calcula el cron por calendario).
   const warBySeason = new Map(seasons.map((s) => [s.season, s]));
-  const listBySeason = new Map(cwlLists.map((l) => [l.season, l]));
+  const keyOf = (l: (typeof cwlLists)[number]) => l.coc_season || l.season;
+  const listBySeason = new Map(cwlLists.map((l) => [keyOf(l), l]));
   const ligaSeasons = Array.from(
-    new Set([...seasons.map((s) => s.season), ...cwlLists.map((l) => l.season)]),
+    new Set([...seasons.map((s) => s.season), ...cwlLists.map(keyOf)]),
   ).sort((a, b) => b.localeCompare(a));
 
   // "En curso" solo si está en guerra o preparación. Una guerra ya terminada

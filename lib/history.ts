@@ -2,6 +2,8 @@ import { createServerClient } from "@/lib/supabase/server";
 import { donationsNegative } from "@/lib/dashboard";
 import { getActiveWarnCounts, getWarnConfig } from "@/lib/warns";
 import { getActiveSanctions } from "@/lib/sanctions";
+import { getActiveEvent, getParticipantTags } from "@/lib/events";
+import { getPositiveTotals } from "@/lib/positives";
 import { classifyAttackStatus } from "@/lib/war";
 import { getRulesConfig, stealWindowMs } from "@/lib/rules";
 
@@ -164,6 +166,9 @@ export interface ActivityRow {
   donationsTrend: "up" | "down" | "flat" | null; // últimos 7d vs 7d anteriores
   daysSinceDonation: number | null; // días seguidos sin donar nada (null si nunca donó/sin datos)
   redDays: number | null; // días seguidos con la guerra desactivada (rojo)
+  warPref: string | null; // "in" | "out": disponibilidad de guerra actual
+  rankedWeeks: number; // semanas en las que jugó ranked (hizo copas)
+  rankedWeeksTotal: number; // semanas con datos en el histórico analizado
   lastActivityAt: string | null; // última señal de actividad detectada
   staleDays: number | null; // días desde la última actividad (null si no hay histórico)
   capped: boolean; // true si podría llevar más (lo topamos a la ventana de análisis)
@@ -172,6 +177,7 @@ export interface ActivityRow {
   donationsReceived: number | null;
   ratio: number | null;
   donationNegative: boolean; // cuenta negativo (leeching) según la regla
+  warsEligible: number; // guerras del periodo posteriores a su alta/punto y aparte
   warsPlayed: number; // rondas/guerras del periodo en las que estuvo alineado
   warAttacks: number; // ataques usados en guerra el periodo
   warMissed: number; // rondas TERMINADAS alineado sin atacar (periodo)
@@ -180,6 +186,10 @@ export interface ActivityRow {
   warStolen: number; // robos de espejo (infracción) en el periodo
   capitalParticipated: number; // findes de capital en los que atacó
   capitalWeekends: number; // findes de capital registrados en el periodo (clan)
+  // Evento del momento: si hay uno activo, si participó (solo suma, no resta).
+  event: { name: string; participated: boolean } | null;
+  // Positivos (méritos) vigentes: los apunta un colíder y solo suman.
+  positives: { count: number; points: number };
   category: ActivityCategory;
   categoryReasons: string[]; // por qué está en esa categoría (motivos con cifras)
   // Expulsión ya conmutada por otra sanción (mientras esté vigente).
@@ -221,7 +231,9 @@ export interface ActivityReport {
 // de calendario. Así no hay reset brusco (el lunes no aparecen todos en rojo) y
 // lo que se mide son tendencias y rachas reales.
 const WINDOW_DAYS = 30; // volumen (donaciones, guerras, capital)
-const HISTORY_DAYS = 60; // histórico que se carga, para medir rachas largas
+// Las rachas ya no dependen del histórico (viven en `members`), así que basta
+// con cargar la ventana de volumen: menos filas y sin riesgo de truncado.
+const HISTORY_DAYS = WINDOW_DAYS;
 
 export interface Departure {
   tag: string;
@@ -291,19 +303,36 @@ export async function getActivityReport(): Promise<ActivityReport> {
   // Punto y aparte por miembro: fecha a partir de la cual se vuelve a contar.
   // Lo anterior queda perdonado (NO se borra nada: sigue en el historial).
   const sanctions = await getActiveSanctions();
-  // Si el perdón fue SOLO de warns, las demás métricas siguen contando igual.
+  // Corte efectivo de cada miembro: lo más reciente entre su ALTA en el clan y
+  // un punto y aparte. Lo anterior no cuenta (un recién llegado no puede haber
+  // fallado guerras o findes en los que no estaba).
+  const firstSeenOf = new Map<string, number>();
   const cutOf = (tag: string): number | null => {
     const s = sanctions.get(tag);
-    return !s || s.scope === "warns" ? null : s.cutMs;
+    // Si el perdón fue SOLO de warns, no mueve el corte de las demás métricas.
+    const sanctionCut = !s || s.scope === "warns" ? null : s.cutMs;
+    const alta = firstSeenOf.get(tag) ?? null;
+    if (sanctionCut == null) return alta;
+    if (alta == null) return sanctionCut;
+    return Math.max(sanctionCut, alta);
   };
   const thresholdDays = rules.inactivityDays; // días de inactividad → "revisar"
   const stealWinMs = stealWindowMs(rules.stealWindowHours);
 
+  // El estado derivado (rachas, última actividad, ranked) se lee de `members`:
+  // lo mantiene el snapshot en cada captura, así no hay que recorrer miles de
+  // filas de histórico (que además la API trunca) para calcularlo.
   const { data: members } = await supabase
     .from("members")
-    .select("tag, name, role, is_active, first_seen_at")
+    .select("*")
     .eq("is_active", true);
   const active = members ?? [];
+
+  // Alta de cada miembro: nada anterior a su entrada le puede contar en contra.
+  for (const m of active) {
+    const t = m.first_seen_at ? new Date(m.first_seen_at as string).getTime() : null;
+    if (t != null) firstSeenOf.set(m.tag as string, t);
+  }
 
   // Línea base del tracking para detectar "nuevos" reales (ver dashboard).
   const firstSeens = active
@@ -329,7 +358,6 @@ export async function getActivityReport(): Promise<ActivityReport> {
   const snaps = (snapsDesc ?? []).slice().reverse(); // a orden ascendente
 
   const byTag = new Map<string, SignalRow[]>();
-  const prefByTag = new Map<string, { t: number; pref: string | null }[]>(); // para rachas
   const lastWarPref = new Map<string, string | null>();
   const lastTH = new Map<string, number | null>();
   const lastTrophies = new Map<string, number | null>();
@@ -341,11 +369,6 @@ export async function getActivityReport(): Promise<ActivityReport> {
     const row = { capturedAt: s.captured_at as string } as SignalRow;
     for (const k of SIGNALS) row[k] = (s[k] as number | null) ?? null;
     byTag.get(tag)!.push(row);
-    if (!prefByTag.has(tag)) prefByTag.set(tag, []);
-    prefByTag.get(tag)!.push({
-      t: new Date(s.captured_at as string).getTime(),
-      pref: (s.war_preference as string | null) ?? null,
-    });
     lastWarPref.set(tag, (s.war_preference as string | null) ?? null);
     lastTH.set(tag, (s.town_hall as number | null) ?? null);
     lastTrophies.set(tag, (s.trophies as number | null) ?? null);
@@ -382,20 +405,31 @@ export async function getActivityReport(): Promise<ActivityReport> {
   // penaliza (aún queda tiempo).
   const { data: warRows } = await supabase
     .from("wars")
-    .select("id, state, round, end_time, is_cwl")
+    .select("id, state, round, start_time, end_time, is_cwl")
     .gte("start_time", since);
   const warIds = (warRows ?? []).map((w) => w.id as number);
   const warsInPeriod = warIds.length;
   const warState = new Map<number, string>();
   const warRound = new Map<number, number | null>();
   const warEndMs = new Map<number, number | null>();
+  const warStartMs = new Map<number, number | null>();
   const warIsCwl = new Map<number, boolean>();
   for (const w of warRows ?? []) {
     warState.set(w.id as number, (w.state as string) ?? "");
     warRound.set(w.id as number, (w.round as number | null) ?? null);
     warEndMs.set(w.id as number, w.end_time ? Date.parse(w.end_time as string) : null);
+    warStartMs.set(w.id as number, w.start_time ? Date.parse(w.start_time as string) : null);
     warIsCwl.set(w.id as number, Boolean(w.is_cwl));
   }
+  // Una guerra solo se le puede exigir a quien ya estaba en el clan cuando se
+  // hizo la alineación, es decir al empezar la PREPARACIÓN (~24h antes del
+  // inicio). Si llegó después, esa guerra no era suya.
+  const warEraSuya = (wid: number, cut: number | null): boolean => {
+    if (cut == null) return true;
+    const start = warStartMs.get(wid) ?? warEndMs.get(wid) ?? null;
+    if (start == null) return false;
+    return start - DAY_MS >= cut;
+  };
 
   interface WarStat {
     played: number;
@@ -414,9 +448,9 @@ export async function getActivityReport(): Promise<ActivityReport> {
     for (const m of wm ?? []) {
       const tag = m.tag as string;
       const wid = m.war_id as number;
-      // Punto y aparte: las guerras terminadas ANTES del corte no cuentan.
-      const cut = cutOf(tag);
-      if (cut != null && (warEndMs.get(wid) ?? 0) < cut) continue;
+      // Solo cuentan las guerras que ya eran suyas (posteriores a su alta o al
+      // punto y aparte).
+      if (!warEraSuya(wid, cutOf(tag))) continue;
       if (!warStat.has(tag)) warStat.set(tag, { played: 0, attacks: 0, missed: 0, missedRounds: [], stars: 0 });
       const s = warStat.get(tag)!;
       const used = (m.attacks_used as number | null) ?? 0;
@@ -473,9 +507,8 @@ export async function getActivityReport(): Promise<ActivityReport> {
           });
         if (st === "stolen") {
           const tag = a.attacker_tag as string;
-          // Punto y aparte: los robos de guerras anteriores al corte no cuentan.
-          const cut = cutOf(tag);
-          if (cut != null && (warEndMs.get(wid) ?? 0) < cut) continue;
+          // Los robos de guerras que no eran suyas (o perdonadas) no cuentan.
+          if (!warEraSuya(wid, cutOf(tag))) continue;
           stolenByTag.set(tag, (stolenByTag.get(tag) ?? 0) + 1);
         }
       }
@@ -485,12 +518,18 @@ export async function getActivityReport(): Promise<ActivityReport> {
   // Participación en asaltos de capital durante el periodo (findes registrados).
   const capitalParticipated = new Map<string, number>();
   let capitalWeekends = 0;
+  const capitalRaidStarts: number[] = []; // inicio de cada finde CON datos (para filtrar por alta)
   {
     const { data: raids } = await supabase
       .from("capital_raids")
-      .select("id")
+      .select("id, start_time, end_time")
       .gte("start_time", since);
     const raidIds = (raids ?? []).map((r) => r.id as number);
+    const startById = new Map<number, number>();
+    for (const r of raids ?? []) {
+      const iso = (r.start_time as string | null) ?? (r.end_time as string | null);
+      if (iso) startById.set(r.id as number, Date.parse(iso));
+    }
     if (raidIds.length > 0) {
       const { data: crm } = await supabase
         .from("capital_raid_members")
@@ -500,7 +539,12 @@ export async function getActivityReport(): Promise<ActivityReport> {
       // Solo cuentan los findes de los que TENEMOS lista de participantes: la
       // API no la da de asaltos pasados, y sin ella nadie "participó" (falso).
       const raidsWithData = new Set((crm ?? []).map((r) => r.raid_id as number));
-      capitalWeekends = raidIds.filter((id) => raidsWithData.has(id)).length;
+      for (const id of raidIds) {
+        if (!raidsWithData.has(id)) continue;
+        capitalWeekends++;
+        const s = startById.get(id);
+        if (s != null) capitalRaidStarts.push(s);
+      }
       const seen = new Set<string>(); // tag+raid, por si hubiera duplicados
       for (const r of crm ?? []) {
         const tag = r.tag as string;
@@ -514,6 +558,14 @@ export async function getActivityReport(): Promise<ActivityReport> {
   }
 
   const [warnCounts, warnCfg] = await Promise.all([getActiveWarnCounts(), getWarnConfig()]);
+
+  // Evento del momento: quien participó se lleva un plus (nunca penaliza a los
+  // demás). La participación llega de Discord (p. ej. cartas) o a mano.
+  const activeEvent = await getActiveEvent();
+  const eventTags = activeEvent ? await getParticipantTags(activeEvent.id) : new Set<string>();
+
+  // Positivos: méritos anotados a mano por un colíder. Solo suman participación.
+  const positiveTotals = await getPositiveTotals();
 
   const rowsOut: ActivityRow[] = active.map((m) => {
     const tag = m.tag as string;
@@ -558,7 +610,11 @@ export async function getActivityReport(): Promise<ActivityReport> {
     const sinceCut = (v: number | null): number | null =>
       v == null ? null : daysSinceCut == null ? v : Math.min(v, Math.max(0, daysSinceCut));
 
-    const lastActivityAt = recent[0]?.at ?? null;
+    // Última actividad: campo mantenido por el snapshot (exacto, sin depender
+    // de cuánto histórico quepa en la consulta). Si aún no está, se cae a las
+    // señales vistas en la ventana.
+    const stateActivityAt = (m.last_activity_at as string | null) ?? null;
+    const lastActivityAt = stateActivityAt ?? recent[0]?.at ?? null;
     let staleDays: number | null = null;
     let capped = false;
     if (lastActivityAt != null) {
@@ -584,30 +640,30 @@ export async function getActivityReport(): Promise<ActivityReport> {
       donationsTrend = Math.abs(diff) < 50 ? "flat" : diff > 0 ? "up" : "down";
     }
 
-    // Días seguidos SIN donar (desde la última vez que subió su contador).
+    // Días seguidos SIN donar: fecha exacta guardada en `members`.
+    const stateDonationAt = (m.last_donation_at as string | null) ?? lastBySignal.donations ?? null;
     let daysSinceDonation: number | null = null;
-    if (lastBySignal.donations) {
-      daysSinceDonation = (now - new Date(lastBySignal.donations).getTime()) / DAY_MS;
+    if (stateDonationAt) {
+      daysSinceDonation = (now - new Date(stateDonationAt).getTime()) / DAY_MS;
     } else if (snapRows.length > 1) {
-      // No donó nada en todo el histórico cargado: al menos esos días.
+      // Nunca se le vio donar: al menos el histórico que tenemos.
       daysSinceDonation = (now - new Date(snapRows[0].capturedAt).getTime()) / DAY_MS;
     }
     daysSinceDonation = sinceCut(daysSinceDonation);
     if (daysSinceDonation != null) daysSinceDonation = Math.round(daysSinceDonation * 10) / 10;
 
-    // Racha actual en ROJO: días seguidos con la guerra desactivada. Se recorre
-    // el histórico desde la última captura hacia atrás hasta encontrar un verde.
+    // Racha en ROJO: fecha exacta guardada al detectar el cambio a rojo (se
+    // borra al volver a verde). Nada de recorrer histórico.
+    const redSince = (m.red_since as string | null) ?? null;
     let redDays: number | null = null;
-    const prefs = prefByTag.get(tag) ?? [];
-    if (prefs.length > 0 && prefs[prefs.length - 1].pref === "out") {
-      let startOfRun = prefs[prefs.length - 1].t;
-      for (let i = prefs.length - 1; i >= 0; i--) {
-        if (prefs[i].pref !== "out") break;
-        startOfRun = prefs[i].t;
-      }
-      redDays = sinceCut((now - startOfRun) / DAY_MS);
+    if (redSince) {
+      redDays = sinceCut((now - new Date(redSince).getTime()) / DAY_MS);
       if (redDays != null) redDays = Math.round(redDays * 10) / 10;
     }
+
+    // Ranked por semanas: contadores acumulados que mantiene el snapshot.
+    const weeksRankedN = (m.ranked_weeks as number | null) ?? 0;
+    const weeksSeenN = (m.tracked_weeks as number | null) ?? 0;
 
     // Liga vs. compañeros del mismo TH (requiere ≥3 del mismo TH para comparar).
     let leagueVsTh: ActivityRow["leagueVsTh"] = null;
@@ -620,6 +676,14 @@ export async function getActivityReport(): Promise<ActivityReport> {
     }
 
     const w = warStat.get(tag) ?? { played: 0, attacks: 0, missed: 0, missedRounds: [], stars: 0 };
+
+    // Guerras y findes que SÍ le corresponden: los posteriores a su corte (alta
+    // en el clan o punto y aparte). Un recién llegado no falló lo de antes.
+    const warsEligible =
+      cut == null ? warsInPeriod : warIds.filter((id) => warEraSuya(id, cut)).length;
+    // Un finde de capital solo cuenta si empezó estando ya en el clan.
+    const capitalEligible =
+      cut == null ? capitalWeekends : capitalRaidStarts.filter((s) => s >= cut).length;
 
     const fs = m.first_seen_at ? new Date(m.first_seen_at as string).getTime() : null;
     const isNew = fs != null && now - fs < 7 * DAY_MS && fs - baseline > 12 * 3_600_000;
@@ -646,7 +710,7 @@ export async function getActivityReport(): Promise<ActivityReport> {
       flags.push(`🔴 ${Math.round(redDays)}d en rojo`);
       graves.push("en rojo");
     }
-    if (warsInPeriod > 0 && w.played === 0) {
+    if (warsEligible > 0 && w.played === 0) {
       flags.push("🚫 No juega guerras");
       graves.push("no juega guerras");
     }
@@ -667,7 +731,7 @@ export async function getActivityReport(): Promise<ActivityReport> {
     if (trophies != null && trophies === 0) flags.push("🎯 Sin ranked esta semana");
     if (lastWarPref.get(tag) === "out" && (redDays == null || redDays < rules.redDaysReview))
       flags.push("💤 Guerra desactivada");
-    if (capitalWeekends > 0 && capPart === 0 && !isNew) flags.push("🏛️ Sin capital");
+    if (capitalEligible > 0 && capPart === 0 && !isNew) flags.push("🏛️ Sin capital");
 
     const isStaff = role === "leader" || role === "coLeader";
     const inactivo = staleDays != null && staleDays >= thresholdDays;
@@ -714,8 +778,8 @@ export async function getActivityReport(): Promise<ActivityReport> {
       reviewReasons.push(`${d(redDays)} días seguidos en rojo (límite ${rules.redDaysReview})`);
     if (daysSinceDonation != null && daysSinceDonation >= rules.noDonationDays)
       reviewReasons.push(`${d(daysSinceDonation)} días sin donar nada`);
-    if (warsInPeriod > 0 && w.played === 0)
-      reviewReasons.push(`no entró a ninguna de las ${warsInPeriod} guerras`);
+    if (warsEligible > 0 && w.played === 0)
+      reviewReasons.push(`no entró a ninguna de las ${warsEligible} guerras`);
 
     // Punto y aparte aplicado (si lo hay). No silencia nada: lo anterior ya no
     // cuenta porque las métricas de arriba se miden desde el corte. Lo que se
@@ -781,6 +845,9 @@ export async function getActivityReport(): Promise<ActivityReport> {
       donationsTrend,
       daysSinceDonation,
       redDays,
+      warPref: (m.prev_war_pref as string | null) ?? lastWarPref.get(tag) ?? null,
+      rankedWeeks: weeksRankedN,
+      rankedWeeksTotal: weeksSeenN,
       lastActivityAt,
       staleDays,
       capped,
@@ -789,6 +856,7 @@ export async function getActivityReport(): Promise<ActivityReport> {
       donationsReceived: received,
       ratio,
       donationNegative: donNeg,
+      warsEligible,
       warsPlayed: w.played,
       warAttacks: w.attacks,
       warMissed: w.missed,
@@ -796,13 +864,22 @@ export async function getActivityReport(): Promise<ActivityReport> {
       warStars: w.stars,
       warStolen,
       capitalParticipated: capPart,
-      capitalWeekends,
+      capitalWeekends: capitalEligible,
       category,
       categoryReasons,
       compensated,
       kickScore,
-      // Participación (para ascensos): donaciones + estrellas + ataques, penaliza fallos.
-      participationScore: (donations ?? 0) + w.stars * 100 + w.attacks * 50 - w.missed * 300,
+      // Participación (para ascensos): donaciones + estrellas + ataques, penaliza
+      // fallos y suma los plus que solo aportan (evento del momento y positivos).
+      participationScore:
+        (donations ?? 0) +
+        w.stars * 100 +
+        w.attacks * 50 -
+        w.missed * 300 +
+        (eventTags.has(tag) ? rules.eventBonus : 0) +
+        (positiveTotals.get(tag)?.points ?? 0),
+      event: activeEvent ? { name: activeEvent.name, participated: eventTags.has(tag) } : null,
+      positives: positiveTotals.get(tag) ?? { count: 0, points: 0 },
       flags,
       activeWarns,
     };

@@ -13,6 +13,9 @@ export interface RulesConfig {
   redDaysReview: number; // días seguidos con la guerra desactivada (rojo) → revisar
   redDaysExpulsion: number; // días seguidos en rojo → proponer expulsión
   noDonationDays: number; // días seguidos sin donar nada → señal
+  eventBonus: number; // plus de participación por el evento del momento
+  positivePoints: number; // puntos que vale un positivo (mérito) normal
+  positivesDays: number; // días que un positivo sigue contando (0 = siempre)
   donationMin: number; // por debajo de esto, si además recibió mucho, cuenta negativo
   donationGap: number; // desfase recibido−donado que dispara "balance bajo"
 }
@@ -27,6 +30,9 @@ export const RULES_DEFAULTS: RulesConfig = {
   redDaysReview: 14,
   redDaysExpulsion: 30,
   noDonationDays: 7,
+  eventBonus: 200,
+  positivePoints: 200,
+  positivesDays: 90,
   donationMin: 1000,
   donationGap: 1000,
 };
@@ -50,6 +56,7 @@ export interface RuleField {
 export const RULE_GROUP_ORDER = [
   "Guerra",
   "Warns",
+  "Positivos",
   "Actividad",
   "Donaciones",
   "Capital y eventos",
@@ -163,6 +170,42 @@ export const RULE_FIELDS: RuleField[] = [
     help: "Días sin donar ni una tropa a partir de los cuales se señala (no dona nada de nada).",
     min: 2,
     max: 60,
+    unit: "días",
+  },
+  {
+    key: "event_bonus",
+    prop: "eventBonus",
+    token: "plus_evento",
+    group: "Capital y eventos",
+    affectsApp: true,
+    label: "Plus por participar en el evento",
+    help: "Puntos extra de participación al participar en el evento del momento (para ascensos). Menos que una guerra; nunca penaliza a quien no participa.",
+    min: 0,
+    max: 2000,
+    unit: "puntos",
+  },
+  {
+    key: "positive_points",
+    prop: "positivePoints",
+    token: "puntos_positivo",
+    group: "Positivos",
+    affectsApp: true,
+    label: "Puntos de un positivo",
+    help: "Lo que suma un positivo normal a la participación (para ascensos). Un detalle vale la mitad y uno grande el doble.",
+    min: 10,
+    max: 2000,
+    unit: "puntos",
+  },
+  {
+    key: "positives_days",
+    prop: "positivesDays",
+    token: "dias_positivo",
+    group: "Positivos",
+    affectsApp: true,
+    label: "Un positivo cuenta durante",
+    help: "Días que un positivo sigue sumando. Pasado el plazo queda en el historial pero deja de contar (0 = cuenta siempre).",
+    min: 0,
+    max: 365,
     unit: "días",
   },
   {
@@ -326,6 +369,9 @@ export async function getRulesConfig(): Promise<RulesConfig> {
       redDaysReview: clamp(num("red_days_review", 14), 3, 90),
       redDaysExpulsion: clamp(num("red_days_expulsion", 30), 7, 180),
       noDonationDays: clamp(num("no_donation_days", 7), 2, 60),
+      eventBonus: clamp(num("event_bonus", 200), 0, 2000),
+      positivePoints: clamp(num("positive_points", 200), 10, 2000),
+      positivesDays: clamp(num("positives_days", 90), 0, 365),
       donationMin: clamp(num("donation_min", 1000), 0, 20000),
       donationGap: clamp(num("donation_gap", 1000), 0, 20000),
     };

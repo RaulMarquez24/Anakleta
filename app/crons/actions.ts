@@ -38,6 +38,12 @@ export async function runSnapshotLight(): Promise<CronResult> {
 export async function runSnapshotFull(): Promise<CronResult> {
   return call("/api/snapshot?mode=full");
 }
+// Vuelve a bajar TODAS las rondas de CWL y reescribe sus ataques. Para corregir
+// datos mal guardados (p. ej. las posiciones del mapa) sin perder la hora de la
+// primera detección de cada ataque.
+export async function runRecaptureCwl(): Promise<CronResult> {
+  return call("/api/snapshot?mode=full&recwl=1");
+}
 export async function runThRoles(): Promise<CronResult> {
   return call("/api/th-roles");
 }

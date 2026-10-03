@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { createServerClient } from "@/lib/supabase/server";
+import { getRulesConfig } from "@/lib/rules";
 
 // Guarda (o borra) el comentario manual de un miembro/ex-miembro, con autor y
 // fecha. La UI refleja el cambio al instante con estado local.
@@ -103,6 +104,63 @@ export async function markReturnReviewed(tag: string): Promise<{ ok: boolean }> 
   const svc = createServerClient();
   const { error } = await svc.from("members").update({ return_reviewed: true }).eq("tag", tag);
   return { ok: !error };
+}
+
+// --- Positivos (méritos: lo contrario de un warn) ---
+
+export interface NewPositive {
+  id: number;
+  reason: string;
+  points: number;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+// Anota algo que alguien hizo bien. Suma puntos de participación (ascensos) y
+// nunca resta a nadie. Los puntos se guardan en la fila: cambiar el valor por
+// defecto de las normas no reescribe lo ya anotado.
+export async function addPositive(
+  tag: string,
+  reason: string,
+  points = 0, // 0 = el valor normal de las normas (acción rápida del listado)
+): Promise<{ ok: boolean; positive?: NewPositive }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false };
+  const clean = reason.trim().slice(0, 300);
+  const pedidos = Math.round(Number(points) || 0);
+  const pts = pedidos > 0 ? Math.min(4000, pedidos) : (await getRulesConfig()).positivePoints;
+  if (!tag || !clean) return { ok: false };
+
+  const svc = createServerClient();
+  const { data, error } = await svc
+    .from("positives")
+    .insert({ member_tag: tag, reason: clean, points: pts, created_by: user.email ?? null })
+    .select("id, reason, points, created_by, created_at")
+    .single();
+  if (error || !data) return { ok: false };
+  revalidatePath("/actividad");
+  return {
+    ok: true,
+    positive: {
+      id: data.id as number,
+      reason: data.reason as string,
+      points: (data.points as number | null) ?? pts,
+      createdBy: (data.created_by as string | null) ?? null,
+      createdAt: data.created_at as string,
+    },
+  };
+}
+
+// Quita un positivo (si se anotó por error). Aquí no hay historial que guardar:
+// un mérito mal puesto no dice nada de nadie.
+export async function removePositive(id: number): Promise<{ ok: boolean }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false };
+  const svc = createServerClient();
+  const { error } = await svc.from("positives").delete().eq("id", id);
+  if (error) return { ok: false };
+  revalidatePath("/actividad");
+  return { ok: true };
 }
 
 // --- Warns (amonestaciones por incumplir normas) ---

@@ -1,6 +1,6 @@
 "use server";
 
-import { getCurrentWar } from "@/lib/war";
+import { getCurrentWarFresh } from "@/lib/war";
 import { discordConfigured } from "@/lib/discord";
 import { sendPendingWarNotice } from "@/lib/war-notify";
 import { getCurrentUser } from "@/lib/supabase/current-user";
@@ -45,7 +45,9 @@ export async function notifyPendingAttacks(): Promise<NotifyResult> {
   if (!user) return { ok: false, error: "No autorizado." };
   if (!discordConfigured) return { ok: false, error: "Discord no está configurado." };
 
-  const war = await getCurrentWar().catch(() => null);
+  // Sin caché: si se va a mencionar a alguien, la lista tiene que ser la de este
+  // instante, no la de la última revalidación.
+  const war = await getCurrentWarFresh().catch(() => null);
   if (!war || war.state !== "inWar") return { ok: false, error: "No hay guerra en curso." };
   if (war.pending.length === 0) return { ok: false, error: "Ya han atacado todos." };
 

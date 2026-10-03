@@ -15,7 +15,8 @@ import {
 // ============================================================================
 
 export interface CwlList {
-  season: string;
+  season: string; // clave de la lista (la calcula el cron por calendario)
+  coc_season?: string | null; // temporada REAL de la API, al arrancar la liga
   state: "open" | "closed";
   size: number | null; // null = corte dinámico 15→30
   opens_at: string | null;
@@ -113,8 +114,20 @@ export async function getCwlConfig(): Promise<CwlConfig> {
 
 // --- Listas ---
 
+// Busca la lista por su clave propia O por la temporada real de la API: así la
+// liga empezada encuentra sus inscripciones aunque las claves no coincidan.
 export async function getList(season: string): Promise<CwlList | null> {
   const svc = createServerClient();
+  try {
+    const { data: byCoc } = await svc
+      .from("cwl_lists")
+      .select("*")
+      .eq("coc_season", season)
+      .maybeSingle();
+    if (byCoc) return byCoc as CwlList;
+  } catch {
+    /* columna coc_season aún sin migrar */
+  }
   const { data } = await svc.from("cwl_lists").select("*").eq("season", season).maybeSingle();
   return (data as CwlList | null) ?? null;
 }

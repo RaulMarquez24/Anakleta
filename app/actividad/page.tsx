@@ -17,7 +17,6 @@ export default async function ActividadPage() {
       <ActivityList
         members={report.members}
         thresholdDays={report.thresholdDays}
-        warsInPeriod={report.warsInPeriod}
         windowDays={report.windowDays}
         defaultSort="inactivo"
       />

@@ -20,6 +20,8 @@ const EDITABLE_SETTINGS = new Set([
   "warns_threshold", // nº de warns vigentes para saltar a "A echar" (def. 3)
   "warns_expiry_days", // días hasta que un warn caduca (def. 90; 0 = nunca)
   "coleader_role_id", // rol que puede apuntar a otros con /apuntar @usuario
+  "cards_channel_id", // tablón de cartas repetidas (evento del Clashiversario)
+  "cards_enabled", // "1" activa el evento de cartas (si no, ni aparece el comando)
 ]);
 
 // Publica o actualiza la tarjeta viva del clan en el canal configurado.

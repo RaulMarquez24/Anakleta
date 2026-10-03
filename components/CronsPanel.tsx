@@ -7,6 +7,7 @@ import {
   runSnapshotFull,
   runThRoles,
   runCwlCron,
+  runRecaptureCwl,
   runWarReminder,
   loadHistory,
   type CronResult,
@@ -237,12 +238,20 @@ export function CronsPanel() {
         job="cwl-cron"
         icon="🏆"
         title="CWL (inscripciones)"
-        desc="Crea la lista si toca, avisa y cierra/limpia según fechas."
+        desc="Crea la lista si toca, la vincula con la liga al arrancar, avisa y cierra según fechas."
         result={results["cwl-cron"] ?? null}
         reloadKey={reload["cwl-cron"] ?? 0}
       >
         <button onClick={() => run("cwl-cron", "cwl", runCwlCron)} disabled={pending} className={solid}>
           {busy === "cwl" ? "Ejecutando…" : "Ejecutar"}
+        </button>
+        <button
+          onClick={() => run("snapshot", "recwl", runRecaptureCwl)}
+          disabled={pending}
+          className={ghost}
+          title="Vuelve a bajar todas las rondas de CWL y corrige sus datos (posiciones, espejo)"
+        >
+          {busy === "recwl" ? "Recapturando…" : "🔁 Recapturar rondas"}
         </button>
       </TaskCard>
 

@@ -86,13 +86,11 @@ function Vital({
 export function ActivityList({
   members,
   thresholdDays,
-  warsInPeriod,
   windowDays,
   defaultSort,
 }: {
   members: ActivityRow[];
   thresholdDays: number;
-  warsInPeriod: number;
   windowDays: number;
   defaultSort: Sort;
 }) {
@@ -203,7 +201,10 @@ export function ActivityList({
           const cat = CAT[m.category];
           const susp = m.category === "expulsion" || m.category === "revisar";
           const stale = susp && m.staleDays != null && m.staleDays >= thresholdDays;
-          const roundsAttacked = Math.min(m.warAttacks, m.warsPlayed);
+          // Guerras en las que SÍ atacó = jugadas − falladas. (Antes se usaba
+          // min(ataques, guerras), y los 2 ataques de una guerra tapaban el
+          // hueco de otra: salía 5/5 con una guerra sin atacar.)
+          const roundsAttacked = Math.max(0, m.warsPlayed - m.warMissed);
           const warTone =
             m.warStolen > 0 || m.warMissed > 0
               ? "bad"
@@ -214,6 +215,11 @@ export function ActivityList({
           // Rachas: llevar mucho en rojo o sin donar es lo que de verdad delata.
           const redLong = m.redDays != null && m.redDays >= 14;
           const noDonaLong = m.daysSinceDonation != null && m.daysSinceDonation >= 7;
+          // Lo que ya cuentan los vitales (ranked, capital, rojo, donaciones,
+          // guerras) no se repite como chip: solo quedan warns y robos.
+          const shownFlags = m.flags.filter(
+            (f) => !/ranked|desactivada|capital|sin donar|en rojo|No juega guerras|No dona/i.test(f),
+          );
           const actTone =
             m.staleDays == null ? "ok" : stale ? "bad" : m.staleDays < 1 ? "good" : "ok";
           const edge =
@@ -239,6 +245,22 @@ export function ActivityList({
                 {m.isNew && (
                   <span className="flex-none rounded-full bg-grass/20 px-2 py-0.5 text-[10px] font-extrabold uppercase text-grass">
                     Nuevo
+                  </span>
+                )}
+                {m.event?.participated && (
+                  <span
+                    className="flex-none rounded-full bg-grass/15 px-2 py-0.5 text-[10px] font-extrabold text-grass"
+                    title={`Participó en: ${m.event.name}`}
+                  >
+                    🎉 evento
+                  </span>
+                )}
+                {m.positives.count > 0 && (
+                  <span
+                    className="flex-none rounded-full bg-gold/15 px-2 py-0.5 text-[10px] font-extrabold text-gold"
+                    title={`${m.positives.count} positivo(s) anotados: +${m.positives.points} puntos de participación`}
+                  >
+                    👍 {m.positives.count} · +{m.positives.points}
                   </span>
                 )}
                 {m.compensated && (
@@ -272,10 +294,8 @@ export function ActivityList({
 
               {/* Vitales: guerra · donaciones · capital · actividad */}
               <div className="mb-2 grid grid-cols-2 gap-1.5">
-                <Vital label="Guerra" tone={redLong ? "bad" : warsInPeriod > 0 ? warTone : "ok"}>
-                  {redLong ? (
-                    <>🔴 {Math.round(m.redDays!)}d en rojo</>
-                  ) : warsInPeriod > 0 ? (
+                <Vital label="Guerra" tone={m.warsEligible > 0 ? warTone : "ok"}>
+                  {m.warsEligible > 0 ? (
                     <>
                       {roundsAttacked}/{m.warsPlayed} · ⭐{m.warStars}
                       {m.warStolen > 0 && (
@@ -301,6 +321,34 @@ export function ActivityList({
                 <Vital label="Actividad" tone={actTone}>
                   {ago(m.staleDays, m.capped)}
                 </Vital>
+                <Vital
+                  label="Ranked"
+                  tone={
+                    m.rankedWeeksTotal === 0
+                      ? "ok"
+                      : m.rankedWeeks === 0
+                        ? "warn"
+                        : m.rankedWeeks === m.rankedWeeksTotal
+                          ? "good"
+                          : "ok"
+                  }
+                >
+                  {m.rankedWeeksTotal > 0
+                    ? `${m.rankedWeeks}/${m.rankedWeeksTotal} semanas`
+                    : "—"}
+                </Vital>
+                <Vital
+                  label="Disponibilidad"
+                  tone={redLong ? "bad" : m.warPref === "out" ? "warn" : m.warPref === "in" ? "good" : "ok"}
+                >
+                  {m.warPref === "out"
+                    ? m.redDays != null
+                      ? `🔴 ${Math.round(m.redDays)}d desactivada`
+                      : "🔴 desactivada"
+                    : m.warPref === "in"
+                      ? "🟢 entra a guerra"
+                      : "—"}
+                </Vital>
               </div>
 
               {/* Por qué está en esta categoría (motivo literal con cifras) */}
@@ -325,10 +373,10 @@ export function ActivityList({
                 </p>
               )}
 
-              {/* Faltillas */}
-              {m.flags.length > 0 && (
+              {/* Faltillas que NO se ven ya en los vitales de arriba */}
+              {shownFlags.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
-                  {m.flags.map((f) => (
+                  {shownFlags.map((f) => (
                     <span key={f} className={`rounded-lg px-2 py-1 text-[11px] font-bold ${flagTone(f)}`}>
                       {f}
                     </span>
