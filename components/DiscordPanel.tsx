@@ -7,6 +7,7 @@ import { DiscordComposer } from "@/components/DiscordComposer";
 import { AnnounceComposer } from "@/components/AnnounceComposer";
 import { SettingsChannels } from "@/components/SettingsChannels";
 import { PublishClanCard } from "@/components/PublishClanCard";
+import { TranslateLastUpdate } from "@/components/TranslateLastUpdate";
 
 type Tab = "mensaje" | "anuncio" | "ajustes";
 
@@ -76,6 +77,7 @@ export function DiscordPanel({
         <div className="space-y-4">
           <SettingsChannels channels={channels} roles={roles} current={current} />
           <PublishClanCard />
+          <TranslateLastUpdate />
         </div>
       )}
     </div>

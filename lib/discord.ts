@@ -342,6 +342,32 @@ export async function editChannelEmbed(
   }
 }
 
+export interface RawChannelMessage {
+  id: string;
+  content: string;
+  author?: { id?: string; bot?: boolean };
+  webhook_id?: string;
+  embeds?: { title?: string; description?: string; fields?: { name: string; value: string }[] }[];
+}
+
+// Últimos mensajes de un canal (para traducir el último parte manualmente).
+export async function getChannelMessages(
+  channelId: string,
+  limit = 10,
+): Promise<RawChannelMessage[]> {
+  if (!TOKEN || !channelId) return [];
+  try {
+    const res = await fetch(`${API}/channels/${channelId}/messages?limit=${limit}`, {
+      headers: { Authorization: `Bot ${TOKEN}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    return (await res.json()) as RawChannelMessage[]; // más reciente primero
+  } catch {
+    return [];
+  }
+}
+
 // Borra un mensaje (p. ej. el mensaje fijo de la lista al eliminar la liga).
 export async function deleteChannelMessage(channelId: string, messageId: string): Promise<boolean> {
   if (!TOKEN || !channelId || !messageId) return false;

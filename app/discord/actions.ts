@@ -1,10 +1,80 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { sendClanMessage, discordConfigured } from "@/lib/discord";
+import {
+  sendClanMessage,
+  discordConfigured,
+  getChannelMessages,
+  postChannelMessage,
+  type RawChannelMessage,
+} from "@/lib/discord";
+import { translateMarkdown } from "@/lib/translate";
 import { upsertClanCard } from "@/lib/clan-card";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { createServerClient } from "@/lib/supabase/server";
+
+// Texto traducible de un mensaje (contenido + embeds), sin menciones.
+function updateText(m: RawChannelMessage): string {
+  const parts: string[] = [];
+  if (m.content?.trim()) parts.push(m.content);
+  for (const e of m.embeds ?? []) {
+    if (e.title) parts.push(`## ${e.title}`);
+    if (e.description) parts.push(e.description);
+    for (const f of e.fields ?? []) parts.push(`**${f.name}**\n${f.value}`);
+  }
+  return parts
+    .join("\n\n")
+    .replace(/<@&?\d+>/g, "")
+    .replace(/@everyone|@here/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function chunk2000(text: string): string[] {
+  const chunks: string[] = [];
+  let buf = "";
+  for (const line of text.split("\n")) {
+    if (buf.length + line.length + 1 > 1950) {
+      if (buf) chunks.push(buf);
+      buf = "";
+    }
+    buf += (buf ? "\n" : "") + line;
+  }
+  if (buf) chunks.push(buf);
+  return chunks;
+}
+
+// Traduce manualmente el último parte del canal de actualizaciones y lo publica.
+export async function translateLastUpdate(): Promise<{ ok: boolean; error?: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "No autorizado." };
+  if (!discordConfigured) return { ok: false, error: "Discord no está configurado." };
+
+  const svc = createServerClient();
+  const { data: s } = await svc
+    .from("settings")
+    .select("value")
+    .eq("key", "updates_channel_id")
+    .maybeSingle();
+  const channelId = (s?.value as string | null) ?? process.env.UPDATES_CHANNEL_ID ?? null;
+  if (!channelId) return { ok: false, error: "Configura primero el canal de Actualizaciones." };
+
+  const msgs = await getChannelMessages(channelId, 15);
+  // El más reciente que NO sea ya una traducción nuestra y tenga contenido real.
+  const source = msgs.find((m) => !(m.content ?? "").startsWith("🌐") && updateText(m).length >= 15);
+  if (!source) return { ok: false, error: "No encontré ningún parte que traducir en ese canal." };
+
+  const translated = await translateMarkdown(updateText(source));
+  const guild = process.env.DISCORD_GUILD_ID;
+  const link = guild ? `https://discord.com/channels/${guild}/${channelId}/${source.id}` : "";
+  const body =
+    `🌐 **Traducción al español**\n\n${translated}` + (link ? `\n\n-# Fuente (original): ${link}` : "");
+  for (const chunk of chunk2000(body)) {
+    const ok = await postChannelMessage(channelId, chunk);
+    if (!ok) return { ok: false, error: "No se pudo publicar (revisa permisos del bot en el canal)." };
+  }
+  return { ok: true };
+}
 
 // Claves de settings que se pueden editar desde el panel (whitelist).
 const EDITABLE_SETTINGS = new Set([
