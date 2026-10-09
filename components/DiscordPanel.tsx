@@ -79,7 +79,8 @@ export function DiscordPanel({
           <PublishClanCard />
           <TranslateLastUpdate
             channels={channels}
-            defaultChannel={current["updates_channel_id"] || null}
+            originId={current["updates_channel_id"] || ""}
+            destId={current["updates_dest_channel_id"] || ""}
           />
         </div>
       )}

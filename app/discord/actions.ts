@@ -57,16 +57,18 @@ export async function translateLastUpdate(
 
   const svc = createServerClient();
   let readCh = origin || null;
-  if (!readCh) {
-    const { data: s } = await svc
+  let postCh = destination || null;
+  if (!readCh || !postCh) {
+    const { data } = await svc
       .from("settings")
-      .select("value")
-      .eq("key", "updates_channel_id")
-      .maybeSingle();
-    readCh = (s?.value as string | null) ?? process.env.UPDATES_CHANNEL_ID ?? null;
+      .select("key, value")
+      .in("key", ["updates_channel_id", "updates_dest_channel_id"]);
+    const map = new Map((data ?? []).map((r) => [r.key as string, r.value as string]));
+    if (!readCh) readCh = map.get("updates_channel_id") || process.env.UPDATES_CHANNEL_ID || null;
+    if (!postCh) postCh = map.get("updates_dest_channel_id") || null;
   }
-  if (!readCh) return { ok: false, error: "Elige el canal de origen (o configúralo en Actualizaciones)." };
-  const postCh = destination || readCh;
+  if (!readCh) return { ok: false, error: "Configura el canal de origen en Actualizaciones." };
+  postCh = postCh || readCh; // sin destino -> publica en el mismo de origen
 
   const msgs = await getChannelMessages(readCh, 15);
   // El más reciente que NO sea ya una traducción nuestra y tenga contenido real.
@@ -101,7 +103,8 @@ const EDITABLE_SETTINGS = new Set([
   "coleader_role_id", // rol que puede apuntar a otros con /apuntar @usuario
   "cards_channel_id", // tablón de cartas repetidas (evento del Clashiversario)
   "cards_enabled", // "1" activa el evento de cartas (si no, ni aparece el comando)
-  "updates_channel_id", // canal donde el bot traduce el parte de CoC al español
+  "updates_channel_id", // canal donde el bot ESCUCHA el parte de CoC
+  "updates_dest_channel_id", // canal donde PUBLICA la traducción (si no, el mismo)
 ]);
 
 // Publica o actualiza la tarjeta viva del clan en el canal configurado.

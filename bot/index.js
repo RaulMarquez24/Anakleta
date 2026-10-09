@@ -887,7 +887,7 @@ client.on(Events.MessageCreate, async (msg) => {
     if (msg.author.bot || msg.webhookId) {
       const cfg = await cwl.getConfig(db);
       if (cfg.updatesChannelId && msg.channelId === cfg.updatesChannelId) {
-        await handleUpdate(msg).catch((e) => console.error("Error traduciendo update:", e));
+        await handleUpdate(msg, cfg).catch((e) => console.error("Error traduciendo update:", e));
       }
       return;
     }
@@ -1398,17 +1398,23 @@ function chunk2000(text) {
   return chunks;
 }
 
-async function handleUpdate(msg) {
+async function handleUpdate(msg, cfg) {
   const src = extractUpdateText(msg);
   if (!src || src.length < 15) return;
+  // Publicar en el canal de destino (si se configuró); si no, en el mismo.
+  const destId = cfg.updatesDestChannelId || cfg.updatesChannelId;
+  const dest =
+    destId === msg.channelId ? msg.channel : await client.channels.fetch(destId).catch(() => null);
+  if (!dest || typeof dest.send !== "function") return;
+
   await msg.channel.sendTyping().catch(() => {});
   const translated = await translateMarkdown(src);
   const link = `https://discord.com/channels/${DISCORD_GUILD_ID}/${msg.channelId}/${msg.id}`;
   const body = `🌐 **Traducción al español**\n\n${translated}\n\n-# Fuente (original): ${link}`;
   for (const chunk of chunk2000(body)) {
-    await msg.channel.send({ content: chunk, allowedMentions: { parse: [] } }).catch(() => {});
+    await dest.send({ content: chunk, allowedMentions: { parse: [] } }).catch(() => {});
   }
-  console.log(`[update] traducido en ${msg.channelId}`);
+  console.log(`[update] traducido ${msg.channelId} -> ${destId}`);
 }
 
 client.login(DISCORD_BOT_TOKEN);
