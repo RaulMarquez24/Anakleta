@@ -27,7 +27,7 @@ import { translateMarkdown } from "./translate.js";
 
 // Súbelo cuando cambies algo. En `fly logs` verás esta línea al arrancar: si NO
 // cambia tras un deploy, es que el deploy no ha subido el código nuevo.
-const BOT_VERSION = "v17 traducir-updates";
+const BOT_VERSION = "v18 traducir-fallback";
 
 // ¿Puede este miembro apuntar a otros? (rol de colíder configurable, o admin).
 function isColeader(member, coleaderRoleId) {
