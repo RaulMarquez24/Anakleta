@@ -23,10 +23,11 @@ import { classifyIntent } from "./match.js";
 import * as cwl from "./cwl.js";
 import * as cards from "./cards.js";
 import * as coc from "./coc.js";
+import { translateMarkdown } from "./translate.js";
 
 // Súbelo cuando cambies algo. En `fly logs` verás esta línea al arrancar: si NO
 // cambia tras un deploy, es que el deploy no ha subido el código nuevo.
-const BOT_VERSION = "v16 apuntar-a-otros";
+const BOT_VERSION = "v17 traducir-updates";
 
 // ¿Puede este miembro apuntar a otros? (rol de colíder configurable, o admin).
 function isColeader(member, coleaderRoleId) {
@@ -878,7 +879,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
 client.on(Events.MessageCreate, async (msg) => {
   try {
-    if (msg.author.bot) return;
+    // Nunca reaccionar a nuestros propios mensajes.
+    if (client.user && msg.author.id === client.user.id) return;
+
+    // Mensajes de bot/webhook: solo nos interesa el canal de actualizaciones,
+    // para traducir el parte de Clash of Clans al español.
+    if (msg.author.bot || msg.webhookId) {
+      const cfg = await cwl.getConfig(db);
+      if (cfg.updatesChannelId && msg.channelId === cfg.updatesChannelId) {
+        await handleUpdate(msg).catch((e) => console.error("Error traduciendo update:", e));
+      }
+      return;
+    }
 
     // DM (sin servidor): flujo de identificación por tag de CoC.
     if (!msg.guild) {
@@ -1351,5 +1363,52 @@ const web = http.createServer((req, res) => {
   res.end("No encontrado");
 });
 web.listen(WEB_PORT, () => console.log(`Landing/health en :${WEB_PORT}`));
+
+// --- Traducir el parte de actualización de CoC al español ---
+
+// Saca el texto del mensaje (contenido + embeds) y limpia menciones.
+function extractUpdateText(msg) {
+  const parts = [];
+  if (msg.content && msg.content.trim()) parts.push(msg.content);
+  for (const e of msg.embeds ?? []) {
+    if (e.title) parts.push(`## ${e.title}`);
+    if (e.description) parts.push(e.description);
+    for (const f of e.fields ?? []) parts.push(`**${f.name}**\n${f.value}`);
+  }
+  return parts
+    .join("\n\n")
+    .replace(/<@&?\d+>/g, "") // menciones de rol/usuario
+    .replace(/@everyone|@here/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+// Trocea en mensajes de ≤2000 caracteres por líneas.
+function chunk2000(text) {
+  const chunks = [];
+  let buf = "";
+  for (const line of text.split("\n")) {
+    if (buf.length + line.length + 1 > 1950) {
+      if (buf) chunks.push(buf);
+      buf = "";
+    }
+    buf += (buf ? "\n" : "") + line;
+  }
+  if (buf) chunks.push(buf);
+  return chunks;
+}
+
+async function handleUpdate(msg) {
+  const src = extractUpdateText(msg);
+  if (!src || src.length < 15) return;
+  await msg.channel.sendTyping().catch(() => {});
+  const translated = await translateMarkdown(src);
+  const link = `https://discord.com/channels/${DISCORD_GUILD_ID}/${msg.channelId}/${msg.id}`;
+  const body = `🌐 **Traducción al español**\n\n${translated}\n\n-# Fuente (original): ${link}`;
+  for (const chunk of chunk2000(body)) {
+    await msg.channel.send({ content: chunk, allowedMentions: { parse: [] } }).catch(() => {});
+  }
+  console.log(`[update] traducido en ${msg.channelId}`);
+}
 
 client.login(DISCORD_BOT_TOKEN);

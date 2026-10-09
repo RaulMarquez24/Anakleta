@@ -22,6 +22,7 @@ const EDITABLE_SETTINGS = new Set([
   "coleader_role_id", // rol que puede apuntar a otros con /apuntar @usuario
   "cards_channel_id", // tablón de cartas repetidas (evento del Clashiversario)
   "cards_enabled", // "1" activa el evento de cartas (si no, ni aparece el comando)
+  "updates_channel_id", // canal donde el bot traduce el parte de CoC al español
 ]);
 
 // Publica o actualiza la tarjeta viva del clan en el canal configurado.

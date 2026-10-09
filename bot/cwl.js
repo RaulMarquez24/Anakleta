@@ -75,6 +75,7 @@ export async function getConfig(db) {
       "clan_role_id",
       "welcome_channel_id",
       "coleader_role_id",
+      "updates_channel_id",
     ]);
   const map = new Map((data ?? []).map((r) => [r.key, r.value]));
   return {
@@ -83,6 +84,7 @@ export async function getConfig(db) {
     clanRoleId: map.get("clan_role_id") || process.env.CLAN_ROLE_ID || null,
     welcomeChannelId: map.get("welcome_channel_id") || process.env.WELCOME_CHANNEL_ID || null,
     coleaderRoleId: map.get("coleader_role_id") || process.env.COLEADER_ROLE_ID || null,
+    updatesChannelId: map.get("updates_channel_id") || process.env.UPDATES_CHANNEL_ID || null,
   };
 }
 

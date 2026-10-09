@@ -18,6 +18,7 @@ const SETTING_KEYS = [
   "coleader_role_id",
   "cards_channel_id",
   "cards_enabled",
+  "updates_channel_id",
 ];
 
 export default async function DiscordPage() {
