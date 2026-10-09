@@ -44,34 +44,43 @@ function chunk2000(text: string): string[] {
   return chunks;
 }
 
-// Traduce manualmente el último parte del canal de actualizaciones y lo publica.
-export async function translateLastUpdate(): Promise<{ ok: boolean; error?: string }> {
+// Traduce manualmente el último parte. `origin` = canal de donde leer (por
+// defecto el de Actualizaciones); `destination` = canal donde publicar (por
+// defecto el mismo que origen).
+export async function translateLastUpdate(
+  origin?: string,
+  destination?: string,
+): Promise<{ ok: boolean; error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "No autorizado." };
   if (!discordConfigured) return { ok: false, error: "Discord no está configurado." };
 
   const svc = createServerClient();
-  const { data: s } = await svc
-    .from("settings")
-    .select("value")
-    .eq("key", "updates_channel_id")
-    .maybeSingle();
-  const channelId = (s?.value as string | null) ?? process.env.UPDATES_CHANNEL_ID ?? null;
-  if (!channelId) return { ok: false, error: "Configura primero el canal de Actualizaciones." };
+  let readCh = origin || null;
+  if (!readCh) {
+    const { data: s } = await svc
+      .from("settings")
+      .select("value")
+      .eq("key", "updates_channel_id")
+      .maybeSingle();
+    readCh = (s?.value as string | null) ?? process.env.UPDATES_CHANNEL_ID ?? null;
+  }
+  if (!readCh) return { ok: false, error: "Elige el canal de origen (o configúralo en Actualizaciones)." };
+  const postCh = destination || readCh;
 
-  const msgs = await getChannelMessages(channelId, 15);
+  const msgs = await getChannelMessages(readCh, 15);
   // El más reciente que NO sea ya una traducción nuestra y tenga contenido real.
   const source = msgs.find((m) => !(m.content ?? "").startsWith("🌐") && updateText(m).length >= 15);
-  if (!source) return { ok: false, error: "No encontré ningún parte que traducir en ese canal." };
+  if (!source) return { ok: false, error: "No encontré ningún parte que traducir en el canal de origen." };
 
   const translated = await translateMarkdown(updateText(source));
   const guild = process.env.DISCORD_GUILD_ID;
-  const link = guild ? `https://discord.com/channels/${guild}/${channelId}/${source.id}` : "";
+  const link = guild ? `https://discord.com/channels/${guild}/${readCh}/${source.id}` : "";
   const body =
     `🌐 **Traducción al español**\n\n${translated}` + (link ? `\n\n-# Fuente (original): ${link}` : "");
   for (const chunk of chunk2000(body)) {
-    const ok = await postChannelMessage(channelId, chunk);
-    if (!ok) return { ok: false, error: "No se pudo publicar (revisa permisos del bot en el canal)." };
+    const ok = await postChannelMessage(postCh, chunk);
+    if (!ok) return { ok: false, error: "No se pudo publicar (revisa permisos del bot en el canal de destino)." };
   }
   return { ok: true };
 }

@@ -77,7 +77,10 @@ export function DiscordPanel({
         <div className="space-y-4">
           <SettingsChannels channels={channels} roles={roles} current={current} />
           <PublishClanCard />
-          <TranslateLastUpdate />
+          <TranslateLastUpdate
+            channels={channels}
+            defaultChannel={current["updates_channel_id"] || null}
+          />
         </div>
       )}
     </div>
