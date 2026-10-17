@@ -1,14 +1,9 @@
-name: Desplegar bot (Fly.io)
+name: Desplegar bot (Fly.io) — EN DESUSO
 
-# Cada push a main que toque bot/ redespliega el bot en Fly.io con un build
-# limpio en el remote builder de Fly (no hace falta Docker local). Así los
-# cambios del bot llegan solos, sin `fly deploy` manual.
+# El bot se ha migrado al homelab (ver compose.yaml). Se deja solo lanzable a
+# mano, sin disparo por push: si no, cada cambio en bot/ lo redesplegaría en Fly
+# y habría DOS bots conectados al gateway con el mismo token.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "bot/**"
-      - ".github/workflows/bot-deploy.yml"
   workflow_dispatch:
 
 jobs:

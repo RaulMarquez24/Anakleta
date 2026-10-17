@@ -1,0 +1,35 @@
+# Bot de Discord de Añakleta en el homelab (antes en Fly.io).
+# El panel sigue en Vercel; bot y panel solo se comunican por la BD de Supabase.
+#
+#   cd /home/raul/stacks/anakleta/bot
+#   docker compose up -d --build
+#
+# Variables en bot/.env (fuera de git). Ver .env.example.
+
+services:
+  bot:
+    build: .
+    env_file: .env
+    environment:
+      TZ: Europe/Madrid
+    # El bot no necesita entrada desde internet para funcionar (el gateway de
+    # Discord es una conexión saliente). Estos puertos son solo para su web:
+    #   8083 → landing pública. El túnel de Cloudflare la sirve en
+    #          anakleta-bot.raulmarquez.dev. Sin /health: devuelve 404 aquí.
+    #   8082 → landing + /health, con los diagnósticos. Solo loopback y tailnet.
+    ports:
+      - "127.0.0.1:8083:8080"
+      - "127.0.0.1:8082:8081"
+      - "100.68.41.44:8082:8081"
+    # A diferencia de Fly, que se rendía tras 10 reinicios y dejaba el bot
+    # caído para siempre, aquí Docker reintenta indefinidamente.
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8081/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

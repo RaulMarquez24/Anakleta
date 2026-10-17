@@ -43,3 +43,5 @@ next-env.d.ts
 # agent skills (local-only)
 /.claude/
 /skills-lock.json
+
+.vercel
