@@ -1092,6 +1092,7 @@ async function syncThRole(guild, member, townHall) {
 // Fly enruta HTTP aquí (ver [http_service] en fly.toml). /health devuelve JSON.
 // ─────────────────────────────────────────────────────────────────────────────
 const WEB_PORT = Number(process.env.PORT) || 8080;
+const DIAG_PORT = Number(process.env.DIAG_PORT) || 8081;
 const CLAN_TAG_CLEAN = (process.env.COC_CLAN_TAG ?? "").replace(/^#/, "").toUpperCase();
 const JOIN_URL = CLAN_TAG_CLEAN
   ? `https://link.clashofclans.com/es?action=OpenClanProfile&tag=${CLAN_TAG_CLEAN}`
@@ -1345,24 +1346,42 @@ function renderLanding() {
 </body></html>`;
 }
 
-const web = http.createServer((req, res) => {
-  const path = (req.url || "/").split("?")[0];
-  if (path === "/health" || path === "/healthz") {
-    // 200 mientras el proceso viva (discord.js reconecta solo); el estado real de
-    // Discord va en el JSON. Evita reinicios de Fly por reconexiones puntuales.
-    res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify(healthJson()));
-    return;
-  }
-  if (path === "/" ) {
-    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-    res.end(renderLanding());
-    return;
-  }
-  res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
-  res.end("No encontrado");
-});
-web.listen(WEB_PORT, () => console.log(`Landing/health en :${WEB_PORT}`));
+// Dos escuchas con el mismo contenido salvo /health:
+//   WEB_PORT  → landing pública (sale a internet por el túnel de Cloudflare)
+//   DIAG_PORT → landing + /health (solo tailnet: el JSON lleva interacciones
+//               recientes, errores y en qué servidor está; no es para publicar)
+function handler({ diagnostics }) {
+  return (req, res) => {
+    const path = (req.url || "/").split("?")[0];
+    if (path === "/health" || path === "/healthz") {
+      if (!diagnostics) {
+        res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+        res.end("No encontrado");
+        return;
+      }
+      // 200 mientras el proceso viva (discord.js reconecta solo); el estado real
+      // de Discord va en el JSON, para no reiniciar por reconexiones puntuales.
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify(healthJson()));
+      return;
+    }
+    if (path === "/") {
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(renderLanding());
+      return;
+    }
+    res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+    res.end("No encontrado");
+  };
+}
+
+http
+  .createServer(handler({ diagnostics: false }))
+  .listen(WEB_PORT, () => console.log(`Landing pública en :${WEB_PORT}`));
+
+http
+  .createServer(handler({ diagnostics: true }))
+  .listen(DIAG_PORT, () => console.log(`Landing + /health en :${DIAG_PORT}`));
 
 // --- Traducir el parte de actualización de CoC al español ---
 
@@ -1417,4 +1436,36 @@ async function handleUpdate(msg, cfg) {
   console.log(`[update] traducido ${msg.channelId} -> ${destId}`);
 }
 
-client.login(DISCORD_BOT_TOKEN);
+// --- Arranque robusto ---
+// Antes, un fallo de DNS puntual al arrancar (EAI_AGAIN discord.com) rechazaba
+// el login sin que nadie lo recogiera y el proceso moría con código 1. En Fly
+// eso agotaba los 10 reinicios y dejaba el bot caído para siempre.
+
+// Sin listener de "error", un EventEmitter que emite error tumba el proceso.
+// discord.js reconecta solo: basta con registrarlo y seguir.
+client.on(Events.Error, (e) => logError("discord", e));
+client.on(Events.ShardError, (e, shardId) => logError(`shard ${shardId}`, e));
+
+// Red de seguridad: una promesa rechazada suelta no debe matar un proceso 24/7.
+process.on("unhandledRejection", (e) => logError("unhandledRejection", e));
+
+// discord.js reconecta solo una vez dentro, pero NO reintenta el primer login.
+async function loginWithRetry() {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await client.login(DISCORD_BOT_TOKEN);
+      return;
+    } catch (e) {
+      // Token inválido: reintentar no lo arregla, mejor fallar claro.
+      if (e?.code === "TokenInvalid") throw e;
+      const waitMs = Math.min(60_000, 2_000 * 2 ** (attempt - 1));
+      logError(`login (intento ${attempt}, reintento en ${waitMs / 1000}s)`, e);
+      await new Promise((r) => setTimeout(r, waitMs));
+    }
+  }
+}
+
+loginWithRetry().catch((e) => {
+  logError("login", e);
+  process.exit(1);
+});
